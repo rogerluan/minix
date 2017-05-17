@@ -6,7 +6,7 @@
 #include <machine/asm.h>
 
 #if defined(LIBC_SCCS)
-	RCSID("$NetBSD: swab.S,v 1.14 2014/05/23 02:34:19 uebayasi Exp $")
+	RCSID("$NetBSD: swab.S,v 1.13 2007/11/12 18:42:00 ad Exp $")
 #endif
 
 /*
@@ -66,4 +66,3 @@ L3:	lodsw
 L4:	popl	%edi
 	popl	%esi
 	ret
-END(swab)

@@ -7,7 +7,6 @@ import tempfile
 import lit.ShUtil as ShUtil
 import lit.Test as Test
 import lit.util
-from lit.util import to_bytes, to_string
 
 class InternalShellError(Exception):
     def __init__(self, command, message):
@@ -145,16 +144,13 @@ def executeShCmd(cmd, cfg, cwd, results):
                     named_temp_files.append(f.name)
                     args[i] = f.name
 
-        try:
-            procs.append(subprocess.Popen(args, cwd=cwd,
-                                          executable = executable,
-                                          stdin = stdin,
-                                          stdout = stdout,
-                                          stderr = stderr,
-                                          env = cfg.environment,
-                                          close_fds = kUseCloseFDs))
-        except OSError as e:
-            raise InternalShellError(j, 'Could not create process due to {}'.format(e))
+        procs.append(subprocess.Popen(args, cwd=cwd,
+                                      executable = executable,
+                                      stdin = stdin,
+                                      stdout = stdout,
+                                      stderr = stderr,
+                                      env = cfg.environment,
+                                      close_fds = kUseCloseFDs))
 
         # Immediately close stdin for any process taking stdin from us.
         if stdin == subprocess.PIPE:
@@ -196,11 +192,6 @@ def executeShCmd(cmd, cfg, cwd, results):
         f.seek(0, 0)
         procData[i] = (procData[i][0], f.read())
 
-    def to_string(bytes):
-        if isinstance(bytes, str):
-            return bytes
-        return bytes.encode('utf-8')
-
     exitCode = None
     for i,(out,err) in enumerate(procData):
         res = procs[i].wait()
@@ -210,11 +201,11 @@ def executeShCmd(cmd, cfg, cwd, results):
 
         # Ensure the resulting output is always of string type.
         try:
-            out = to_string(out.decode('utf-8'))
+            out = str(out.decode('ascii'))
         except:
             out = str(out)
         try:
-            err = to_string(err.decode('utf-8'))
+            err = str(err.decode('ascii'))
         except:
             err = str(err)
 
@@ -323,11 +314,14 @@ def parseIntegratedTestScriptCommands(source_path):
     # Python2 and bytes in Python3.
     #
     # Once we find a match, we do require each script line to be decodable to
-    # UTF-8, so we convert the outputs to UTF-8 before returning. This way the
+    # ascii, so we convert the outputs to ascii before returning. This way the
     # remaining code can work with "strings" agnostic of the executing Python
     # version.
-
-    keywords = ['RUN:', 'XFAIL:', 'REQUIRES:', 'UNSUPPORTED:', 'END.']
+    
+    def to_bytes(str):
+        # Encode to Latin1 to get binary data.
+        return str.encode('ISO-8859-1')
+    keywords = ('RUN:', 'XFAIL:', 'REQUIRES:', 'END.')
     keywords_re = re.compile(
         to_bytes("(%s)(.*)\n" % ("|".join(k for k in keywords),)))
 
@@ -335,10 +329,6 @@ def parseIntegratedTestScriptCommands(source_path):
     try:
         # Read the entire file contents.
         data = f.read()
-
-        # Ensure the data ends with a newline.
-        if not data.endswith(to_bytes('\n')):
-            data = data + to_bytes('\n')
 
         # Iterate over the matches.
         line_number = 1
@@ -351,25 +341,21 @@ def parseIntegratedTestScriptCommands(source_path):
                                       match_position)
             last_match_position = match_position
 
-            # Convert the keyword and line to UTF-8 strings and yield the
+            # Convert the keyword and line to ascii strings and yield the
             # command. Note that we take care to return regular strings in
             # Python 2, to avoid other code having to differentiate between the
             # str and unicode types.
             keyword,ln = match.groups()
-            yield (line_number, to_string(keyword[:-1].decode('utf-8')),
-                   to_string(ln.decode('utf-8')))
+            yield (line_number, str(keyword[:-1].decode('ascii')),
+                   str(ln.decode('ascii')))
     finally:
         f.close()
 
-
 def parseIntegratedTestScript(test, normalize_slashes=False,
-                              extra_substitutions=[], require_script=True):
+                              extra_substitutions=[]):
     """parseIntegratedTestScript - Scan an LLVM/Clang style integrated test
     script and extract the lines to 'RUN' as well as 'XFAIL' and 'REQUIRES'
-    and 'UNSUPPORTED' information. The RUN lines also will have variable
-    substitution performed. If 'require_script' is False an empty script may be
-    returned. This can be used for test formats where the actual script is
-    optional or ignored.
+    information. The RUN lines also will have variable substitution performed.
     """
 
     # Get the temporary location, this is always relative to the test suite
@@ -414,7 +400,6 @@ def parseIntegratedTestScript(test, normalize_slashes=False,
     # Collect the test lines from the script.
     script = []
     requires = []
-    unsupported = []
     for line_number, command_type, ln in \
             parseIntegratedTestScriptCommands(sourcepath):
         if command_type == 'RUN':
@@ -439,8 +424,6 @@ def parseIntegratedTestScript(test, normalize_slashes=False,
             test.xfails.extend([s.strip() for s in ln.split(',')])
         elif command_type == 'REQUIRES':
             requires.extend([s.strip() for s in ln.split(',')])
-        elif command_type == 'UNSUPPORTED':
-            unsupported.extend([s.strip() for s in ln.split(',')])
         elif command_type == 'END':
             # END commands are only honored if the rest of the line is empty.
             if not ln.strip():
@@ -465,11 +448,11 @@ def parseIntegratedTestScript(test, normalize_slashes=False,
               for ln in script]
 
     # Verify the script contains a run line.
-    if require_script and not script:
+    if not script:
         return lit.Test.Result(Test.UNRESOLVED, "Test has no run line!")
 
     # Check for unterminated run lines.
-    if script and script[-1][-1] == '\\':
+    if script[-1][-1] == '\\':
         return lit.Test.Result(Test.UNRESOLVED,
                                "Test has unterminated run lines (with '\\')")
 
@@ -480,17 +463,22 @@ def parseIntegratedTestScript(test, normalize_slashes=False,
         msg = ', '.join(missing_required_features)
         return lit.Test.Result(Test.UNSUPPORTED,
                                "Test requires the following features: %s" % msg)
-    unsupported_features = [f for f in unsupported
-                            if f in test.config.available_features]
-    if unsupported_features:
-        msg = ', '.join(unsupported_features)
-        return lit.Test.Result(Test.UNSUPPORTED,
-                    "Test is unsupported with the following features: %s" % msg)
 
     return script,tmpBase,execdir
 
-def _runShTest(test, litConfig, useExternalSh,
-                   script, tmpBase, execdir):
+def executeShTest(test, litConfig, useExternalSh,
+                  extra_substitutions=[]):
+    if test.config.unsupported:
+        return (Test.UNSUPPORTED, 'Test is unsupported')
+
+    res = parseIntegratedTestScript(test, useExternalSh, extra_substitutions)
+    if isinstance(res, lit.Test.Result):
+        return res
+    if litConfig.noExecute:
+        return lit.Test.Result(Test.PASS)
+
+    script, tmpBase, execdir = res
+
     # Create the output directory if it does not already exist.
     lit.util.mkdir_p(os.path.dirname(tmpBase))
 
@@ -518,19 +506,3 @@ def _runShTest(test, litConfig, useExternalSh,
         output += """Command Output (stderr):\n--\n%s\n--\n""" % (err,)
 
     return lit.Test.Result(status, output)
-
-
-def executeShTest(test, litConfig, useExternalSh,
-                  extra_substitutions=[]):
-    if test.config.unsupported:
-        return (Test.UNSUPPORTED, 'Test is unsupported')
-
-    res = parseIntegratedTestScript(test, useExternalSh, extra_substitutions)
-    if isinstance(res, lit.Test.Result):
-        return res
-    if litConfig.noExecute:
-        return lit.Test.Result(Test.PASS)
-
-    script, tmpBase, execdir = res
-    return _runShTest(test, litConfig, useExternalSh, script, tmpBase, execdir)
-

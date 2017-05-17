@@ -8,8 +8,10 @@
 
 #include <minix/cpufeature.h>
 #include <sys/types.h>
+#include <machine/multiboot.h>
 #include "kernel/kernel.h"
 
+#include "archconst.h"
 #include "arch_proto.h"
 
 #include <sys/exec.h>
@@ -176,7 +178,7 @@ int tss_init(unsigned cpu, void * kernel_stack)
 	k_percpu_stacks[cpu] = t->sp0 = ((unsigned) kernel_stack) - X86_STACK_TOP_RESERVED;
 	/* 
 	 * set the cpu id at the top of the stack so we know on which cpu is
-	 * this stack in use when we trap to kernel
+	 * this stak in use when we trap to kernel
 	 */
 	*((reg_t *)(t->sp0 + 1 * sizeof(reg_t))) = cpu;
 
@@ -318,7 +320,7 @@ void prot_load_selectors(void)
 /*===========================================================================*
  *				prot_init				     *
  *===========================================================================*/
-void prot_init(void)
+void prot_init()
 {
   extern char k_boot_stktop;
 

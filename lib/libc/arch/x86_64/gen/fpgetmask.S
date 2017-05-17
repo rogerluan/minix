@@ -1,4 +1,4 @@
-/*	$NetBSD: fpgetmask.S,v 1.4 2014/05/22 15:01:56 uebayasi Exp $	*/
+/*	$NetBSD: fpgetmask.S,v 1.3 2002/06/12 19:17:22 fvdl Exp $	*/
 
 /*
  * Written by J.T. Conklin, Apr 4, 1995
@@ -24,8 +24,3 @@ ENTRY(fpgetmask)
 	notl %eax
 	andl $63,%eax
 	ret
-#ifdef WEAK_ALIAS
-END(_fpgetmask)
-#else
-END(fpgetmask)
-#endif

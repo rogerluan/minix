@@ -20,7 +20,7 @@
 
 using namespace llvm;
 
-void SmallPtrSetImplBase::shrink_and_clear() {
+void SmallPtrSetImpl::shrink_and_clear() {
   assert(!isSmall() && "Can't shrink a small set!");
   free(CurArray);
 
@@ -34,19 +34,18 @@ void SmallPtrSetImplBase::shrink_and_clear() {
   memset(CurArray, -1, CurArraySize*sizeof(void*));
 }
 
-std::pair<const void *const *, bool>
-SmallPtrSetImplBase::insert_imp(const void *Ptr) {
+bool SmallPtrSetImpl::insert_imp(const void * Ptr) {
   if (isSmall()) {
     // Check to see if it is already in the set.
     for (const void **APtr = SmallArray, **E = SmallArray+NumElements;
          APtr != E; ++APtr)
       if (*APtr == Ptr)
-        return std::make_pair(APtr, false);
-
+        return false;
+    
     // Nope, there isn't.  If we stay small, just 'pushback' now.
-    if (NumElements < CurArraySize) {
+    if (NumElements < CurArraySize-1) {
       SmallArray[NumElements++] = Ptr;
-      return std::make_pair(SmallArray + (NumElements - 1), true);
+      return true;
     }
     // Otherwise, hit the big set case, which will call grow.
   }
@@ -62,18 +61,17 @@ SmallPtrSetImplBase::insert_imp(const void *Ptr) {
   
   // Okay, we know we have space.  Find a hash bucket.
   const void **Bucket = const_cast<const void**>(FindBucketFor(Ptr));
-  if (*Bucket == Ptr)
-    return std::make_pair(Bucket, false); // Already inserted, good.
-
+  if (*Bucket == Ptr) return false; // Already inserted, good.
+  
   // Otherwise, insert it!
   if (*Bucket == getTombstoneMarker())
     --NumTombstones;
   *Bucket = Ptr;
   ++NumElements;  // Track density.
-  return std::make_pair(Bucket, true);
+  return true;
 }
 
-bool SmallPtrSetImplBase::erase_imp(const void * Ptr) {
+bool SmallPtrSetImpl::erase_imp(const void * Ptr) {
   if (isSmall()) {
     // Check to see if it is in the set.
     for (const void **APtr = SmallArray, **E = SmallArray+NumElements;
@@ -100,12 +98,12 @@ bool SmallPtrSetImplBase::erase_imp(const void * Ptr) {
   return true;
 }
 
-const void * const *SmallPtrSetImplBase::FindBucketFor(const void *Ptr) const {
+const void * const *SmallPtrSetImpl::FindBucketFor(const void *Ptr) const {
   unsigned Bucket = DenseMapInfo<void *>::getHashValue(Ptr) & (CurArraySize-1);
   unsigned ArraySize = CurArraySize;
   unsigned ProbeAmt = 1;
   const void *const *Array = CurArray;
-  const void *const *Tombstone = nullptr;
+  const void *const *Tombstone = 0;
   while (1) {
     // Found Ptr's bucket?
     if (Array[Bucket] == Ptr)
@@ -129,7 +127,7 @@ const void * const *SmallPtrSetImplBase::FindBucketFor(const void *Ptr) const {
 
 /// Grow - Allocate a larger backing store for the buckets and move it over.
 ///
-void SmallPtrSetImplBase::Grow(unsigned NewSize) {
+void SmallPtrSetImpl::Grow(unsigned NewSize) {
   // Allocate at twice as many buckets, but at least 128.
   unsigned OldSize = CurArraySize;
   
@@ -165,8 +163,8 @@ void SmallPtrSetImplBase::Grow(unsigned NewSize) {
   }
 }
 
-SmallPtrSetImplBase::SmallPtrSetImplBase(const void **SmallStorage,
-                                 const SmallPtrSetImplBase& that) {
+SmallPtrSetImpl::SmallPtrSetImpl(const void **SmallStorage,
+                                 const SmallPtrSetImpl& that) {
   SmallArray = SmallStorage;
 
   // If we're becoming small, prepare to insert into our stack space
@@ -188,38 +186,9 @@ SmallPtrSetImplBase::SmallPtrSetImplBase(const void **SmallStorage,
   NumTombstones = that.NumTombstones;
 }
 
-SmallPtrSetImplBase::SmallPtrSetImplBase(const void **SmallStorage,
-                                         unsigned SmallSize,
-                                         SmallPtrSetImplBase &&that) {
-  SmallArray = SmallStorage;
-
-  // Copy over the basic members.
-  CurArraySize = that.CurArraySize;
-  NumElements = that.NumElements;
-  NumTombstones = that.NumTombstones;
-
-  // When small, just copy into our small buffer.
-  if (that.isSmall()) {
-    CurArray = SmallArray;
-    memcpy(CurArray, that.CurArray, sizeof(void *) * CurArraySize);
-  } else {
-    // Otherwise, we steal the large memory allocation and no copy is needed.
-    CurArray = that.CurArray;
-    that.CurArray = that.SmallArray;
-  }
-
-  // Make the "that" object small and empty.
-  that.CurArraySize = SmallSize;
-  assert(that.CurArray == that.SmallArray);
-  that.NumElements = 0;
-  that.NumTombstones = 0;
-}
-
 /// CopyFrom - implement operator= from a smallptrset that has the same pointer
 /// type, but may have a different small size.
-void SmallPtrSetImplBase::CopyFrom(const SmallPtrSetImplBase &RHS) {
-  assert(&RHS != this && "Self-copy should be handled by the caller.");
-
+void SmallPtrSetImpl::CopyFrom(const SmallPtrSetImpl &RHS) {
   if (isSmall() && RHS.isSmall())
     assert(CurArraySize == RHS.CurArraySize &&
            "Cannot assign sets with different small sizes");
@@ -253,35 +222,7 @@ void SmallPtrSetImplBase::CopyFrom(const SmallPtrSetImplBase &RHS) {
   NumTombstones = RHS.NumTombstones;
 }
 
-void SmallPtrSetImplBase::MoveFrom(unsigned SmallSize,
-                                   SmallPtrSetImplBase &&RHS) {
-  assert(&RHS != this && "Self-move should be handled by the caller.");
-
-  if (!isSmall())
-    free(CurArray);
-
-  if (RHS.isSmall()) {
-    // Copy a small RHS rather than moving.
-    CurArray = SmallArray;
-    memcpy(CurArray, RHS.CurArray, sizeof(void*)*RHS.CurArraySize);
-  } else {
-    CurArray = RHS.CurArray;
-    RHS.CurArray = RHS.SmallArray;
-  }
-
-  // Copy the rest of the trivial members.
-  CurArraySize = RHS.CurArraySize;
-  NumElements = RHS.NumElements;
-  NumTombstones = RHS.NumTombstones;
-
-  // Make the RHS small and empty.
-  RHS.CurArraySize = SmallSize;
-  assert(RHS.CurArray == RHS.SmallArray);
-  RHS.NumElements = 0;
-  RHS.NumTombstones = 0;
-}
-
-void SmallPtrSetImplBase::swap(SmallPtrSetImplBase &RHS) {
+void SmallPtrSetImpl::swap(SmallPtrSetImpl &RHS) {
   if (this == &RHS) return;
 
   // We can only avoid copying elements if neither set is small.
@@ -331,7 +272,7 @@ void SmallPtrSetImplBase::swap(SmallPtrSetImplBase &RHS) {
   std::swap(this->NumElements, RHS.NumElements);
 }
 
-SmallPtrSetImplBase::~SmallPtrSetImplBase() {
+SmallPtrSetImpl::~SmallPtrSetImpl() {
   if (!isSmall())
     free(CurArray);
 }

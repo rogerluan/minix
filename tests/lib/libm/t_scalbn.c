@@ -1,4 +1,4 @@
-/* $NetBSD: t_scalbn.c,v 1.11 2014/03/03 10:39:08 martin Exp $ */
+/* $NetBSD: t_scalbn.c,v 1.10 2013/05/24 11:47:13 martin Exp $ */
 
 /*-
  * Copyright (c) 2011 The NetBSD Foundation, Inc.
@@ -29,7 +29,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 #include <sys/cdefs.h>
-__RCSID("$NetBSD: t_scalbn.c,v 1.11 2014/03/03 10:39:08 martin Exp $");
+__RCSID("$NetBSD: t_scalbn.c,v 1.10 2013/05/24 11:47:13 martin Exp $");
 
 #include <math.h>
 #include <limits.h>
@@ -99,6 +99,7 @@ ATF_TC_HEAD(scalbn_nan, tc)
 
 ATF_TC_BODY(scalbn_nan, tc)
 {
+#ifndef __vax__
 	const double x = 0.0L / 0.0L;
 	double y;
 	size_t i;
@@ -109,6 +110,7 @@ ATF_TC_BODY(scalbn_nan, tc)
 		y = scalbn(x, exps[i]);
 		ATF_CHECK(isnan(y) != 0);
 	}
+#endif
 }
 
 ATF_TC(scalbn_inf_neg);
@@ -119,11 +121,13 @@ ATF_TC_HEAD(scalbn_inf_neg, tc)
 
 ATF_TC_BODY(scalbn_inf_neg, tc)
 {
+#ifndef __vax__
 	const double x = -1.0L / 0.0L;
 	size_t i;
 
 	for (i = 0; i < __arraycount(exps); i++)
 		ATF_CHECK(scalbn(x, exps[i]) == x);
+#endif
 }
 
 ATF_TC(scalbn_inf_pos);
@@ -134,11 +138,13 @@ ATF_TC_HEAD(scalbn_inf_pos, tc)
 
 ATF_TC_BODY(scalbn_inf_pos, tc)
 {
+#ifndef __vax__
 	const double x = 1.0L / 0.0L;
 	size_t i;
 
 	for (i = 0; i < __arraycount(exps); i++)
 		ATF_CHECK(scalbn(x, exps[i]) == x);
+#endif
 }
 
 ATF_TC(scalbn_ldexp);
@@ -149,6 +155,7 @@ ATF_TC_HEAD(scalbn_ldexp, tc)
 
 ATF_TC_BODY(scalbn_ldexp, tc)
 {
+#ifndef __vax__
 #if FLT_RADIX == 2
 	const double x = 2.91288191221812821;
 	double y;
@@ -161,6 +168,7 @@ ATF_TC_BODY(scalbn_ldexp, tc)
 		    ldexp(x, exps[i]), y - ldexp(x, exps[i]));
 	}
 #endif
+#endif
 }
 
 ATF_TC(scalbn_zero_neg);
@@ -171,6 +179,7 @@ ATF_TC_HEAD(scalbn_zero_neg, tc)
 
 ATF_TC_BODY(scalbn_zero_neg, tc)
 {
+#ifndef __vax__
 	const double x = -0.0L;
 	double y;
 	size_t i;
@@ -182,6 +191,7 @@ ATF_TC_BODY(scalbn_zero_neg, tc)
 		ATF_CHECK(x == y);
 		ATF_CHECK(signbit(y) != 0);
 	}
+#endif
 }
 
 ATF_TC(scalbn_zero_pos);
@@ -192,6 +202,7 @@ ATF_TC_HEAD(scalbn_zero_pos, tc)
 
 ATF_TC_BODY(scalbn_zero_pos, tc)
 {
+#ifndef __vax__
 	const double x = 0.0L;
 	double y;
 	size_t i;
@@ -203,6 +214,7 @@ ATF_TC_BODY(scalbn_zero_pos, tc)
 		ATF_CHECK(x == y);
 		ATF_CHECK(signbit(y) == 0);
 	}
+#endif
 }
 
 /*
@@ -216,6 +228,7 @@ ATF_TC_HEAD(scalbnf_val, tc)
 
 ATF_TC_BODY(scalbnf_val, tc)
 {
+#ifndef __vax__
 	const struct testcase *tests = test_vals;
 	const size_t tcnt = __arraycount(test_vals);
 	size_t i;
@@ -230,6 +243,7 @@ ATF_TC_BODY(scalbnf_val, tc)
 		    "test %zu: return value %g instead of %g (difference %g)",
 		    i, rv, tests[i].result, tests[i].result-rv);
 	}
+#endif
 }
 
 ATF_TC(scalbnf_nan);
@@ -240,6 +254,7 @@ ATF_TC_HEAD(scalbnf_nan, tc)
 
 ATF_TC_BODY(scalbnf_nan, tc)
 {
+#ifndef __vax__
 	const float x = 0.0L / 0.0L;
 	float y;
 	size_t i;
@@ -250,6 +265,7 @@ ATF_TC_BODY(scalbnf_nan, tc)
 		y = scalbnf(x, exps[i]);
 		ATF_CHECK(isnan(y) != 0);
 	}
+#endif
 }
 
 ATF_TC(scalbnf_inf_neg);
@@ -260,11 +276,13 @@ ATF_TC_HEAD(scalbnf_inf_neg, tc)
 
 ATF_TC_BODY(scalbnf_inf_neg, tc)
 {
+#ifndef __vax__
 	const float x = -1.0L / 0.0L;
 	size_t i;
 
 	for (i = 0; i < __arraycount(exps); i++)
 		ATF_CHECK(scalbnf(x, exps[i]) == x);
+#endif
 }
 
 ATF_TC(scalbnf_inf_pos);
@@ -275,11 +293,13 @@ ATF_TC_HEAD(scalbnf_inf_pos, tc)
 
 ATF_TC_BODY(scalbnf_inf_pos, tc)
 {
+#ifndef __vax__
 	const float x = 1.0L / 0.0L;
 	size_t i;
 
 	for (i = 0; i < __arraycount(exps); i++)
 		ATF_CHECK(scalbnf(x, exps[i]) == x);
+#endif
 }
 
 ATF_TC(scalbnf_ldexpf);
@@ -290,6 +310,7 @@ ATF_TC_HEAD(scalbnf_ldexpf, tc)
 
 ATF_TC_BODY(scalbnf_ldexpf, tc)
 {
+#ifndef __vax__
 #if FLT_RADIX == 2
 	const float x = 2.91288191221812821;
 	float y;
@@ -302,6 +323,7 @@ ATF_TC_BODY(scalbnf_ldexpf, tc)
 		    i, exps[i], y, ldexpf(x, exps[i]), y-ldexpf(x, exps[i]));
 	}
 #endif
+#endif
 }
 
 ATF_TC(scalbnf_zero_neg);
@@ -312,6 +334,7 @@ ATF_TC_HEAD(scalbnf_zero_neg, tc)
 
 ATF_TC_BODY(scalbnf_zero_neg, tc)
 {
+#ifndef __vax__
 	const float x = -0.0L;
 	float y;
 	size_t i;
@@ -323,6 +346,7 @@ ATF_TC_BODY(scalbnf_zero_neg, tc)
 		ATF_CHECK(x == y);
 		ATF_CHECK(signbit(y) != 0);
 	}
+#endif
 }
 
 ATF_TC(scalbnf_zero_pos);
@@ -333,6 +357,7 @@ ATF_TC_HEAD(scalbnf_zero_pos, tc)
 
 ATF_TC_BODY(scalbnf_zero_pos, tc)
 {
+#ifndef __vax__
 	const float x = 0.0L;
 	float y;
 	size_t i;
@@ -344,6 +369,7 @@ ATF_TC_BODY(scalbnf_zero_pos, tc)
 		ATF_CHECK(x == y);
 		ATF_CHECK(signbit(y) == 0);
 	}
+#endif
 }
 
 /*
@@ -385,6 +411,7 @@ ATF_TC_HEAD(scalbnl_nan, tc)
 
 ATF_TC_BODY(scalbnl_nan, tc)
 {
+#ifndef __vax__
 #ifndef __HAVE_LONG_DOUBLE
 	atf_tc_skip("Requires long double support");
 #else
@@ -402,6 +429,7 @@ ATF_TC_BODY(scalbnl_nan, tc)
 		ATF_CHECK(isnan(y) != 0);
 	}
 #endif
+#endif
 }
 
 ATF_TC(scalbnl_inf_neg);
@@ -412,6 +440,7 @@ ATF_TC_HEAD(scalbnl_inf_neg, tc)
 
 ATF_TC_BODY(scalbnl_inf_neg, tc)
 {
+#ifndef __vax__
 #ifndef __HAVE_LONG_DOUBLE
 	atf_tc_skip("Requires long double support");
 #else
@@ -420,6 +449,7 @@ ATF_TC_BODY(scalbnl_inf_neg, tc)
 
 	for (i = 0; i < __arraycount(exps); i++)
 		ATF_CHECK(scalbnl(x, exps[i]) == x);
+#endif
 #endif
 }
 
@@ -431,6 +461,7 @@ ATF_TC_HEAD(scalbnl_inf_pos, tc)
 
 ATF_TC_BODY(scalbnl_inf_pos, tc)
 {
+#ifndef __vax__
 #ifndef __HAVE_LONG_DOUBLE
 	atf_tc_skip("Requires long double support");
 #else
@@ -439,6 +470,7 @@ ATF_TC_BODY(scalbnl_inf_pos, tc)
 
 	for (i = 0; i < __arraycount(exps); i++)
 		ATF_CHECK(scalbnl(x, exps[i]) == x);
+#endif
 #endif
 }
 
@@ -450,6 +482,7 @@ ATF_TC_HEAD(scalbnl_zero_neg, tc)
 
 ATF_TC_BODY(scalbnl_zero_neg, tc)
 {
+#ifndef __vax__
 #ifndef __HAVE_LONG_DOUBLE
 	atf_tc_skip("Requires long double support");
 #else
@@ -465,6 +498,7 @@ ATF_TC_BODY(scalbnl_zero_neg, tc)
 		ATF_CHECK(signbit(y) != 0);
 	}
 #endif
+#endif
 }
 
 ATF_TC(scalbnl_zero_pos);
@@ -475,6 +509,7 @@ ATF_TC_HEAD(scalbnl_zero_pos, tc)
 
 ATF_TC_BODY(scalbnl_zero_pos, tc)
 {
+#ifndef __vax__
 #ifndef __HAVE_LONG_DOUBLE
 	atf_tc_skip("Requires long double support");
 #else
@@ -489,6 +524,7 @@ ATF_TC_BODY(scalbnl_zero_pos, tc)
 		ATF_CHECK(x == y);
 		ATF_CHECK(signbit(y) == 0);
 	}
+#endif
 #endif
 }
 

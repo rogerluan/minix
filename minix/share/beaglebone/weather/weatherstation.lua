@@ -1,6 +1,6 @@
 #!/usr/bin/lua
 --
--- weatherstation.lua - a simple web server intended to be run from inetd to
+-- weatherstation.lua - a simple web server intended to be run from tcpd to
 -- expose sensors from the BeagleBone Weather cape and serve the web app.
 --
 

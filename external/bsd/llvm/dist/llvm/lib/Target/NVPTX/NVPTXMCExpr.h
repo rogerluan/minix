@@ -9,8 +9,8 @@
 
 // Modeled after ARMMCExpr
 
-#ifndef LLVM_LIB_TARGET_NVPTX_NVPTXMCEXPR_H
-#define LLVM_LIB_TARGET_NVPTX_NVPTXMCEXPR_H
+#ifndef NVPTXMCEXPR_H
+#define NVPTXMCEXPR_H
 
 #include "llvm/ADT/APFloat.h"
 #include "llvm/MC/MCExpr.h"
@@ -61,19 +61,18 @@ public:
 
 /// @}
 
-  void PrintImpl(raw_ostream &OS) const override;
+  void PrintImpl(raw_ostream &OS) const;
   bool EvaluateAsRelocatableImpl(MCValue &Res,
-                                 const MCAsmLayout *Layout,
-                                 const MCFixup *Fixup) const override {
+                                 const MCAsmLayout *Layout) const {
     return false;
   }
-  void visitUsedExpr(MCStreamer &Streamer) const override {};
-  const MCSection *FindAssociatedSection() const override {
-    return nullptr;
+  void AddValueSymbols(MCAssembler *) const {};
+  const MCSection *FindAssociatedSection() const {
+    return NULL;
   }
 
   // There are no TLS NVPTXMCExprs at the moment.
-  void fixELFSymbolsInTLSFixups(MCAssembler &Asm) const override {}
+  void fixELFSymbolsInTLSFixups(MCAssembler &Asm) const {}
 
   static bool classof(const MCExpr *E) {
     return E->getKind() == MCExpr::Target;

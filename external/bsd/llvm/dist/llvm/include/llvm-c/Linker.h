@@ -21,7 +21,6 @@ extern "C" {
 #endif
 
 
-/* Note: LLVMLinkerPreserveSource has no effect. */
 typedef enum {
   LLVMLinkerDestroySource = 0, /* Allow source module to be destroyed. */
   LLVMLinkerPreserveSource = 1 /* Preserve the source module. */

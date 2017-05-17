@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -fsyntax-only -triple i686-pc-win32 -verify %s
+// RUN: %clang_cc1 -fsyntax-only -verify %s
 // PR14993
 
 namespace test1 {
@@ -54,10 +54,4 @@ namespace test10 {
   inline void foo();
   void test() { foo(); }
   inline void foo() __attribute__((gnu_inline));
-}
-
-namespace test11 {
-  inline void foo() __attribute__((dllexport));
-  inline void bar() __attribute__((dllimport));
-  void test() { foo(); bar(); }
 }

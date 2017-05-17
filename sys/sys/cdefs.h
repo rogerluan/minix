@@ -1,6 +1,7 @@
-/*	$NetBSD: cdefs.h,v 1.126 2015/08/30 08:46:44 mlelstv Exp $	*/
+/*	$NetBSD: cdefs.h,v 1.116 2013/10/25 14:54:25 apb Exp $	*/
 
-/* * Copyright (c) 1991, 1993
+/*
+ * Copyright (c) 1991, 1993
  *	The Regents of the University of California.  All rights reserved.
  *
  * This code is derived from software contributed to Berkeley by
@@ -35,10 +36,6 @@
 
 #ifndef	_SYS_CDEFS_H_
 #define	_SYS_CDEFS_H_
-
-#ifdef _KERNEL_OPT
-#include "opt_diagnostic.h"
-#endif
 
 /*
  * Macro to test if we're using a GNU C compiler of a specific vintage
@@ -149,9 +146,7 @@
 #ifdef __COUNTER__
 #define	__CTASSERT(x)		__CTASSERT0(x, __ctassert, __COUNTER__)
 #else
-#define	__CTASSERT(x)		__CTASSERT99(x, __INCLUDE_LEVEL__, __LINE__)
-#define	__CTASSERT99(x, a, b)	__CTASSERT0(x, __CONCAT(__ctassert,a), \
-					       __CONCAT(_,b))
+#define	__CTASSERT(x)		__CTASSERT0(x, __ctassert, __LINE__)
 #endif
 #define	__CTASSERT0(x, y, z)	__CTASSERT1(x, y, z) 
 #define	__CTASSERT1(x, y, z)	typedef char y ## z[/*CONSTCOND*/(x) ? 1 : -1] __unused
@@ -300,12 +295,6 @@
 #define	__noprofile	/* nothing */
 #endif
 
-#if __GNUC_PREREQ__(4, 6) || defined(__clang__)
-#define	__unreachable()	__builtin_unreachable()
-#else
-#define	__unreachable()	do {} while (/*CONSTCOND*/0)
-#endif
-
 #if defined(__cplusplus)
 #define	__BEGIN_EXTERN_C	extern "C" {
 #define	__END_EXTERN_C		}
@@ -363,10 +352,14 @@
 #define	__packed	__packed
 #define	__aligned(x)	/* delete */
 #define	__section(x)	/* delete */
-#elif __GNUC_PREREQ__(2, 7) || defined(__PCC__)
+#elif __GNUC_PREREQ__(2, 7)
 #define	__packed	__attribute__((__packed__))
 #define	__aligned(x)	__attribute__((__aligned__(x)))
 #define	__section(x)	__attribute__((__section__(x)))
+#elif defined(__PCC__)
+#define	__packed	_Pragma("packed 1")
+#define	__aligned(x)   	_Pragma("aligned " __STRING(x))
+#define	__section(x)   	_Pragma("section " ## x)
 #elif defined(_MSC_VER)
 #define	__packed	/* ignore */
 #else
@@ -419,7 +412,7 @@
 #error "No function renaming possible"
 #endif /* __GNUC__ */
 #else /* _STANDALONE || _KERNEL */
-#define	__RENAME(x)	no renaming in kernel/standalone environment
+#define	__RENAME(x)	no renaming in kernel or standalone environment
 #endif
 
 /*
@@ -554,7 +547,7 @@
 #ifndef __ASSEMBLER__
 /* __BIT(n): nth bit, where __BIT(0) == 0x1. */
 #define	__BIT(__n)	\
-    (((uintmax_t)(__n) >= NBBY * sizeof(uintmax_t)) ? 0 : ((uintmax_t)1 << (uintmax_t)((__n) & (NBBY * sizeof(uintmax_t) - 1))))
+    (((uintmax_t)(__n) >= NBBY * sizeof(uintmax_t)) ? 0 : ((uintmax_t)1 << (uintmax_t)(__n)))
 
 /* __BITS(m, n): bits m through n, m < n. */
 #define	__BITS(__m, __n)	\
@@ -583,9 +576,6 @@
 #else
 #define __CAST(__dt, __st)	((__dt)(__st))
 #endif
-
-#define __CASTV(__dt, __st)	__CAST(__dt, __CAST(void *, __st))
-#define __CASTCV(__dt, __st)	__CAST(__dt, __CAST(const void *, __st))
 
 #define __USE(a) ((void)(a))
 

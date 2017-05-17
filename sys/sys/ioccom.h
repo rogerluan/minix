@@ -1,4 +1,4 @@
-/*	$NetBSD: ioccom.h,v 1.12 2014/12/10 00:16:05 christos Exp $	*/
+/*	$NetBSD: ioccom.h,v 1.11 2011/10/19 10:53:12 yamt Exp $	*/
 
 /*-
  * Copyright (c) 1982, 1986, 1990, 1993, 1994
@@ -88,12 +88,6 @@
 /* this should be _IORW, but stdio got there first */
 #define	_IOWR(g,n,t)	_IOC(IOC_INOUT,	(g), (n), sizeof(t))
 
-#define IOCSNPRINTF(buf, len, cmd) \
-    snprintf((buf), (len), "_IO%s%s('%c', %hhu)", \
-	(((cmd) >> 30) & 1) ? "W" : "", \
-	(((cmd) >> 30) & 2) ? "R" : "", \
-	(char)IOCGROUP(cmd), (unsigned char)(cmd))
-		
 #if defined(__minix)
 #define _IOW_BIG(y,t)  (y | ((sizeof(t) & IOCPARM_MASK_BIG) << IOCPARM_SHIFT_BIG) \
         | IOC_IN | IOC_BIG)
@@ -105,6 +99,7 @@
 /* Decode an ioctl call. */
 #define _MINIX_IOCTL_SIZE(i)            (((i) >> IOCPARM_SHIFT) & IOCPARM_MASK)
 #define _MINIX_IOCTL_IOR(i)             ((i) & IOC_OUT)
+#define _MINIX_IOCTL_IORW(i)            ((i) & IOC_INOUT)
 #define _MINIX_IOCTL_IOW(i)             ((i) & IOC_IN)
 
 /* Recognize and decode size of a 'big' ioctl call. */

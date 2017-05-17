@@ -13,8 +13,8 @@
 ///
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_CLANG_BASIC_TARGETCXXABI_H
-#define LLVM_CLANG_BASIC_TARGETCXXABI_H
+#ifndef LLVM_CLANG_TARGETCXXABI_H
+#define LLVM_CLANG_TARGETCXXABI_H
 
 #include "llvm/ADT/Triple.h"
 #include "llvm/Support/ErrorHandling.h"
@@ -63,14 +63,6 @@ public:
     ///   - constructor/destructor signatures.
     iOS,
 
-    /// The iOS 64-bit ABI is follows ARM's published 64-bit ABI more
-    /// closely, but we don't guarantee to follow it perfectly.
-    ///
-    /// It is documented here:
-    ///    http://infocenter.arm.com
-    ///                  /help/topic/com.arm.doc.ihi0059a/IHI0059A_cppabi64.pdf
-    iOS64,
-
     /// The generic AArch64 ABI is also a modified version of the Itanium ABI,
     /// but it has fewer divergences than the 32-bit ARM ABI.
     ///
@@ -78,12 +70,6 @@ public:
     ///   - representation of member function pointers adjusted as in ARM.
     ///   - guard variables  are smaller.
     GenericAArch64,
-
-    /// The generic Mips ABI is a modified version of the Itanium ABI.
-    ///
-    /// At the moment, only change from the generic ABI in this case is:
-    ///   - representation of member function pointers adjusted as in ARM.
-    GenericMIPS,
 
     /// The Microsoft ABI is the ABI used by Microsoft Visual Studio (and
     /// compatible compilers).
@@ -119,8 +105,6 @@ public:
     case GenericItanium:
     case GenericARM:
     case iOS:
-    case iOS64:
-    case GenericMIPS:
       return true;
 
     case Microsoft:
@@ -136,8 +120,6 @@ public:
     case GenericItanium:
     case GenericARM:
     case iOS:
-    case iOS64:
-    case GenericMIPS:
       return false;
 
     case Microsoft:
@@ -153,14 +135,14 @@ public:
     return !isMicrosoft();
   }
 
-  /// Are arguments to a call destroyed left to right in the callee?
+  /// Are temporary objects passed by value to a call destroyed by the callee?
   /// This is a fundamental language change, since it implies that objects
   /// passed by value do *not* live to the end of the full expression.
   /// Temporaries passed to a function taking a const reference live to the end
   /// of the full expression as usual.  Both the caller and the callee must
   /// have access to the destructor, while only the caller needs the
   /// destructor if this is false.
-  bool areArgsDestroyedLeftToRightInCallee() const {
+  bool isArgumentDestroyedByCallee() const {
     return isMicrosoft();
   }
 
@@ -213,14 +195,12 @@ public:
   bool canKeyFunctionBeInline() const {
     switch (getKind()) {
     case GenericARM:
-    case iOS64:
       return false;
 
     case GenericAArch64:
     case GenericItanium:
     case iOS:   // old iOS compilers did not follow this rule
     case Microsoft:
-    case GenericMIPS:
       return true;
     }
     llvm_unreachable("bad ABI kind");
@@ -250,7 +230,7 @@ public:
 
     /// Only allocate objects in the tail padding of a base class if
     /// the base class is not POD according to the rules of C++ TR1.
-    /// This is non-strictly conforming in C++11 mode.
+    /// This is non strictly conforming in C++11 mode.
     UseTailPaddingUnlessPOD03,
 
     /// Only allocate objects in the tail padding of a base class if
@@ -266,13 +246,7 @@ public:
     case GenericAArch64:
     case GenericARM:
     case iOS:
-    case GenericMIPS:
       return UseTailPaddingUnlessPOD03;
-
-    // iOS on ARM64 uses the C++11 POD rules.  It does not honor the
-    // Itanium exception about classes with over-large bitfields.
-    case iOS64:
-      return UseTailPaddingUnlessPOD11;
 
     // MSVC always allocates fields in the tail-padding of a base class
     // subobject, even if they're POD.

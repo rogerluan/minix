@@ -1,23 +1,13 @@
-#	$NetBSD: Makefile,v 1.139 2014/08/08 19:38:47 apb Exp $
+#	$NetBSD: Makefile,v 1.137 2012/11/06 12:25:56 skrll Exp $
 
 .include <bsd.own.mk>
 
 .if defined(__MINIX)
 SUBDIR+=	texinfo
-
-.if ${USETOOLS} != "yes"
-# MINIX: make sure sources are fetched, even when tools were not built earlier
-MODULE=		texinfo
-GNUHOSTDIST=	${NETBSDSRCDIR}/gnu/dist/${MODULE}
-.include "${.CURDIR}/../../minix/Makefile.fetchgnu"
-
-realall realdepend: ${GNUHOSTDIST:H}/.gitignore
-.endif # defined(__MINIX)
-
 .else
 SUBDIR+=	bc
 SUBDIR+=	c89 c99
-SUBDIR+=	dc diffutils
+SUBDIR+=	dc diffutils gkermit
 SUBDIR+=	rcs send-pr texinfo
 
 .if ${MKBSDGREP} == "no"
@@ -29,6 +19,14 @@ SUBDIR+=	groff
 .endif
 
 SUBDIR+=	gettext
+
+.if ${MKGCC} != "no"
+.if ${HAVE_GCC} == 4
+.if ${MKGCCCMDS} != "no"
+SUBDIR+=	gcc4
+.endif
+.endif
+.endif
 .endif # defined(__MINIX)
 
 .include <bsd.subdir.mk>

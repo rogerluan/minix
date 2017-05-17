@@ -1,13 +1,14 @@
 set(LLVM_LINK_COMPONENTS
-  Support
+  ${LLVM_TARGETS_TO_BUILD}
+  asmparser
+  bitreader
+  support
+  mc
   )
 
 add_clang_unittest(FrontendTests
   FrontendActionTest.cpp
   )
 target_link_libraries(FrontendTests
-  clangAST
   clangFrontend
-  clangLex
-  clangSema
   )

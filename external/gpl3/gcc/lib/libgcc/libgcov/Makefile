@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.8 2014/06/01 19:51:01 mrg Exp $
+#	$NetBSD: Makefile,v 1.5 2013/08/22 00:16:54 matt Exp $
 
 REQUIRETOOLS=	yes
 NOPIC=		# defined
@@ -7,7 +7,6 @@ NOLINT=		# defined
 
 LIB=		gcov
 
-.include "../../../Makefile.gcc_path"
 .include <bsd.own.mk>
 .include <bsd.init.mk>
 
@@ -28,6 +27,11 @@ CLEANFILES+=	${LIBGCOVSRCS}
 ${LIBGCOVSRCS}: ${.CURDIR}/Makefile
 	${_MKTARGET_CREATE}
 	printf '#define L${.PREFIX}\n#include <libgcov.c>\n' >${.TARGET}
+
+.if defined(__MINIX)
+NOCLANGERROR=	yes
+NOGCCERROR=	yes
+.endif # defined(__MINIX)
 
 .include <bsd.lib.mk>
 .else

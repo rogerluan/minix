@@ -4,41 +4,41 @@
 # the installation CD-ROM.
 
 RC=/usr/etc/rc.package
-CDPATH=packages/$(uname -r)/$(uname -m)/All
+CDMP=/mnt
+CDPACK=${CDMP}/install/packages
 PACKSUM=pkg_summary.bz2
+cdpackages=""
+cdmounted=""
 
-# Run user rc script
 if [ -f "$RC" ]
-then
-	. "$RC"
+then   . "$RC"
 fi
 
-# Mount CD
+# Is there a usable CD to install packages from?
 if [ -n "$cddrive" ]
-then
-	if [ -z $(mount | grep 'on /mnt ') ]
-	then
-		echo "Mounting $cddrive on /mnt."
-		mount $cddrive /mnt
-	fi
+then   pack=${cddrive}p2
+       umount $pack >/dev/null 2>&1 || true
+       echo "Checking for CD in $pack."
+       if mount -r $pack $CDMP 2>/dev/null
+       then    fn="$CDPACK/$PACKSUM"
+               echo "Found."
+               cdmounted=1
+               cdpackages=$fn
+               if [ ! -f $cdpackages ]
+               then    cdpackages=""
+                       echo "No package summary found on CD in $fn."
+		       exit 1
+               fi
+       else    echo "Not found."
+               exit 1
+       fi
+else   echo "Don't know where the install CD is. You can set it in $RC."
+       exit 1
 fi
 
-# Find package summary
-for i in / /mnt
-do
-	if [ -f $i/$CDPATH/$PACKSUM ]
-	then
-		(>&2 echo "Found package summary at $i/$CDPATH/$PACKSUM.")
+# Set package repo to CD and populate package db
+export PKG_REPOS=${CDPACK}
+pkgin update
 
-		# Set package repo to CD and populate package db
-		export PKG_REPOS=$i/$CDPATH/
-		pkgin update
-
-		# Run pkgin
-		exec pkgin $@
-	fi
-done
-
-echo "Can't find package summary. Please mount CD first at /mnt and make sure"
-echo "that $CDPATH/$PACKSUM exists on the CD."
-exit 1
+# Run pkgin
+pkgin $@

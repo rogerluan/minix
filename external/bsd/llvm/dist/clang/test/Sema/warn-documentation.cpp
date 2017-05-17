@@ -4,43 +4,35 @@
 // RUN: c-index-test -test-load-source all -comments-xml-schema=%S/../../bindings/xml/comment-xml-schema.rng %s | FileCheck %s -check-prefix=WRONG
 // WRONG-NOT: CommentXMLInvalid
 
-// expected-warning@+2 {{HTML tag 'a' requires an end tag}}
 // expected-warning@+1 {{expected quoted string after equals sign}}
 /// <a href=>
 int test_html1(int);
 
-// expected-warning@+2 {{HTML tag 'a' requires an end tag}}
 // expected-warning@+1 {{expected quoted string after equals sign}}
 /// <a href==>
 int test_html2(int);
 
-// expected-warning@+3 {{HTML tag 'a' requires an end tag}}
 // expected-warning@+2 {{expected quoted string after equals sign}}
 // expected-warning@+1 {{HTML start tag prematurely ended, expected attribute name or '>'}}
 /// <a href= blah
 int test_html3(int);
 
-// expected-warning@+2 {{HTML tag 'a' requires an end tag}}
 // expected-warning@+1 {{HTML start tag prematurely ended, expected attribute name or '>'}}
 /// <a =>
 int test_html4(int);
 
-// expected-warning@+2 {{HTML tag 'a' requires an end tag}}
 // expected-warning@+1 {{HTML start tag prematurely ended, expected attribute name or '>'}}
 /// <a "aaa">
 int test_html5(int);
 
-// expected-warning@+2 {{HTML tag 'a' requires an end tag}}
 // expected-warning@+1 {{HTML start tag prematurely ended, expected attribute name or '>'}}
 /// <a a="b" =>
 int test_html6(int);
 
-// expected-warning@+2 {{HTML tag 'a' requires an end tag}}
 // expected-warning@+1 {{HTML start tag prematurely ended, expected attribute name or '>'}}
 /// <a a="b" "aaa">
 int test_html7(int);
 
-// expected-warning@+2 {{HTML tag 'a' requires an end tag}}
 // expected-warning@+1 {{HTML start tag prematurely ended, expected attribute name or '>'}}
 /// <a a="b" =
 int test_html8(int);
@@ -75,8 +67,6 @@ int test_html_nesting3(int);
 /// Bbb</p>
 int test_html_nesting4(int);
 
-// expected-warning@+3 {{HTML tag 'b' requires an end tag}}
-// expected-warning@+2 {{HTML tag 'i' requires an end tag}}
 // expected-warning@+1 {{HTML end tag does not match any start tag}}
 /// <b><i>Meow</a>
 int test_html_nesting5(int);
@@ -91,9 +81,6 @@ int test_html_nesting6(int);
 /// <b><i>Meow</b></i>
 int test_html_nesting7(int);
 
-// expected-warning@+1 {{HTML tag 'b' requires an end tag}}
-/// <b>Meow
-int test_html_nesting8(int);
 
 // expected-warning@+1 {{empty paragraph passed to '\brief' command}}
 /// \brief\returns Aaa
@@ -180,13 +167,7 @@ int test_multiple_returns4(int);
 
 // expected-warning@+1 {{'\param' command used in a comment that is not attached to a function declaration}}
 /// \param a Blah blah.
-int test_param1_backslash;
-
-// rdar://13066276
-// Check that the diagnostic uses the same command marker as the comment.
-// expected-warning@+1 {{'@param' command used in a comment that is not attached to a function declaration}}
-/// @param a Blah blah.
-int test_param1_at;
+int test_param1;
 
 // expected-warning@+1 {{empty paragraph passed to '\param' command}}
 /// \param
@@ -288,85 +269,41 @@ int test_param21(int a);
 /// \param x2 Ccc.
 int test_param22(int x1, int x2, int x3);
 
-//===---
-// Test that we treat typedefs to some non-function types as functions for the
-// purposes of documentation comment parsing.
-//===---
-
-namespace foo {
-  inline namespace bar {
-    template<typename>
-    struct function_wrapper {};
-
-    template<unsigned>
-    struct not_a_function_wrapper {};
-  }
-};
+// expected-warning@+2 {{parameter 'bbb' not found in the function declaration}} expected-note@+2 {{did you mean 'ccc'?}}
+/// \param aaa Meow.
+/// \param bbb Bbb.
+/// \returns aaa.
+typedef int test_param23(int aaa, int ccc);
 
 // expected-warning@+2 {{parameter 'bbb' not found in the function declaration}} expected-note@+2 {{did you mean 'ccc'?}}
 /// \param aaa Meow.
 /// \param bbb Bbb.
 /// \returns aaa.
-typedef int test_function_like_typedef1(int aaa, int ccc);
+typedef int (*test_param24)(int aaa, int ccc);
 
 // expected-warning@+2 {{parameter 'bbb' not found in the function declaration}} expected-note@+2 {{did you mean 'ccc'?}}
 /// \param aaa Meow.
 /// \param bbb Bbb.
 /// \returns aaa.
-typedef int (*test_function_like_typedef2)(int aaa, int ccc);
+typedef int (* const test_param25)(int aaa, int ccc);
 
 // expected-warning@+2 {{parameter 'bbb' not found in the function declaration}} expected-note@+2 {{did you mean 'ccc'?}}
 /// \param aaa Meow.
 /// \param bbb Bbb.
 /// \returns aaa.
-typedef int (* const test_function_like_typedef3)(int aaa, int ccc);
+typedef int (C::*test_param26)(int aaa, int ccc);
 
-// expected-warning@+2 {{parameter 'bbb' not found in the function declaration}} expected-note@+2 {{did you mean 'ccc'?}}
-/// \param aaa Meow.
-/// \param bbb Bbb.
-/// \returns aaa.
-typedef int (C::*test_function_like_typedef4)(int aaa, int ccc);
-
-// expected-warning@+2 {{parameter 'bbb' not found in the function declaration}} expected-note@+2 {{did you mean 'ccc'?}}
-/// \param aaa Meow.
-/// \param bbb Bbb.
-/// \returns aaa.
-typedef foo::function_wrapper<int (int aaa, int ccc)> test_function_like_typedef5;
-
-// expected-warning@+2 {{parameter 'bbb' not found in the function declaration}} expected-note@+2 {{did you mean 'ccc'?}}
-/// \param aaa Meow.
-/// \param bbb Bbb.
-/// \returns aaa.
-typedef foo::function_wrapper<int (int aaa, int ccc)> *test_function_like_typedef6;
-
-// expected-warning@+2 {{parameter 'bbb' not found in the function declaration}} expected-note@+2 {{did you mean 'ccc'?}}
-/// \param aaa Meow.
-/// \param bbb Bbb.
-/// \returns aaa.
-typedef foo::function_wrapper<int (int aaa, int ccc)> &test_function_like_typedef7;
-
-// expected-warning@+2 {{parameter 'bbb' not found in the function declaration}} expected-note@+2 {{did you mean 'ccc'?}}
-/// \param aaa Meow.
-/// \param bbb Bbb.
-/// \returns aaa.
-typedef foo::function_wrapper<int (int aaa, int ccc)> &&test_function_like_typedef8;
-
-
-typedef int (*test_not_function_like_typedef1)(int aaa);
+typedef int (*test_param27)(int aaa);
 
 // expected-warning@+1 {{'\param' command used in a comment that is not attached to a function declaration}}
 /// \param aaa Meow.
-typedef test_not_function_like_typedef1 test_not_function_like_typedef2;
+typedef test_param27 test_param28;
 
 // rdar://13066276
-// Check that the diagnostic uses the same command marker as the comment.
 // expected-warning@+1 {{'@param' command used in a comment that is not attached to a function declaration}}
 /// @param aaa Meow.
-typedef unsigned int test_not_function_like_typedef3;
+typedef unsigned int test_param29;
 
-// expected-warning@+1 {{'\param' command used in a comment that is not attached to a function declaration}}
-/// \param aaa Meow.
-typedef foo::not_a_function_wrapper<1> test_not_function_like_typedef4;
 
 /// \param aaa Aaa
 /// \param ... Vararg
@@ -382,26 +319,6 @@ int test_vararg_param3(int aaa);
 // expected-warning@+1 {{parameter '...' not found in the function declaration}}
 /// \param ... Vararg
 int test_vararg_param4();
-
-
-/// \param aaa Aaa
-/// \param ... Vararg
-template<typename T>
-int test_template_vararg_param1(int aaa, ...);
-
-/// \param ... Vararg
-template<typename T>
-int test_template_vararg_param2(...);
-
-// expected-warning@+1 {{parameter '...' not found in the function declaration}} expected-note@+1 {{did you mean 'aaa'?}}
-/// \param ... Vararg
-template<typename T>
-int test_template_vararg_param3(int aaa);
-
-// expected-warning@+1 {{parameter '...' not found in the function declaration}}
-/// \param ... Vararg
-template<typename T>
-int test_template_vararg_param4();
 
 
 // expected-warning@+1 {{'\tparam' command used in a comment that is not attached to a template declaration}}
@@ -586,13 +503,7 @@ T test_returns_right_decl_5(T aaa);
 
 // expected-warning@+1 {{'\returns' command used in a comment that is not attached to a function or method declaration}}
 /// \returns Aaa
-int test_returns_wrong_decl_1_backslash;
-
-// rdar://13066276
-// Check that the diagnostic uses the same command marker as the comment.
-// expected-warning@+1 {{'@returns' command used in a comment that is not attached to a function or method declaration}}
-/// @returns Aaa
-int test_returns_wrong_decl_1_at;
+int test_returns_wrong_decl_1;
 
 // expected-warning@+1 {{'\return' command used in a comment that is not attached to a function or method declaration}}
 /// \return Aaa
@@ -643,6 +554,11 @@ enum test_returns_wrong_decl_8 {
 // expected-warning@+1 {{'\returns' command used in a comment that is not attached to a function or method declaration}}
 /// \returns Aaa
 namespace test_returns_wrong_decl_10 { };
+
+// rdar://13066276
+// expected-warning@+1 {{'@returns' command used in a comment that is not attached to a function or method declaration}}
+/// @returns Aaa
+typedef unsigned int test_returns_wrong_decl_11;
 
 // rdar://13094352
 // expected-warning@+1 {{'@function' command should be used in a comment attached to a function declaration}}

@@ -1,5 +1,4 @@
-; RUN: llc -mtriple=arm-eabi -mcpu=swift -verify-machineinstrs %s -o /dev/null
-
+; RUN: llc < %s -march=arm -mcpu=swift -verify-machineinstrs
 %union.opcode.0.2.5.8.15.28 = type { i32 }
 
 @opcode = external global %union.opcode.0.2.5.8.15.28, align 4

@@ -35,9 +35,8 @@
 
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/StringMap.h"
-#include "llvm/IR/DebugLoc.h"
 #include "llvm/Pass.h"
-#include <memory>
+#include "llvm/Support/DebugLoc.h"
 
 namespace llvm {
   class AsmPrinter;
@@ -79,8 +78,8 @@ namespace llvm {
   };
 
 
-  /// Garbage collection metadata for a single function.  Currently, this
-  /// information only applies to GCStrategies which use GCRoot.
+  /// GCFunctionInfo - Garbage collection metadata for a single function.
+  ///
   class GCFunctionInfo {
   public:
     typedef std::vector<GCPoint>::iterator iterator;
@@ -159,42 +158,27 @@ namespace llvm {
     size_t live_size(const iterator &p) const { return roots_size(); }
   };
 
-  /// An analysis pass which caches information about the entire Module.
-  /// Records both the function level information used by GCRoots and a
-  /// cache of the 'active' gc strategy objects for the current Module.
+
+  /// GCModuleInfo - Garbage collection metadata for a whole module.
+  ///
   class GCModuleInfo : public ImmutablePass {
     typedef StringMap<GCStrategy*> strategy_map_type;
-    typedef std::vector<std::unique_ptr<GCStrategy>> list_type;
+    typedef std::vector<GCStrategy*> list_type;
+    typedef DenseMap<const Function*,GCFunctionInfo*> finfo_map_type;
 
     strategy_map_type StrategyMap;
     list_type StrategyList;
+    finfo_map_type FInfoMap;
 
     GCStrategy *getOrCreateStrategy(const Module *M, const std::string &Name);
 
   public:
-    /// List of per function info objects.  In theory, Each of these
-    /// may be associated with a different GC.
-    typedef std::vector<std::unique_ptr<GCFunctionInfo>> FuncInfoVec;
-
-    FuncInfoVec::iterator funcinfo_begin() { return Functions.begin(); }
-    FuncInfoVec::iterator funcinfo_end()   { return Functions.end();   }
-    
-
-  private:
-    /// Owning list of all GCFunctionInfos associated with this Module
-    FuncInfoVec Functions;
-
-    /// Non-owning map to bypass linear search when finding the GCFunctionInfo
-    /// associated with a particular Function.
-    typedef DenseMap<const Function*,GCFunctionInfo*> finfo_map_type;
-    finfo_map_type FInfoMap;
-  public:
-
     typedef list_type::const_iterator iterator;
 
     static char ID;
 
     GCModuleInfo();
+    ~GCModuleInfo();
 
     /// clear - Resets the pass. Any pass, which uses GCModuleInfo, should
     /// call it in doFinalization().
@@ -206,9 +190,8 @@ namespace llvm {
     iterator begin() const { return StrategyList.begin(); }
     iterator end()   const { return StrategyList.end();   }
 
-    /// get - Look up function metadata.  This is currently assumed
-    /// have the side effect of initializing the associated GCStrategy.  That
-    /// will soon change.
+    /// get - Look up function metadata.
+    ///
     GCFunctionInfo &getFunctionInfo(const Function &F);
   };
 

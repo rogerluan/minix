@@ -1,4 +1,4 @@
-/*	$NetBSD: prop_object.c,v 1.30 2015/05/12 14:59:35 christos Exp $	*/
+/*	$NetBSD: prop_object.c,v 1.29 2013/10/18 18:26:20 martin Exp $	*/
 
 /*-
  * Copyright (c) 2006, 2007 The NetBSD Foundation, Inc.
@@ -419,11 +419,10 @@ _prop_object_internalize_find_tag(struct _prop_object_internalize_context *ctx,
 
 	ctx->poic_tagname = cp;
 
-	while (!_PROP_ISSPACE(*cp) && *cp != '/' && *cp != '>') {
-		if (_PROP_EOF(*cp))
-			return (false);
+	while (!_PROP_ISSPACE(*cp) && *cp != '/' && *cp != '>')
 		cp++;
-	}
+	if (_PROP_EOF(*cp))
+		return (false);
 
 	ctx->poic_tagname_len = cp - ctx->poic_tagname;
 
@@ -466,11 +465,10 @@ _prop_object_internalize_find_tag(struct _prop_object_internalize_context *ctx,
 
 	ctx->poic_tagattr = cp;
 
-	while (!_PROP_ISSPACE(*cp) && *cp != '=') {
-		if (_PROP_EOF(*cp))
-			return (false);
+	while (!_PROP_ISSPACE(*cp) && *cp != '=')
 		cp++;
-	}
+	if (_PROP_EOF(*cp))
+		return (false);
 
 	ctx->poic_tagattr_len = cp - ctx->poic_tagattr;
 	
@@ -482,11 +480,10 @@ _prop_object_internalize_find_tag(struct _prop_object_internalize_context *ctx,
 		return (false);
 	
 	ctx->poic_tagattrval = cp;
-	while (*cp != '\"') {
-		if (_PROP_EOF(*cp))
-			return (false);
+	while (*cp != '\"')
 		cp++;
-	}
+	if (_PROP_EOF(*cp))
+		return (false);
 	ctx->poic_tagattrval_len = cp - ctx->poic_tagattrval;
 	
 	cp++;
@@ -953,7 +950,8 @@ _prop_object_internalize_map_file(const char *fname)
 		_PROP_FREE(mf, M_TEMP);
 		return (NULL);
 	}
-#if !defined(__minix)
+
+#ifndef __minix
 	(void) madvise(mf->poimf_xml, mf->poimf_mapsize, MADV_SEQUENTIAL);
 
 	if (need_guard) {
@@ -967,7 +965,7 @@ _prop_object_internalize_map_file(const char *fname)
 		}
 		mf->poimf_mapsize += pgsize;
 	}
-#endif /* !defined(__minix) */
+#endif
 
 	return (mf);
 }
@@ -984,13 +982,13 @@ _prop_object_internalize_unmap_file(
     struct _prop_object_internalize_mapped_file *mf)
 {
 
-#if !defined(__minix)
+#ifndef __minix
 	(void) madvise(mf->poimf_xml, mf->poimf_mapsize, MADV_DONTNEED);
 	(void) munmap(mf->poimf_xml, mf->poimf_mapsize);
 	_PROP_FREE(mf, M_TEMP);
 #else
 	abort();
-#endif /*  !defined(__minix) */
+#endif
 }
 #endif /* !_KERNEL && !_STANDALONE */
 

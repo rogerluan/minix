@@ -38,7 +38,9 @@ __RCSID("$NetBSD: initfini.c,v 1.11 2013/08/19 22:14:37 matt Exp $");
 
 #include <sys/param.h>
 #include <sys/exec.h>
+#if !defined(__minix)
 #include <sys/tls.h>
+#endif /* !defined(__minix) */
 #include <stdbool.h>
 
 void	_libc_init(void) __attribute__((__constructor__, __used__));
@@ -96,20 +98,20 @@ _libc_init(void)
 	/* For -fstack-protector */
 	__guard_setup();
 
-#if defined(__minix) && defined(_REENTRANT)
+#ifdef _REENTRANT
 	/* Atomic operations */
 	__libc_atomic_init();
-#endif /* defined(__minix) && defined(_REENTRANT) */
+#endif
 
 #if defined(__HAVE_TLS_VARIANT_I) || defined(__HAVE_TLS_VARIANT_II)
 	/* Initialize TLS for statically linked programs. */
 	__libc_static_tls_setup();
 #endif
 
-#if defined(__minix) && defined(_REENTRANT)
+#ifdef _REENTRANT
 	/* Threads */
 	__libc_thr_init();
-#endif /* defined(__minix) && defined(_REENTRANT) */
+#endif
 
 	/* Initialize the atexit mutexes */
 	__libc_atexit_init();

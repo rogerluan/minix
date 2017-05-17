@@ -1,4 +1,4 @@
-/*	$NetBSD: getfsspecname.c,v 1.5 2014/05/25 13:46:07 christos Exp $	*/
+/*	$NetBSD: getfsspecname.c,v 1.4 2013/01/01 18:32:17 dsl Exp $	*/
 
 /*-
  * Copyright (c) 2012 The NetBSD Foundation, Inc.
@@ -29,7 +29,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 #include <sys/cdefs.h>
-__RCSID("$NetBSD: getfsspecname.c,v 1.5 2014/05/25 13:46:07 christos Exp $");
+__RCSID("$NetBSD: getfsspecname.c,v 1.4 2013/01/01 18:32:17 dsl Exp $");
 
 #include <sys/types.h>
 #include <sys/ioctl.h>
@@ -55,12 +55,13 @@ getfsspecname(char *buf, size_t bufsiz, const char *name)
 {
 	static const int mib[] = { CTL_HW, HW_DISKNAMES };
 	static const unsigned int miblen = __arraycount(mib);
-	char *drives, *dk, *p;
+	char *drives, *dk;
 	size_t len;
-	int fd, savee = errno;
+	int fd, savee;
 	char *vname;
 
-	p = drives = vname = NULL;
+	drives = NULL;
+	vname = NULL;
 	if (strncasecmp(name, "NAME=", 5) != 0) {
 #ifdef COMPAT_DKWEDGE
 		/*
@@ -130,28 +131,20 @@ search:
 		}
 		(void)close(fd);
 		if (strcmp(vname, (char *)dkw.dkw_wname) == 0) {
-			p = strstr(buf, "/rdk");
-			goto good;
+			char *p = strstr(buf, "/rdk");
+			if (p++ == NULL) 
+				return buf;
+			strcpy(p, p + 1);
+			free(drives);
+			free(vname);
+			return buf;
 		}
 	}
-#ifdef COMPAT_DKWEDGE
-	/* Last ditch effort assuming NAME=label, and label is a disk name */
-	fd = opendisk(name, O_RDONLY, buf, bufsiz, 0);
-	if (fd != -1) {
-		close(fd);
-		p = strstr(buf, "/r");
-		goto good;
-	}
-#endif
 	savee = ESRCH;
 	snprintf(buf, bufsiz, "no match for `%s'", vname);
 out:
-	buf = NULL;
-good:
-	if (p++ != NULL) 
-		strcpy(p, p + 1);
 	free(drives);
 	free(vname);
 	errno = savee;
-	return buf;
+	return NULL;
 }

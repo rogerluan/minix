@@ -23,8 +23,7 @@ using namespace llvm;
 
 AnalyzerOptions::UserModeKind AnalyzerOptions::getUserMode() {
   if (UserMode == UMK_NotSet) {
-    StringRef ModeStr =
-        Config.insert(std::make_pair("mode", "deep")).first->second;
+    StringRef ModeStr(Config.GetOrCreateValue("mode", "deep").getValue());
     UserMode = llvm::StringSwitch<UserModeKind>(ModeStr)
       .Case("shallow", UMK_Shallow)
       .Case("deep", UMK_Deep)
@@ -40,7 +39,7 @@ IPAKind AnalyzerOptions::getIPAMode() {
     // Use the User Mode to set the default IPA value.
     // Note, we have to add the string to the Config map for the ConfigDumper
     // checker to function properly.
-    const char *DefaultIPA = nullptr;
+    const char *DefaultIPA = 0;
     UserModeKind HighLevelMode = getUserMode();
     if (HighLevelMode == UMK_Shallow)
       DefaultIPA = "inlining";
@@ -49,8 +48,7 @@ IPAKind AnalyzerOptions::getIPAMode() {
     assert(DefaultIPA);
 
     // Lookup the ipa configuration option, use the default from User Mode.
-    StringRef ModeStr =
-        Config.insert(std::make_pair("ipa", DefaultIPA)).first->second;
+    StringRef ModeStr(Config.GetOrCreateValue("ipa", DefaultIPA).getValue());
     IPAKind IPAConfig = llvm::StringSwitch<IPAKind>(ModeStr)
             .Case("none", IPAK_None)
             .Case("basic-inlining", IPAK_BasicInlining)
@@ -74,9 +72,9 @@ AnalyzerOptions::mayInlineCXXMemberFunction(CXXInlineableMemberKind K) {
 
   if (!CXXMemberInliningMode) {
     static const char *ModeKey = "c++-inlining";
-
-    StringRef ModeStr =
-        Config.insert(std::make_pair(ModeKey, "destructors")).first->second;
+    
+    StringRef ModeStr(Config.GetOrCreateValue(ModeKey,
+                                              "destructors").getValue());
 
     CXXInlineableMemberKind &MutableMode =
       const_cast<CXXInlineableMemberKind &>(CXXMemberInliningMode);
@@ -104,8 +102,7 @@ bool AnalyzerOptions::getBooleanOption(StringRef Name, bool DefaultVal) {
   // FIXME: We should emit a warning here if the value is something other than
   // "true", "false", or the empty string (meaning the default value),
   // but the AnalyzerOptions doesn't have access to a diagnostic engine.
-  StringRef V =
-      Config.insert(std::make_pair(Name, toString(DefaultVal))).first->second;
+  StringRef V(Config.GetOrCreateValue(Name, toString(DefaultVal)).getValue());
   return llvm::StringSwitch<bool>(V)
       .Case("true", true)
       .Case("false", false)
@@ -137,14 +134,8 @@ bool AnalyzerOptions::mayInlineTemplateFunctions() {
                           /*Default=*/true);
 }
 
-bool AnalyzerOptions::mayInlineCXXAllocator() {
-  return getBooleanOption(InlineCXXAllocator,
-                          "c++-allocator-inlining",
-                          /*Default=*/false);
-}
-
-bool AnalyzerOptions::mayInlineCXXContainerMethods() {
-  return getBooleanOption(InlineCXXContainerMethods,
+bool AnalyzerOptions::mayInlineCXXContainerCtorsAndDtors() {
+  return getBooleanOption(InlineCXXContainerCtorsAndDtors,
                           "c++-container-inlining",
                           /*Default=*/false);
 }
@@ -192,19 +183,12 @@ bool AnalyzerOptions::shouldReportIssuesInMainSourceFile() {
                           /* Default = */ false);
 }
 
-
-bool AnalyzerOptions::shouldWriteStableReportFilename() {
-  return getBooleanOption(StableReportFilename,
-                          "stable-report-filename",
-                          /* Default = */ false);
-}
-
 int AnalyzerOptions::getOptionAsInteger(StringRef Name, int DefaultVal) {
   SmallString<10> StrBuf;
   llvm::raw_svector_ostream OS(StrBuf);
   OS << DefaultVal;
-
-  StringRef V = Config.insert(std::make_pair(Name, OS.str())).first->second;
+  
+  StringRef V(Config.GetOrCreateValue(Name, OS.str()).getValue());
   int Res = DefaultVal;
   bool b = V.getAsInteger(10, Res);
   assert(!b && "analyzer-config option should be numeric");

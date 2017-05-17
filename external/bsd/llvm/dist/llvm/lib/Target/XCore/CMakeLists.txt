@@ -24,8 +24,9 @@ add_llvm_target(XCoreCodeGen
   XCoreTargetObjectFile.cpp
   XCoreTargetTransformInfo.cpp
   XCoreSelectionDAGInfo.cpp
-  XCoreFrameToArgsOffsetElim.cpp
   )
+
+add_dependencies(LLVMXCoreCodeGen XCoreCommonTableGen intrinsics_gen)
 
 add_subdirectory(Disassembler)
 add_subdirectory(InstPrinter)

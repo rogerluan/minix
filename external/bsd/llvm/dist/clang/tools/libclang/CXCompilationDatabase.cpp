@@ -8,7 +8,7 @@ using namespace clang::tooling;
 
 extern "C" {
 
-// FIXME: do something more useful with the error message
+// FIXME: do something more usefull with the error message
 CXCompilationDatabase
 clang_CompilationDatabase_fromDirectory(const char *BuildDir,
                                         CXCompilationDatabase_Error *ErrorCode)
@@ -16,8 +16,8 @@ clang_CompilationDatabase_fromDirectory(const char *BuildDir,
   std::string ErrorMsg;
   CXCompilationDatabase_Error Err = CXCompilationDatabase_NoError;
 
-  std::unique_ptr<CompilationDatabase> db =
-      CompilationDatabase::loadFromDirectory(BuildDir, ErrorMsg);
+  CompilationDatabase *db = CompilationDatabase::loadFromDirectory(BuildDir,
+                                                                   ErrorMsg);
 
   if (!db) {
     fprintf(stderr, "LIBCLANG TOOLING ERROR: %s\n", ErrorMsg.c_str());
@@ -27,7 +27,7 @@ clang_CompilationDatabase_fromDirectory(const char *BuildDir,
   if (ErrorCode)
     *ErrorCode = Err;
 
-  return db.release();
+  return db;
 }
 
 void
@@ -40,8 +40,9 @@ struct AllocatedCXCompileCommands
 {
   std::vector<CompileCommand> CCmd;
 
-  AllocatedCXCompileCommands(std::vector<CompileCommand> Cmd)
-      : CCmd(std::move(Cmd)) {}
+  AllocatedCXCompileCommands(const std::vector<CompileCommand>& Cmd)
+    : CCmd(Cmd)
+  { }
 };
 
 CXCompileCommands
@@ -49,23 +50,24 @@ clang_CompilationDatabase_getCompileCommands(CXCompilationDatabase CDb,
                                              const char *CompleteFileName)
 {
   if (CompilationDatabase *db = static_cast<CompilationDatabase *>(CDb)) {
-    std::vector<CompileCommand> CCmd(db->getCompileCommands(CompleteFileName));
+    const std::vector<CompileCommand>
+      CCmd(db->getCompileCommands(CompleteFileName));
     if (!CCmd.empty())
-      return new AllocatedCXCompileCommands(std::move(CCmd));
+      return new AllocatedCXCompileCommands( CCmd );
   }
 
-  return nullptr;
+  return 0;
 }
 
 CXCompileCommands
 clang_CompilationDatabase_getAllCompileCommands(CXCompilationDatabase CDb) {
   if (CompilationDatabase *db = static_cast<CompilationDatabase *>(CDb)) {
-    std::vector<CompileCommand> CCmd(db->getAllCompileCommands());
+    const std::vector<CompileCommand> CCmd(db->getAllCompileCommands());
     if (!CCmd.empty())
-      return new AllocatedCXCompileCommands(std::move(CCmd));
+      return new AllocatedCXCompileCommands( CCmd );
   }
 
-  return nullptr;
+  return 0;
 }
 
 void
@@ -90,13 +92,13 @@ CXCompileCommand
 clang_CompileCommands_getCommand(CXCompileCommands Cmds, unsigned I)
 {
   if (!Cmds)
-    return nullptr;
+    return 0;
 
   AllocatedCXCompileCommands *ACC =
     static_cast<AllocatedCXCompileCommands *>(Cmds);
 
   if (I >= ACC->CCmd.size())
-    return nullptr;
+    return 0;
 
   return &ACC->CCmd[I];
 }

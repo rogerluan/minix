@@ -99,10 +99,6 @@ TokenConcatenation::TokenConcatenation(Preprocessor &pp) : PP(pp) {
     TokenInfo[tok::utf32_char_constant ] |= aci_custom;
   }
 
-  // These tokens have custom code in C++1z mode.
-  if (PP.getLangOpts().CPlusPlus1z)
-    TokenInfo[tok::utf8_char_constant] |= aci_custom;
-
   // These tokens change behavior if followed by an '='.
   TokenInfo[tok::amp         ] |= aci_avoid_equal;           // &=
   TokenInfo[tok::plus        ] |= aci_avoid_equal;           // +=
@@ -167,8 +163,8 @@ bool TokenConcatenation::AvoidConcat(const Token &PrevPrevTok,
     return false;
 
   tok::TokenKind PrevKind = PrevTok.getKind();
-  if (!PrevTok.isAnnotation() && PrevTok.getIdentifierInfo())
-    PrevKind = tok::identifier; // Language keyword or named operator.
+  if (PrevTok.getIdentifierInfo())  // Language keyword or named operator.
+    PrevKind = tok::identifier;
 
   // Look up information on when we should avoid concatenation with prevtok.
   unsigned ConcatInfo = TokenInfo[PrevKind];
@@ -181,14 +177,6 @@ bool TokenConcatenation::AvoidConcat(const Token &PrevPrevTok,
     if (Tok.is(tok::equal) || Tok.is(tok::equalequal))
       return true;
     ConcatInfo &= ~aci_avoid_equal;
-  }
-  if (Tok.isAnnotation()) {
-    // Modules annotation can show up when generated automatically for includes.
-    assert((Tok.is(tok::annot_module_include) ||
-            Tok.is(tok::annot_module_begin) ||
-            Tok.is(tok::annot_module_end)) &&
-           "unexpected annotation in AvoidConcat");
-    ConcatInfo = 0;
   }
 
   if (ConcatInfo == 0) return false;
@@ -217,7 +205,6 @@ bool TokenConcatenation::AvoidConcat(const Token &PrevPrevTok,
   case tok::utf32_string_literal:
   case tok::char_constant:
   case tok::wide_char_constant:
-  case tok::utf8_char_constant:
   case tok::utf16_char_constant:
   case tok::utf32_char_constant:
     if (!PP.getLangOpts().CPlusPlus11)
@@ -241,8 +228,7 @@ bool TokenConcatenation::AvoidConcat(const Token &PrevPrevTok,
     if (Tok.getIdentifierInfo() || Tok.is(tok::wide_string_literal) ||
         Tok.is(tok::utf8_string_literal) || Tok.is(tok::utf16_string_literal) ||
         Tok.is(tok::utf32_string_literal) || Tok.is(tok::wide_char_constant) ||
-        Tok.is(tok::utf8_char_constant) || Tok.is(tok::utf16_char_constant) ||
-        Tok.is(tok::utf32_char_constant))
+        Tok.is(tok::utf16_char_constant) || Tok.is(tok::utf32_char_constant))
       return true;
 
     // If this isn't identifier + string, we're done.

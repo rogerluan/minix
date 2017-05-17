@@ -1,8 +1,8 @@
-#	$NetBSD: Makefile,v 1.7 2014/06/01 19:51:01 mrg Exp $
+#	$NetBSD: Makefile,v 1.4 2013/08/22 00:16:54 matt Exp $
 
 LIBISPRIVATE=	yes
 
-.include <bsd.init.mk>
+.include <bsd.own.mk>
 
 GCC_MACHINE_ARCH?=${MACHINE_ARCH:S/earmv5/earm/}
 
@@ -10,7 +10,7 @@ LIB=		iberty
 
 .include "${.CURDIR}/defs.mk"
 
-DIST=		${GCCDIST}
+DIST=		${NETBSDSRCDIR}/external/gpl3/gcc/dist
 GNUHOSTDIST=	${DIST}
 
 SRCS=		${G_REQUIRED_OFILES:.o=.c} ${G_EXTRA_OFILES:.o=.c} \

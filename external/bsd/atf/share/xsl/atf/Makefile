@@ -1,9 +1,10 @@
-# $NetBSD: Makefile,v 1.5 2014/02/12 04:08:32 jmmv Exp $
+# $NetBSD: Makefile,v 1.3 2010/06/04 08:33:41 jmmv Exp $
 
-.include <bsd.init.mk>
+.include <bsd.own.mk>
 
 .if ${MKSHARE} != "no"
-.PATH:		${SRCDIR}/tools
+SRCDIR=		${NETBSDSRCDIR}/external/bsd/atf/dist
+.PATH:		${SRCDIR}/atf-report
 
 FILESDIR=	/usr/share/xsl/atf
 FILESMODE=	444

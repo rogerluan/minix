@@ -1,18 +1,17 @@
-#	$NetBSD: Makefile,v 1.2 2014/07/05 19:22:02 dholland Exp $
+#	$NetBSD: Makefile,v 1.1 2013/11/22 16:00:45 christos Exp $
 #
 #	@(#)Makefile	8.1 (Berkeley) 6/8/93
 
 .include "../../../Makefile.inc"
 .PATH: ${DIST}/docs/edit
-
-SECTION=usd
-ARTICLE=edit
+DIR=	usd/11.edit
 SRCS=	edittut.ms
 MACROS=	-ms
-ROFF_TBL=yes
-EXTRAHTMLFILES=edit1.png edit2.png edit3.png
 
-.include <bsd.doc.mk>
+all: paper.ps
+
+paper.ps: ${SRCS}
+	${TOOL_TBL} ${.ALLSRC} | ${TOOL_ROFF_PS} ${MACROS} > ${.TARGET}
 
 # index for versatec is different from the one in edit.tut
 # because the fonts are different and entries reference page
@@ -21,3 +20,5 @@ EXTRAHTMLFILES=edit1.png edit2.png edit3.png
 
 editvindex:
 	${TOOL_ROFF_RAW} ${MACROS} -n22 edit.vindex
+
+.include <bsd.doc.mk>

@@ -70,9 +70,6 @@ typedef char BOOL;
 
 - (id) dataSource;
 
-// rdar://15509831
-- (id)delegate;
-
 - (id)xxxdelegateYYY;
 - (void)setXxxdelegateYYY:(id)delegate;
 

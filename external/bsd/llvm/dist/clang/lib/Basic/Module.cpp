@@ -24,23 +24,20 @@
 
 using namespace clang;
 
-Module::Module(StringRef Name, SourceLocation DefinitionLoc, Module *Parent,
+Module::Module(StringRef Name, SourceLocation DefinitionLoc, Module *Parent, 
                bool IsFramework, bool IsExplicit)
-    : Name(Name), DefinitionLoc(DefinitionLoc), Parent(Parent), Directory(),
-      Umbrella(), ASTFile(nullptr), IsMissingRequirement(false),
-      IsAvailable(true), IsFromModuleFile(false), IsFramework(IsFramework),
-      IsExplicit(IsExplicit), IsSystem(false), IsExternC(false),
-      IsInferred(false), InferSubmodules(false), InferExplicitSubmodules(false),
-      InferExportWildcard(false), ConfigMacrosExhaustive(false),
-      NameVisibility(Hidden) {
+  : Name(Name), DefinitionLoc(DefinitionLoc), Parent(Parent),
+    Umbrella(), ASTFile(0), IsAvailable(true), IsFromModuleFile(false),
+    IsFramework(IsFramework), IsExplicit(IsExplicit), IsSystem(false),
+    InferSubmodules(false), InferExplicitSubmodules(false), 
+    InferExportWildcard(false), ConfigMacrosExhaustive(false),
+    NameVisibility(Hidden)
+{ 
   if (Parent) {
     if (!Parent->isAvailable())
       IsAvailable = false;
     if (Parent->IsSystem)
       IsSystem = true;
-    if (Parent->IsExternC)
-      IsExternC = true;
-    IsMissingRequirement = Parent->IsMissingRequirement;
     
     Parent->SubModuleIndex[Name] = Parent->SubModules.size();
     Parent->SubModules.push_back(this);
@@ -70,17 +67,13 @@ static bool hasFeature(StringRef Feature, const LangOptions &LangOpts,
            .Default(Target.hasFeature(Feature));
 }
 
-bool Module::isAvailable(const LangOptions &LangOpts, const TargetInfo &Target,
-                         Requirement &Req,
-                         UnresolvedHeaderDirective &MissingHeader) const {
+bool
+Module::isAvailable(const LangOptions &LangOpts, const TargetInfo &Target,
+                    Requirement &Req) const {
   if (IsAvailable)
     return true;
 
   for (const Module *Current = this; Current; Current = Current->Parent) {
-    if (!Current->MissingHeaders.empty()) {
-      MissingHeader = Current->MissingHeaders.front();
-      return false;
-    }
     for (unsigned I = 0, N = Current->Requirements.size(); I != N; ++I) {
       if (hasFeature(Current->Requirements[I].first, LangOpts, Target) !=
               Current->Requirements[I].second) {
@@ -93,7 +86,7 @@ bool Module::isAvailable(const LangOptions &LangOpts, const TargetInfo &Target,
   llvm_unreachable("could not find a reason why module is unavailable");
 }
 
-bool Module::isSubModuleOf(const Module *Other) const {
+bool Module::isSubModuleOf(Module *Other) const {
   const Module *This = this;
   do {
     if (This == Other)
@@ -162,10 +155,6 @@ void Module::addRequirement(StringRef Feature, bool RequiredState,
   if (hasFeature(Feature, LangOpts, Target) == RequiredState)
     return;
 
-  markUnavailable(/*MissingRequirement*/true);
-}
-
-void Module::markUnavailable(bool MissingRequirement) {
   if (!IsAvailable)
     return;
 
@@ -179,7 +168,6 @@ void Module::markUnavailable(bool MissingRequirement) {
       continue;
 
     Current->IsAvailable = false;
-    Current->IsMissingRequirement |= MissingRequirement;
     for (submodule_iterator Sub = Current->submodule_begin(),
                          SubEnd = Current->submodule_end();
          Sub != SubEnd; ++Sub) {
@@ -192,8 +180,8 @@ void Module::markUnavailable(bool MissingRequirement) {
 Module *Module::findSubmodule(StringRef Name) const {
   llvm::StringMap<unsigned>::const_iterator Pos = SubModuleIndex.find(Name);
   if (Pos == SubModuleIndex.end())
-    return nullptr;
-
+    return 0;
+  
   return SubModules[Pos->getValue()];
 }
 
@@ -293,12 +281,9 @@ void Module::print(raw_ostream &OS, unsigned Indent) const {
     OS << "explicit ";
   OS << "module " << Name;
 
-  if (IsSystem || IsExternC) {
+  if (IsSystem) {
     OS.indent(Indent + 2);
-    if (IsSystem)
-      OS << " [system]";
-    if (IsExternC)
-      OS << " [extern_c]";
+    OS << " [system]";
   }
 
   OS << " {\n";
@@ -341,32 +326,30 @@ void Module::print(raw_ostream &OS, unsigned Indent) const {
     OS << "\n";
   }
 
-  struct {
-    StringRef Prefix;
-    HeaderKind Kind;
-  } Kinds[] = {{"", HK_Normal},
-               {"textual ", HK_Textual},
-               {"private ", HK_Private},
-               {"private textual ", HK_PrivateTextual},
-               {"exclude ", HK_Excluded}};
-
-  for (auto &K : Kinds) {
-    for (auto &H : Headers[K.Kind]) {
-      OS.indent(Indent + 2);
-      OS << K.Prefix << "header \"";
-      OS.write_escaped(H.NameAsWritten);
-      OS << "\"\n";
-    }
+  for (unsigned I = 0, N = NormalHeaders.size(); I != N; ++I) {
+    OS.indent(Indent + 2);
+    OS << "header \"";
+    OS.write_escaped(NormalHeaders[I]->getName());
+    OS << "\"\n";
   }
 
+  for (unsigned I = 0, N = ExcludedHeaders.size(); I != N; ++I) {
+    OS.indent(Indent + 2);
+    OS << "exclude header \"";
+    OS.write_escaped(ExcludedHeaders[I]->getName());
+    OS << "\"\n";
+  }
+
+  for (unsigned I = 0, N = PrivateHeaders.size(); I != N; ++I) {
+    OS.indent(Indent + 2);
+    OS << "private header \"";
+    OS.write_escaped(PrivateHeaders[I]->getName());
+    OS << "\"\n";
+  }
+  
   for (submodule_const_iterator MI = submodule_begin(), MIEnd = submodule_end();
        MI != MIEnd; ++MI)
-    // Print inferred subframework modules so that we don't need to re-infer
-    // them (requires expensive directory iteration + stat calls) when we build
-    // the module. Regular inferred submodules are OK, as we need to look at all
-    // those header files anyway.
-    if (!(*MI)->IsInferred || (*MI)->IsFramework)
-      (*MI)->print(OS, Indent + 2);
+    (*MI)->print(OS, Indent + 2);
   
   for (unsigned I = 0, N = Exports.size(); I != N; ++I) {
     OS.indent(Indent + 2);

@@ -1,5 +1,3 @@
-int top_left_before(void *);
-
 @import diamond_top;
 
 float left(float *);

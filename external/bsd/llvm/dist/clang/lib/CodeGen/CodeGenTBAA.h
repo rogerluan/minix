@@ -12,8 +12,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_CLANG_LIB_CODEGEN_CODEGENTBAA_H
-#define LLVM_CLANG_LIB_CODEGEN_CODEGENTBAA_H
+#ifndef CLANG_CODEGEN_CODEGENTBAA_H
+#define CLANG_CODEGEN_CODEGENTBAA_H
 
 #include "clang/Basic/LLVM.h"
 #include "llvm/ADT/DenseMap.h"

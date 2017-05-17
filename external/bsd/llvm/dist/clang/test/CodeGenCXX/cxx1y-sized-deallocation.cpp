@@ -30,8 +30,6 @@ template<typename T>
 void del() {
   ::delete get<T*>();
   ::delete[] get<T*>();
-  delete get<T*>();
-  delete[] get<T*>();
 }
 
 template void del<A>();
@@ -46,9 +44,6 @@ D::D() {}
 // CHECK-LABEL: define weak_odr void @_Z3delIiEvv()
 // CHECK: call void @_ZdlPvm(i8* %{{[^ ]*}}, i64 4)
 // CHECK: call void @_ZdaPv(i8* %{{[^ ]*}})
-//
-// CHECK: call void @_ZdlPvm(i8* %{{[^ ]*}}, i64 4)
-// CHECK: call void @_ZdaPv(i8* %{{[^ ]*}})
 
 // CHECK-LABEL: define linkonce void @_ZdlPvm(i8*
 // CHECK: call void @_ZdlPv(i8* %0)
@@ -56,16 +51,8 @@ D::D() {}
 // CHECK-LABEL: define weak_odr void @_Z3delI1BEvv()
 // CHECK: call void @_ZdlPvm(i8* %{{[^ ]*}}, i64 4)
 // CHECK: call void @_ZdaPv(i8* %{{[^ ]*}})
-//
-// CHECK: call void @_ZdlPvm(i8* %{{[^ ]*}}, i64 4)
-// CHECK: call void @_ZdaPv(i8* %{{[^ ]*}})
 
 // CHECK-LABEL: define weak_odr void @_Z3delI1CEvv()
-// CHECK: call void @_ZdlPvm(i8* %{{[^ ]*}}, i64 1)
-// CHECK: mul i64 1, %{{[^ ]*}}
-// CHECK: add i64 %{{[^ ]*}}, 8
-// CHECK: call void @_ZdaPvm(i8* %{{[^ ]*}}, i64 %{{[^ ]*}})
-//
 // CHECK: call void @_ZdlPvm(i8* %{{[^ ]*}}, i64 1)
 // CHECK: mul i64 1, %{{[^ ]*}}
 // CHECK: add i64 %{{[^ ]*}}, 8
@@ -79,32 +66,25 @@ D::D() {}
 // CHECK: mul i64 8, %{{[^ ]*}}
 // CHECK: add i64 %{{[^ ]*}}, 8
 // CHECK: call void @_ZdaPvm(i8* %{{[^ ]*}}, i64 %{{[^ ]*}})
-//
-// CHECK-NOT: Zdl
-// CHECK: call void %{{.*}}
-// CHECK-NOT: Zdl
-// CHECK: mul i64 8, %{{[^ ]*}}
-// CHECK: add i64 %{{[^ ]*}}, 8
-// CHECK: call void @_ZdaPvm(i8* %{{[^ ]*}}, i64 %{{[^ ]*}})
 
 // CHECK-LABEL: define weak_odr void @_Z3delI1EEvv()
 // CHECK: call void @_ZdlPvm(i8* %{{[^ ]*}}, i64 1)
 // CHECK: call void @_ZdaPv(i8* %{{[^ ]*}})
-//
-// CHECK: call void @_ZN1EdlEPv(i8* %{{[^ ]*}})
-// CHECK: call void @_ZN1EdaEPv(i8* %{{[^ ]*}})
 
 // CHECK-LABEL: define weak_odr void @_Z3delI1FEvv()
 // CHECK: call void @_ZdlPvm(i8* %{{[^ ]*}}, i64 1)
 // CHECK: mul i64 1, %{{[^ ]*}}
 // CHECK: add i64 %{{[^ ]*}}, 8
 // CHECK: call void @_ZdaPvm(i8* %{{[^ ]*}}, i64 %{{[^ ]*}})
-//
-// CHECK: call void @_ZN1FdlEPvm(i8* %{{[^ ]*}}, i64 1)
-// CHECK: mul i64 1, %{{[^ ]*}}
-// CHECK: add i64 %{{[^ ]*}}, 8
-// CHECK: call void @_ZN1FdaEPvm(i8* %{{[^ ]*}}, i64 %{{[^ ]*}})
 
+// CHECK-LABEL: define void @_Z10member_delv()
+// CHECK-NOT: Zdl
+// CHECK: call void %{{[^ ]*}}(%{{[^ ]*}}* %
+// CHECK-NOT: Zdl
+// CHECK: }
+void member_del() {
+  delete get<D*>();
+}
 
 // CHECK-LABEL: define linkonce_odr void @_ZN1DD0Ev(%{{[^ ]*}}* %this)
 // CHECK: call void @_ZdlPvm(i8* %{{[^ ]*}}, i64 8)

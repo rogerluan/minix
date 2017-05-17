@@ -8,8 +8,9 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Support/ErrorOr.h"
-#include "llvm/Support/Errc.h"
+
 #include "gtest/gtest.h"
+
 #include <memory>
 
 using namespace llvm;
@@ -21,25 +22,22 @@ ErrorOr<int> t2() { return errc::invalid_argument; }
 
 TEST(ErrorOr, SimpleValue) {
   ErrorOr<int> a = t1();
-  // FIXME: This is probably a bug in gtest. EXPECT_TRUE should expand to
-  // include the !! to make it friendly to explicit bool operators.
-  EXPECT_TRUE(!!a);
+  EXPECT_TRUE(a);
   EXPECT_EQ(1, *a);
-
-  ErrorOr<int> b = a;
-  EXPECT_EQ(1, *b);
 
   a = t2();
   EXPECT_FALSE(a);
-  EXPECT_EQ(a.getError(), errc::invalid_argument);
+  EXPECT_EQ(errc::invalid_argument, a);
 #ifdef EXPECT_DEBUG_DEATH
   EXPECT_DEBUG_DEATH(*a, "Cannot get value when an error exists");
 #endif
 }
 
+#if LLVM_HAS_CXX11_STDLIB
 ErrorOr<std::unique_ptr<int> > t3() {
   return std::unique_ptr<int>(new int(3));
 }
+#endif
 
 TEST(ErrorOr, Types) {
   int x;
@@ -47,49 +45,22 @@ TEST(ErrorOr, Types) {
   *a = 42;
   EXPECT_EQ(42, x);
 
+#if LLVM_HAS_CXX11_STDLIB
   // Move only types.
   EXPECT_EQ(3, **t3());
+#endif
 }
 
 struct B {};
 struct D : B {};
 
 TEST(ErrorOr, Covariant) {
-  ErrorOr<B*> b(ErrorOr<D*>(nullptr));
-  b = ErrorOr<D*>(nullptr);
+  ErrorOr<B*> b(ErrorOr<D*>(0));
+  b = ErrorOr<D*>(0);
 
-  ErrorOr<std::unique_ptr<B> > b1(ErrorOr<std::unique_ptr<D> >(nullptr));
-  b1 = ErrorOr<std::unique_ptr<D> >(nullptr);
-
-  ErrorOr<std::unique_ptr<int>> b2(ErrorOr<int *>(nullptr));
-  ErrorOr<int *> b3(nullptr);
-  ErrorOr<std::unique_ptr<int>> b4(b3);
+#if LLVM_HAS_CXX11_STDLIB
+  ErrorOr<std::unique_ptr<B> > b1(ErrorOr<std::unique_ptr<D> >(0));
+  b1 = ErrorOr<std::unique_ptr<D> >(0);
+#endif
 }
-
-// ErrorOr<int*> x(nullptr);
-// ErrorOr<std::unique_ptr<int>> y = x; // invalid conversion
-static_assert(
-    !std::is_convertible<const ErrorOr<int *> &,
-                         ErrorOr<std::unique_ptr<int>>>::value,
-    "do not invoke explicit ctors in implicit conversion from lvalue");
-
-// ErrorOr<std::unique_ptr<int>> y = ErrorOr<int*>(nullptr); // invalid
-//                                                           // conversion
-static_assert(
-    !std::is_convertible<ErrorOr<int *> &&,
-                         ErrorOr<std::unique_ptr<int>>>::value,
-    "do not invoke explicit ctors in implicit conversion from rvalue");
-
-// ErrorOr<int*> x(nullptr);
-// ErrorOr<std::unique_ptr<int>> y;
-// y = x; // invalid conversion
-static_assert(!std::is_assignable<ErrorOr<std::unique_ptr<int>>,
-                                  const ErrorOr<int *> &>::value,
-              "do not invoke explicit ctors in assignment");
-
-// ErrorOr<std::unique_ptr<int>> x;
-// x = ErrorOr<int*>(nullptr); // invalid conversion
-static_assert(!std::is_assignable<ErrorOr<std::unique_ptr<int>>,
-                                  ErrorOr<int *> &&>::value,
-              "do not invoke explicit ctors in assignment");
 } // end anon namespace

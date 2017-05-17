@@ -11,8 +11,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_LIB_TARGET_MSP430_MSP430MACHINEFUNCTIONINFO_H
-#define LLVM_LIB_TARGET_MSP430_MSP430MACHINEFUNCTIONINFO_H
+#ifndef MSP430MACHINEFUNCTIONINFO_H
+#define MSP430MACHINEFUNCTIONINFO_H
 
 #include "llvm/CodeGen/MachineFunction.h"
 

@@ -1,6 +1,4 @@
-// RUN: %clang_cc1 -mrtd -triple i386-unknown-unknown -std=c89 -emit-llvm -o - %s 2>&1 | FileCheck %s
-
-// CHECK: mrtd.c:10:3: warning: function with no prototype cannot use the stdcall calling convention
+// RUN: %clang_cc1 -mrtd -triple i386-unknown-unknown -std=c89 -emit-llvm -o - %s | FileCheck %s
 
 void baz(int arg);
 

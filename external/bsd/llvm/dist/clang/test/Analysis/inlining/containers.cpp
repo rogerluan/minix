@@ -103,10 +103,7 @@ public:
   ~MySet() { delete[] storage; }
 
   bool isEmpty() {
-    clang_analyzer_checkInlined(true);
-    #if INLINE
-        // expected-warning@-2 {{TRUE}}
-    #endif
+    clang_analyzer_checkInlined(true); // expected-warning {{TRUE}}
     return size == 0;
   }
 
@@ -117,35 +114,23 @@ public:
   };
 
   iterator begin() {
-    clang_analyzer_checkInlined(true);
-    #if INLINE
-        // expected-warning@-2 {{TRUE}}
-    #endif
+    clang_analyzer_checkInlined(true); // expected-warning {{TRUE}}
     return iterator(storage);
   }
 
   iterator end() {
-    clang_analyzer_checkInlined(true);
-    #if INLINE
-        // expected-warning@-2 {{TRUE}}
-    #endif
+    clang_analyzer_checkInlined(true); // expected-warning {{TRUE}}
     return iterator(storage+size);
   }
 
   typedef int *raw_iterator;
 
   raw_iterator raw_begin() {
-    clang_analyzer_checkInlined(true);
-    #if INLINE
-        // expected-warning@-2 {{TRUE}}
-    #endif
+    clang_analyzer_checkInlined(true); // expected-warning {{TRUE}}
     return storage;
   }
   raw_iterator raw_end() {
-    clang_analyzer_checkInlined(true);
-    #if INLINE
-        // expected-warning@-2 {{TRUE}}
-    #endif
+    clang_analyzer_checkInlined(true); // expected-warning {{TRUE}}
     return storage + size;
   }
 };
@@ -160,10 +145,7 @@ public:
   }
 
   void useIterator(iterator i) {
-    clang_analyzer_checkInlined(true);
-    #if INLINE
-        // expected-warning@-2 {{TRUE}}
-    #endif
+    clang_analyzer_checkInlined(true); // expected-warning {{TRUE}}
   }
 };
 
@@ -192,10 +174,7 @@ public:
   typedef IterImpl wrapped_iterator;
 
   wrapped_iterator begin() {
-    clang_analyzer_checkInlined(true);
-    #if INLINE
-        // expected-warning@-2 {{TRUE}}
-    #endif
+    clang_analyzer_checkInlined(true); // expected-warning {{TRUE}}
     return IterImpl(impl.begin());
   }
 };
@@ -214,10 +193,7 @@ public:
   typedef MySet::iterator iterator;
 
   iterator start() {
-    clang_analyzer_checkInlined(true);
-#if INLINE
-    // expected-warning@-2 {{TRUE}}
-#endif
+    clang_analyzer_checkInlined(true); // expected-warning {{TRUE}}
     return impl.begin();
   }
 };
@@ -236,10 +212,7 @@ public:
   using iterator = MySet::iterator;
 
   iterator start() {
-    clang_analyzer_checkInlined(true);
-    #if INLINE
-        // expected-warning@-2 {{TRUE}}
-    #endif
+    clang_analyzer_checkInlined(true); // expected-warning {{TRUE}}
     return impl.begin();
   }
 };
@@ -260,10 +233,7 @@ public:
   };
 
   iterator start() {
-    clang_analyzer_checkInlined(true);
-    #if INLINE
-        // expected-warning@-2 {{TRUE}}
-    #endif
+    clang_analyzer_checkInlined(true); // expected-warning {{TRUE}}
     return iterator{impl.begin().impl};
   }
 };

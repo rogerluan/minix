@@ -1,7 +1,7 @@
-/*	Id: term.c,v 1.215 2013/12/31 18:07:42 schwarze Exp  */
+/*	$Vendor-Id: term.c,v 1.201 2011/09/21 09:57:13 schwarze Exp $ */
 /*
  * Copyright (c) 2008, 2009, 2010, 2011 Kristaps Dzonsons <kristaps@bsd.lv>
- * Copyright (c) 2010, 2011, 2012, 2013 Ingo Schwarze <schwarze@openbsd.org>
+ * Copyright (c) 2010, 2011 Ingo Schwarze <schwarze@openbsd.org>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -33,8 +33,7 @@
 #include "term.h"
 #include "main.h"
 
-static	size_t		 cond_width(const struct termp *, int, int *);
-static	void		 adjbuf(struct termp *p, size_t);
+static	void		 adjbuf(struct termp *p, int);
 static	void		 bufferc(struct termp *, char);
 static	void		 encode(struct termp *, const char *, size_t);
 static	void		 encode1(struct termp *, int);
@@ -83,8 +82,9 @@ term_end(struct termp *p)
  *  - TERMP_NOBREAK: this is the most important and is used when making
  *    columns.  In short: don't print a newline and instead expect the
  *    next call to do the padding up to the start of the next column.
- *    p->trailspace may be set to 0, 1, or 2, depending on how many
- *    space characters are required at the end of the column.
+ *
+ *  - TERMP_TWOSPACE: make sure there is room for at least two space
+ *    characters of padding.  Otherwise, rather break the line.
  *
  *  - TERMP_DANGLE: don't newline when TERMP_NOBREAK is specified and
  *    the line is overrun, and don't pad-right if it's underrun.
@@ -104,15 +104,14 @@ term_end(struct termp *p)
 void
 term_flushln(struct termp *p)
 {
-	size_t		 i;     /* current input position in p->buf */
-	int		 ntab;	/* number of tabs to prepend */
+	int		 i;     /* current input position in p->buf */
 	size_t		 vis;   /* current visual position on output */
 	size_t		 vbl;   /* number of blanks to prepend to output */
 	size_t		 vend;	/* end of word visual position on output */
 	size_t		 bp;    /* visual right border position */
 	size_t		 dv;    /* temporary for visual pos calculations */
-	size_t		 j;     /* temporary loop index for p->buf */
-	size_t		 jhy;	/* last hyph before overflow w/r/t j */
+	int		 j;     /* temporary loop index for p->buf */
+	int		 jhy;	/* last hyph before overflow w/r/t j */
 	size_t		 maxvis; /* output position of visible boundary */
 	size_t		 mmax; /* used in calculating bp */
 
@@ -120,12 +119,7 @@ term_flushln(struct termp *p)
 	 * First, establish the maximum columns of "visible" content.
 	 * This is usually the difference between the right-margin and
 	 * an indentation, but can be, for tagged lists or columns, a
-	 * small set of values.
-	 *
-	 * The following unsigned-signed subtractions look strange,
-	 * but they are actually correct.  If the int p->overstep
-	 * is negative, it gets sign extended.  Subtracting that
-	 * very large size_t effectively adds a small number to dv.
+	 * small set of values. 
 	 */
 	assert  (p->rmargin >= p->offset);
 	dv     = p->rmargin - p->offset;
@@ -149,12 +143,10 @@ term_flushln(struct termp *p)
 		 * Handle literal tab characters: collapse all
 		 * subsequent tabs into a single huge set of spaces.
 		 */
-		ntab = 0;
 		while (i < p->col && '\t' == p->buf[i]) {
 			vend = (vis / p->tabwidth + 1) * p->tabwidth;
 			vbl += vend - vis;
 			vis = vend;
-			ntab++;
 			i++;
 		}
 
@@ -166,7 +158,7 @@ term_flushln(struct termp *p)
 		 */
 
 		for (j = i, jhy = 0; j < p->col; j++) {
-			if (' ' == p->buf[j] || '\t' == p->buf[j])
+			if ((j && ' ' == p->buf[j]) || '\t' == p->buf[j])
 				break;
 
 			/* Back over the the last printed character. */
@@ -199,16 +191,7 @@ term_flushln(struct termp *p)
 			} else
 				vbl = p->offset;
 
-			/* use pending tabs on the new line */
-
-			if (0 < ntab)
-				vbl += ntab * p->tabwidth;
-
-			/*
-			 * Remove the p->overstep width.
-			 * Again, if p->overstep is negative,
-			 * sign extension does the right thing.
-			 */
+			/* Remove the p->overstep width. */
 
 			bp += (size_t)p->overstep;
 			p->overstep = 0;
@@ -224,7 +207,7 @@ term_flushln(struct termp *p)
 				j = i;
 				while (' ' == p->buf[i])
 					i++;
-				dv = (i - j) * (*p->width)(p, ' ');
+				dv = (size_t)(i - j) * (*p->width)(p, ' ');
 				vbl += dv;
 				vend += dv;
 				break;
@@ -277,17 +260,20 @@ term_flushln(struct termp *p)
 	}
 
 	if (TERMP_HANG & p->flags) {
-		p->overstep = (int)(vis - maxvis +
-				p->trailspace * (*p->width)(p, ' '));
+		/* We need one blank after the tag. */
+		p->overstep = (int)(vis - maxvis + (*p->width)(p, ' '));
 
 		/*
+		 * Behave exactly the same way as groff:
 		 * If we have overstepped the margin, temporarily move
 		 * it to the right and flag the rest of the line to be
 		 * shorter.
-		 * If there is a request to keep the columns together,
-		 * allow negative overstep when the column is not full.
+		 * If we landed right at the margin, be happy.
+		 * If we are one step before the margin, temporarily
+		 * move it one step LEFT and flag the rest of the line
+		 * to be longer.
 		 */
-		if (p->trailspace && p->overstep < 0)
+		if (p->overstep < -1)
 			p->overstep = 0;
 		return;
 
@@ -295,7 +281,8 @@ term_flushln(struct termp *p)
 		return;
 
 	/* If the column was overrun, break the line. */
-	if (maxvis < vis + p->trailspace * (*p->width)(p, ' ')) {
+	if (maxvis <= vis +
+	    ((TERMP_TWOSPACE & p->flags) ? (*p->width)(p, ' ') : 0)) {
 		(*p->endline)(p);
 		p->viscol = 0;
 	}
@@ -329,10 +316,7 @@ term_vspace(struct termp *p)
 
 	term_newln(p);
 	p->viscol = 0;
-	if (0 < p->skipvsp)
-		p->skipvsp--;
-	else
-		(*p->endline)(p);
+	(*p->endline)(p);
 }
 
 void
@@ -385,7 +369,7 @@ void
 term_fontpopq(struct termp *p, const void *key)
 {
 
-	while (p->fonti >= 0 && key < (void *)(p->fontq + p->fonti))
+	while (p->fonti >= 0 && key != &p->fontq[p->fonti])
 		p->fonti--;
 	assert(p->fonti >= 0);
 }
@@ -407,7 +391,6 @@ term_fontpop(struct termp *p)
 void
 term_word(struct termp *p, const char *word)
 {
-	const char	 nbrsp[2] = { ASCII_NBRSP, 0 };
 	const char	*seq, *cp;
 	char		 c;
 	int		 sz, uc;
@@ -416,42 +399,29 @@ term_word(struct termp *p, const char *word)
 
 	if ( ! (TERMP_NOSPACE & p->flags)) {
 		if ( ! (TERMP_KEEP & p->flags)) {
+			if (TERMP_PREKEEP & p->flags)
+				p->flags |= TERMP_KEEP;
 			bufferc(p, ' ');
 			if (TERMP_SENTENCE & p->flags)
 				bufferc(p, ' ');
 		} else
 			bufferc(p, ASCII_NBRSP);
 	}
-	if (TERMP_PREKEEP & p->flags)
-		p->flags |= TERMP_KEEP;
 
 	if ( ! (p->flags & TERMP_NONOSPACE))
 		p->flags &= ~TERMP_NOSPACE;
 	else
 		p->flags |= TERMP_NOSPACE;
 
-	p->flags &= ~TERMP_SENTENCE;
+	p->flags &= ~(TERMP_SENTENCE | TERMP_IGNDELIM);
 
 	while ('\0' != *word) {
-		if ('\\' != *word) {
-			if (TERMP_SKIPCHAR & p->flags) {
-				p->flags &= ~TERMP_SKIPCHAR;
-				word++;
-				continue;
-			}
-			if (TERMP_NBRWORD & p->flags) {
-				if (' ' == *word) {
-					encode(p, nbrsp, 1);
-					word++;
-					continue;
-				}
-				ssz = strcspn(word, "\\ ");
-			} else
-				ssz = strcspn(word, "\\");
+		if ((ssz = strcspn(word, "\\")) > 0)
 			encode(p, word, ssz);
-			word += (int)ssz;
+
+		word += (int)ssz;
+		if ('\\' != *word)
 			continue;
-		}
 
 		word++;
 		esc = mandoc_escape(&word, &seq, &sz);
@@ -498,9 +468,6 @@ term_word(struct termp *p, const char *word)
 		case (ESCAPE_FONTITALIC):
 			term_fontrepl(p, TERMFONT_UNDER);
 			break;
-		case (ESCAPE_FONTBI):
-			term_fontrepl(p, TERMFONT_BI);
-			break;
 		case (ESCAPE_FONT):
 			/* FALLTHROUGH */
 		case (ESCAPE_FONTROMAN):
@@ -510,23 +477,17 @@ term_word(struct termp *p, const char *word)
 			term_fontlast(p);
 			break;
 		case (ESCAPE_NOSPACE):
-			if (TERMP_SKIPCHAR & p->flags)
-				p->flags &= ~TERMP_SKIPCHAR;
-			else if ('\0' == *word)
+			if ('\0' == *word)
 				p->flags |= TERMP_NOSPACE;
-			break;
-		case (ESCAPE_SKIPCHAR):
-			p->flags |= TERMP_SKIPCHAR;
 			break;
 		default:
 			break;
 		}
 	}
-	p->flags &= ~TERMP_NBRWORD;
 }
 
 static void
-adjbuf(struct termp *p, size_t sz)
+adjbuf(struct termp *p, int sz)
 {
 
 	if (0 == p->maxcols)
@@ -534,7 +495,8 @@ adjbuf(struct termp *p, size_t sz)
 	while (sz >= p->maxcols)
 		p->maxcols <<= 2;
 
-	p->buf = mandoc_realloc(p->buf, sizeof(int) * p->maxcols);
+	p->buf = mandoc_realloc
+		(p->buf, sizeof(int) * (size_t)p->maxcols);
 }
 
 static void
@@ -557,39 +519,31 @@ encode1(struct termp *p, int c)
 {
 	enum termfont	  f;
 
-	if (TERMP_SKIPCHAR & p->flags) {
-		p->flags &= ~TERMP_SKIPCHAR;
-		return;
-	}
-
-	if (p->col + 6 >= p->maxcols)
-		adjbuf(p, p->col + 6);
+	if (p->col + 4 >= p->maxcols)
+		adjbuf(p, p->col + 4);
 
 	f = term_fonttop(p);
 
-	if (TERMFONT_UNDER == f || TERMFONT_BI == f) {
+	if (TERMFONT_NONE == f) {
+		p->buf[p->col++] = c;
+		return;
+	} else if (TERMFONT_UNDER == f) {
 		p->buf[p->col++] = '_';
-		p->buf[p->col++] = 8;
-	}
-	if (TERMFONT_BOLD == f || TERMFONT_BI == f) {
-		if (ASCII_HYPH == c)
-			p->buf[p->col++] = '-';
-		else
-			p->buf[p->col++] = c;
-		p->buf[p->col++] = 8;
-	}
+	} else
+		p->buf[p->col++] = c;
+
+	p->buf[p->col++] = 8;
 	p->buf[p->col++] = c;
 }
 
 static void
 encode(struct termp *p, const char *word, size_t sz)
 {
-	size_t		  i;
+	enum termfont	  f;
+	int		  i, len;
 
-	if (TERMP_SKIPCHAR & p->flags) {
-		p->flags &= ~TERMP_SKIPCHAR;
-		return;
-	}
+	/* LINTED */
+	len = sz;
 
 	/*
 	 * Encode and buffer a string of characters.  If the current
@@ -597,25 +551,35 @@ encode(struct termp *p, const char *word, size_t sz)
 	 * character by character.
 	 */
 
-	if (TERMFONT_NONE == term_fonttop(p)) {
-		if (p->col + sz >= p->maxcols) 
-			adjbuf(p, p->col + sz);
-		for (i = 0; i < sz; i++)
+	if (TERMFONT_NONE == (f = term_fonttop(p))) {
+		if (p->col + len >= p->maxcols) 
+			adjbuf(p, p->col + len);
+		for (i = 0; i < len; i++)
 			p->buf[p->col++] = word[i];
 		return;
 	}
 
 	/* Pre-buffer, assuming worst-case. */
 
-	if (p->col + 1 + (sz * 5) >= p->maxcols)
-		adjbuf(p, p->col + 1 + (sz * 5));
+	if (p->col + 1 + (len * 3) >= p->maxcols)
+		adjbuf(p, p->col + 1 + (len * 3));
 
-	for (i = 0; i < sz; i++) {
-		if (ASCII_HYPH == word[i] ||
-		    isgraph((unsigned char)word[i]))
-			encode1(p, word[i]);
+	for (i = 0; i < len; i++) {
+		if (ASCII_HYPH != word[i] &&
+		    ! isgraph((unsigned char)word[i])) {
+			p->buf[p->col++] = word[i];
+			continue;
+		}
+
+		if (TERMFONT_UNDER == f)
+			p->buf[p->col++] = '_';
+		else if (ASCII_HYPH == word[i])
+			p->buf[p->col++] = '-';
 		else
 			p->buf[p->col++] = word[i];
+
+		p->buf[p->col++] = 8;
+		p->buf[p->col++] = word[i];
 	}
 }
 
@@ -626,22 +590,12 @@ term_len(const struct termp *p, size_t sz)
 	return((*p->width)(p, ' ') * sz);
 }
 
-static size_t
-cond_width(const struct termp *p, int c, int *skip)
-{
-
-	if (*skip) {
-		(*skip) = 0;
-		return(0);
-	} else
-		return((*p->width)(p, c));
-}
 
 size_t
 term_strlen(const struct termp *p, const char *cp)
 {
 	size_t		 sz, rsz, i;
-	int		 ssz, skip, c;
+	int		 ssz, c;
 	const char	*seq, *rhs;
 	enum mandoc_esc	 esc;
 	static const char rej[] = { '\\', ASCII_HYPH, ASCII_NBRSP, '\0' };
@@ -653,12 +607,12 @@ term_strlen(const struct termp *p, const char *cp)
 	 */
 
 	sz = 0;
-	skip = 0;
 	while ('\0' != *cp) {
 		rsz = strcspn(cp, rej);
 		for (i = 0; i < rsz; i++)
-			sz += cond_width(p, *cp++, &skip);
+			sz += (*p->width)(p, *cp++);
 
+		c = 0;
 		switch (*cp) {
 		case ('\\'):
 			cp++;
@@ -673,14 +627,14 @@ term_strlen(const struct termp *p, const char *cp)
 						(seq + 1, ssz - 1);
 					if ('\0' == c)
 						break;
-					sz += cond_width(p, c, &skip);
+					sz += (*p->width)(p, c);
 					continue;
 				case (ESCAPE_SPECIAL):
 					c = mchars_spec2cp
 						(p->symtab, seq, ssz);
 					if (c <= 0)
 						break;
-					sz += cond_width(p, c, &skip);
+					sz += (*p->width)(p, c);
 					continue;
 				default:
 					break;
@@ -690,12 +644,12 @@ term_strlen(const struct termp *p, const char *cp)
 
 			switch (esc) {
 			case (ESCAPE_UNICODE):
-				sz += cond_width(p, '?', &skip);
+				sz += (*p->width)(p, '?');
 				break;
 			case (ESCAPE_NUMBERED):
 				c = mchars_num2char(seq, ssz);
 				if ('\0' != c)
-					sz += cond_width(p, c, &skip);
+					sz += (*p->width)(p, c);
 				break;
 			case (ESCAPE_SPECIAL):
 				rhs = mchars_spec2str
@@ -707,9 +661,6 @@ term_strlen(const struct termp *p, const char *cp)
 				rhs = seq;
 				rsz = ssz;
 				break;
-			case (ESCAPE_SKIPCHAR):
-				skip = 1;
-				break;
 			default:
 				break;
 			}
@@ -717,20 +668,15 @@ term_strlen(const struct termp *p, const char *cp)
 			if (NULL == rhs)
 				break;
 
-			if (skip) {
-				skip = 0;
-				break;
-			}
-
 			for (i = 0; i < rsz; i++)
 				sz += (*p->width)(p, *rhs++);
 			break;
 		case (ASCII_NBRSP):
-			sz += cond_width(p, ' ', &skip);
+			sz += (*p->width)(p, ' ');
 			cp++;
 			break;
 		case (ASCII_HYPH):
-			sz += cond_width(p, '-', &skip);
+			sz += (*p->width)(p, '-');
 			cp++;
 			break;
 		default:

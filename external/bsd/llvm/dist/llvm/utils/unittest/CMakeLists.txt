@@ -40,9 +40,8 @@ endif ()
 
 add_llvm_library(gtest
   googletest/src/gtest-all.cc
-
-  LINK_LIBS
-  LLVMSupport # Depends on llvm::raw_ostream
   )
 
-add_subdirectory(UnitTestMain)
+add_llvm_library(gtest_main
+  UnitTestMain/TestMain.cpp
+  )

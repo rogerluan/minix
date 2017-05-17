@@ -1,6 +1,6 @@
 #! /bin/sh
 #
-#	$NetBSD: gcc2netbsd,v 1.5 2014/02/23 05:46:28 mrg Exp $
+#	$NetBSD: gcc2netbsd,v 1.2 2013/10/05 18:38:03 christos Exp $
 #
 # Copyright (c) 2011 The NetBSD Foundation, Inc.
 # All rights reserved.
@@ -27,7 +27,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 # gcc2netbsd:  convert a file source tree into a
-# format suitable for import.  Works on first arg dir.
+# format suitable for import.  Works on current dir.
 # You can run this only once if you want it to work.
 #
 # based on file 2netbsd
@@ -39,41 +39,30 @@ then
 	echo "Usage: $PROG <directory>" 1>&2
 	exit 1
 fi
-DIR="$1"
+FILE="$1"
 
 ### Remove the $'s around RCS tags
-cleantags "$DIR"
+cleantags "$FILE"
 
 RM="
-boehm-gc
+gcc/java
 gcc/ada
 gcc/fortran
-gcc/go
-gcc/java
-gcc/po
-gcc/testsuite
-libada
-libatomic
-libcpp/po
+gcc/testsuite/ada
+gcc/testsuite/gfortran.dg
+gcc/testsuite/gfortran.fortran-torture
 libffi
-libgfortran
-libgo
-libgomp/testsuite
-libiberty/testsuite
-libitm/testsuite
-libjava
-libmudflap/testsuite
-libquadmath
-libstdc++-v3/po
-libstdc++-v3/testsuite
 zlib
+boehm-gc
+libjava
+libada
+libgfortran
 "
 
-find "$DIR" -name .cvsignore -exec rm -f {} +
-find "$DIR" -name .gitignore -exec rm -f {} +
-find "$DIR" -name .svn -type d -exec rm -fr {} +
+find "$FILE" -name .cvsignore -exec rm -f {} +
+find "$FILE" -name .gitignore -exec rm -f {} +
 for i in $RM; do
-	rm -fr "$DIR/$i"
+	rm -fr "$FILE/$i"
 done
 
 echo You can import now.  Use the following command:

@@ -30,12 +30,18 @@ public:
   explicit APSInt(uint32_t BitWidth, bool isUnsigned = true)
    : APInt(BitWidth, 0), IsUnsigned(isUnsigned) {}
 
-  explicit APSInt(APInt I, bool isUnsigned = true)
-   : APInt(std::move(I)), IsUnsigned(isUnsigned) {}
+  explicit APSInt(const APInt &I, bool isUnsigned = true)
+   : APInt(I), IsUnsigned(isUnsigned) {}
 
-  APSInt &operator=(APInt RHS) {
+  APSInt &operator=(const APSInt &RHS) {
+    APInt::operator=(RHS);
+    IsUnsigned = RHS.IsUnsigned;
+    return *this;
+  }
+
+  APSInt &operator=(const APInt &RHS) {
     // Retain our current sign.
-    APInt::operator=(std::move(RHS));
+    APInt::operator=(RHS);
     return *this;
   }
 
@@ -56,7 +62,7 @@ public:
     APInt::toString(Str, Radix, isSigned());
   }
   /// toString - Converts an APInt to a std::string.  This is an inefficient
-  /// method; you should prefer passing in a SmallString instead.
+  /// method, your should prefer passing in a SmallString instead.
   std::string toString(unsigned Radix) const {
     return APInt::toString(Radix, isSigned());
   }
@@ -269,15 +275,19 @@ public:
     else if (I2.getBitWidth() > I1.getBitWidth())
       return isSameValue(I1.extend(I2.getBitWidth()), I2);
 
-    assert(I1.isSigned() != I2.isSigned());
+    // We have a signedness mismatch. Turn the signed value into an unsigned
+    // value.
+    if (I1.isSigned()) {
+      if (I1.isNegative())
+        return false;
 
-    // We have a signedness mismatch. Check for negative values and do an
-    // unsigned compare if signs match.
-    if ((I1.isSigned() && I1.isNegative()) ||
-        (!I1.isSigned() && I2.isNegative()))
+      return APSInt(I1, true) == I2;
+    }
+
+    if (I2.isNegative())
       return false;
 
-    return I1.eq(I2);
+    return I1 == APSInt(I2, true);
   }
 
   /// Profile - Used to insert APSInt objects, or objects that contain APSInt

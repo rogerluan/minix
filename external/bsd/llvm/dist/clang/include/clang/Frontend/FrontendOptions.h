@@ -43,7 +43,6 @@ namespace frontend {
     GeneratePTH,            ///< Generate pre-tokenized header.
     InitOnly,               ///< Only execute frontend initialization.
     ModuleFileInfo,         ///< Dump information about a module file.
-    VerifyPCH,              ///< Load and verify that a PCH file is usable.
     ParseSyntaxOnly,        ///< Parse and perform semantic analysis.
     PluginAction,           ///< Run a plugin action, \see ActionName.
     PrintDeclContext,       ///< Print DeclContext and their Decls.
@@ -90,9 +89,9 @@ class FrontendInputFile {
   bool IsSystem;
 
 public:
-  FrontendInputFile() : Buffer(nullptr), Kind(IK_None) { }
+  FrontendInputFile() : Buffer(0), Kind(IK_None) { }
   FrontendInputFile(StringRef File, InputKind Kind, bool IsSystem = false)
-    : File(File.str()), Buffer(nullptr), Kind(Kind), IsSystem(IsSystem) { }
+    : File(File.str()), Buffer(0), Kind(Kind), IsSystem(IsSystem) { }
   FrontendInputFile(llvm::MemoryBuffer *buffer, InputKind Kind,
                     bool IsSystem = false)
     : Buffer(buffer), Kind(Kind), IsSystem(IsSystem) { }
@@ -100,9 +99,9 @@ public:
   InputKind getKind() const { return Kind; }
   bool isSystem() const { return IsSystem; }
 
-  bool isEmpty() const { return File.empty() && Buffer == nullptr; }
+  bool isEmpty() const { return File.empty() && Buffer == 0; }
   bool isFile() const { return !isBuffer(); }
-  bool isBuffer() const { return Buffer != nullptr; }
+  bool isBuffer() const { return Buffer != 0; }
 
   StringRef getFile() const {
     assert(isFile());
@@ -142,8 +141,6 @@ public:
                                            ///< global module index if available.
   unsigned GenerateGlobalModuleIndex : 1;  ///< Whether we can generate the
                                            ///< global module index if needed.
-  unsigned ASTDumpDecls : 1;               ///< Whether we include declaration
-                                           ///< dumps in AST dumps.
   unsigned ASTDumpLookups : 1;             ///< Whether we include lookup table
                                            ///< dumps in AST dumps.
 
@@ -182,17 +179,11 @@ public:
     ObjCMT_ReturnsInnerPointerProperty = 0x200,
     /// \brief use NS_NONATOMIC_IOSONLY for property 'atomic' attribute
     ObjCMT_NsAtomicIOSOnlyProperty = 0x400,
-    /// \brief Enable inferring NS_DESIGNATED_INITIALIZER for ObjC methods.
-    ObjCMT_DesignatedInitializer = 0x800,
-    /// \brief Enable converting setter/getter expressions to property-dot syntx.
-    ObjCMT_PropertyDotSyntax = 0x1000,
     ObjCMT_MigrateDecls = (ObjCMT_ReadonlyProperty | ObjCMT_ReadwriteProperty |
                            ObjCMT_Annotation | ObjCMT_Instancetype |
                            ObjCMT_NsMacros | ObjCMT_ProtocolConformance |
-                           ObjCMT_NsAtomicIOSOnlyProperty |
-                           ObjCMT_DesignatedInitializer),
-    ObjCMT_MigrateAll = (ObjCMT_Literals | ObjCMT_Subscripting |
-                         ObjCMT_MigrateDecls | ObjCMT_PropertyDotSyntax)
+                           ObjCMT_NsAtomicIOSOnlyProperty),
+    ObjCMT_MigrateAll = (ObjCMT_Literals | ObjCMT_Subscripting | ObjCMT_MigrateDecls)
   };
   unsigned ObjCMTAction;
   std::string ObjCMTWhiteListPath;
@@ -233,13 +224,6 @@ public:
   /// The list of plugins to load.
   std::vector<std::string> Plugins;
 
-  /// \brief The list of module map files to load before processing the input.
-  std::vector<std::string> ModuleMapFiles;
-
-  /// \brief The list of additional prebuilt module files to load before
-  /// processing the input.
-  std::vector<std::string> ModuleFiles;
-
   /// \brief The list of AST files to merge.
   std::vector<std::string> ASTMergeFiles;
 
@@ -258,7 +242,7 @@ public:
     FixWhatYouCan(false), FixOnlyWarnings(false), FixAndRecompile(false),
     FixToTemporaries(false), ARCMTMigrateEmitARCErrors(false),
     SkipFunctionBodies(false), UseGlobalModuleIndex(true),
-    GenerateGlobalModuleIndex(true), ASTDumpDecls(false), ASTDumpLookups(false),
+    GenerateGlobalModuleIndex(true), ASTDumpLookups(false),
     ARCMTAction(ARCMT_None), ObjCMTAction(ObjCMT_None),
     ProgramAction(frontend::ParseSyntaxOnly)
   {}

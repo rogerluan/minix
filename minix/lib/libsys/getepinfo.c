@@ -2,9 +2,9 @@
 #include <string.h>
 #include <unistd.h>
 
-#include <sys/socket.h>
+#include <sys/ucred.h>
 
-pid_t
+static pid_t
 getepinfo(endpoint_t proc_ep, uid_t *uid, gid_t *gid)
 {
 	message m;
@@ -12,16 +12,14 @@ getepinfo(endpoint_t proc_ep, uid_t *uid, gid_t *gid)
 
 	memset(&m, 0, sizeof(m));
 	m.m_lsys_pm_getepinfo.endpt = proc_ep;
-	m.m_lsys_pm_getepinfo.groups = (vir_bytes)NULL;
-	m.m_lsys_pm_getepinfo.ngroups = 0;
 
 	if ((r = _taskcall(PM_PROC_NR, PM_GETEPINFO, &m)) < 0)
 		return r;
 
 	if (uid != NULL)
-		*uid = m.m_pm_lsys_getepinfo.euid;
+		*uid = m.m_pm_lsys_getepinfo.uid;
 	if (gid != NULL)
-		*gid = m.m_pm_lsys_getepinfo.egid;
+		*gid = m.m_pm_lsys_getepinfo.gid;
 	return (pid_t) r;
 }
 
@@ -56,25 +54,22 @@ getngid(endpoint_t proc_ep)
 }
 
 int
-getsockcred(endpoint_t proc_ep, struct sockcred * sockcred, gid_t * groups,
-	int ngroups)
+getnucred(endpoint_t proc_ep, struct uucred *ucred)
 {
-	message m;
+	uid_t uid;
+	gid_t gid;
 	int r;
 
-	memset(&m, 0, sizeof(m));
-	m.m_lsys_pm_getepinfo.endpt = proc_ep;
-	m.m_lsys_pm_getepinfo.groups = (vir_bytes)groups;
-	m.m_lsys_pm_getepinfo.ngroups = ngroups;
+	if (ucred == NULL)
+		return EFAULT;
 
-	if ((r = _taskcall(PM_PROC_NR, PM_GETEPINFO, &m)) < 0)
+	if ((r = getepinfo(proc_ep, &uid, &gid)) < 0)
 		return r;
 
-	sockcred->sc_uid = m.m_pm_lsys_getepinfo.uid;
-	sockcred->sc_euid = m.m_pm_lsys_getepinfo.euid;
-	sockcred->sc_gid = m.m_pm_lsys_getepinfo.gid;
-	sockcred->sc_egid = m.m_pm_lsys_getepinfo.egid;
-	sockcred->sc_ngroups = m.m_pm_lsys_getepinfo.ngroups;
+	/* Only two fields are used for now; ensure the rest is zeroed out. */
+	memset(ucred, 0, sizeof(struct uucred));
+	ucred->cr_uid = uid;
+	ucred->cr_gid = gid;
 
-	return OK;
+	return r;
 }

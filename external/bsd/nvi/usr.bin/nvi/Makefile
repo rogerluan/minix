@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.6 2015/01/23 03:04:06 christos Exp $
+#	$NetBSD: Makefile,v 1.4 2013/11/30 14:52:40 christos Exp $
 
 .include <bsd.own.mk>
 
@@ -10,7 +10,6 @@ CPPFLAGS+=-I${DIST}/include -I${.CURDIR} -I. -DGTAGS
 #DBG=-g
 #CPPFLAGS+=-DLOGDEBUG -DTRACE
 #CPPFLAGS+=-DDBDEBUG -DTRACE
-#CPPFLAGS+=-DQUEUEDEBUG
 
 #CWARNFLAGS+=-Wno-parentheses -Wno-unused -Wno-missing-prototypes
 #.if defined(HAVE_GCC)
@@ -80,11 +79,10 @@ ipc_def.h: ipc.awk vipc.awk ipc_cmd.c ip_read.c
 .for i in cl common ex ip ipc vi
 DPSRCS+=${i}_extern.h
 CLEANFILES+=${i}_extern.h
-# does not work, DIST isn't set yet here
-#_${i}_SRCS != echo ${DIST}/${i}/*.c ${DIST}/${i}/*.xs
+_${i}_SRCS != echo ${DIST}/${i}/*.c ${DIST}/${i}/*.xs
 ${i}_extern.h: ${SRCS}
 	${_MKTARGET_CREATE}
-	@${TOOL_SED} -n "s/^ \* PUBLIC: \(.*\)/\1/p" ${.ALLSRC:M${DIST}/$i/*} > ${.TARGET}.tmp
+	@${TOOL_SED} -n "s/^ \* PUBLIC: \(.*\)/\1/p" ${.ALLSRC:M*/$i/*} > ${.TARGET}.tmp
 	@if cmp -s ${.TARGET}.tmp ${.TARGET}; then \
 		rm -f ${.TARGET}.tmp; \
 	else \

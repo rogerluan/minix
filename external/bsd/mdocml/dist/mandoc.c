@@ -1,7 +1,7 @@
-/*	Id: mandoc.c,v 1.75 2013/12/31 23:23:10 schwarze Exp  */
+/*	$Vendor-Id: mandoc.c,v 1.62 2011/12/03 16:08:51 schwarze Exp $ */
 /*
  * Copyright (c) 2008, 2009, 2010, 2011 Kristaps Dzonsons <kristaps@bsd.lv>
- * Copyright (c) 2011, 2012, 2013 Ingo Schwarze <schwarze@openbsd.org>
+ * Copyright (c) 2011 Ingo Schwarze <schwarze@openbsd.org>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -37,38 +37,83 @@
 
 static	int	 a2time(time_t *, const char *, const char *);
 static	char	*time2a(time_t);
+static	int	 numescape(const char *);
 
+/*
+ * Pass over recursive numerical expressions.  This context of this
+ * function is important: it's only called within character-terminating
+ * escapes (e.g., \s[xxxyyy]), so all we need to do is handle initial
+ * recursion: we don't care about what's in these blocks. 
+ * This returns the number of characters skipped or -1 if an error
+ * occurs (the caller should bail).
+ */
+static int
+numescape(const char *start)
+{
+	int		 i;
+	size_t		 sz;
+	const char	*cp;
+
+	i = 0;
+
+	/* The expression consists of a subexpression. */
+
+	if ('\\' == start[i]) {
+		cp = &start[++i];
+		/*
+		 * Read past the end of the subexpression.
+		 * Bail immediately on errors.
+		 */
+		if (ESCAPE_ERROR == mandoc_escape(&cp, NULL, NULL))
+			return(-1);
+		return(i + cp - &start[i]);
+	} 
+
+	if ('(' != start[i++])
+		return(0);
+
+	/*
+	 * A parenthesised subexpression.  Read until the closing
+	 * parenthesis, making sure to handle any nested subexpressions
+	 * that might ruin our parse.
+	 */
+
+	while (')' != start[i]) {
+		sz = strcspn(&start[i], ")\\");
+		i += (int)sz;
+
+		if ('\0' == start[i])
+			return(-1);
+		else if ('\\' != start[i])
+			continue;
+
+		cp = &start[++i];
+		if (ESCAPE_ERROR == mandoc_escape(&cp, NULL, NULL))
+			return(-1);
+		i += cp - &start[i];
+	}
+
+	/* Read past the terminating ')'. */
+	return(++i);
+}
 
 enum mandoc_esc
 mandoc_escape(const char **end, const char **start, int *sz)
 {
-	const char	*local_start;
-	int		 local_sz;
-	char		 term;
+	char		 c, term, numeric;
+	int		 i, lim, ssz, rlim;
+	const char	*cp, *rstart;
 	enum mandoc_esc	 gly; 
 
-	/*
-	 * When the caller doesn't provide return storage,
-	 * use local storage.
-	 */
-
-	if (NULL == start)
-		start = &local_start;
-	if (NULL == sz)
-		sz = &local_sz;
-
-	/*
-	 * Beyond the backslash, at least one input character
-	 * is part of the escape sequence.  With one exception
-	 * (see below), that character won't be returned.
-	 */
-
+	cp = *end;
+	rstart = cp;
+	if (start)
+		*start = rstart;
+	i = lim = 0;
 	gly = ESCAPE_ERROR;
-	*start = ++*end;
-	*sz = 0;
-	term = '\0';
+	term = numeric = '\0';
 
-	switch ((*start)[-1]) {
+	switch ((c = cp[i++])) {
 	/*
 	 * First the glyphs.  There are several different forms of
 	 * these, but each eventually returns a substring of the glyph
@@ -76,7 +121,7 @@ mandoc_escape(const char **end, const char **start, int *sz)
 	 */
 	case ('('):
 		gly = ESCAPE_SPECIAL;
-		*sz = 2;
+		lim = 2;
 		break;
 	case ('['):
 		gly = ESCAPE_SPECIAL;
@@ -86,37 +131,16 @@ mandoc_escape(const char **end, const char **start, int *sz)
 		 * Unicode codepoint.  Here, however, only check whether
 		 * it's not a zero-width escape.
 		 */
-		if ('u' == (*start)[0] && ']' != (*start)[1])
+		if ('u' == cp[i] && ']' != cp[i + 1])
 			gly = ESCAPE_UNICODE;
 		term = ']';
 		break;
 	case ('C'):
-		if ('\'' != **start)
+		if ('\'' != cp[i])
 			return(ESCAPE_ERROR);
-		*start = ++*end;
-		if ('u' == (*start)[0] && '\'' != (*start)[1])
-			gly = ESCAPE_UNICODE;
-		else
-			gly = ESCAPE_SPECIAL;
+		gly = ESCAPE_SPECIAL;
 		term = '\'';
 		break;
-
-	/*
-	 * Escapes taking no arguments at all.
-	 */
-	case ('d'):
-		/* FALLTHROUGH */
-	case ('u'):
-		return(ESCAPE_IGNORE);
-
-	/*
-	 * The \z escape is supposed to output the following
-	 * character without advancing the cursor position.  
-	 * Since we are mostly dealing with terminal mode,
-	 * let us just skip the next character.
-	 */
-	case ('z'):
-		return(ESCAPE_SKIPCHAR);
 
 	/*
 	 * Handle all triggers matching \X(xy, \Xx, and \X[xxxx], where
@@ -142,17 +166,21 @@ mandoc_escape(const char **end, const char **start, int *sz)
 	case ('f'):
 		if (ESCAPE_ERROR == gly)
 			gly = ESCAPE_FONT;
-		switch (**start) {
+
+		rstart= &cp[i];
+		if (start) 
+			*start = rstart;
+
+		switch (cp[i++]) {
 		case ('('):
-			*start = ++*end;
-			*sz = 2;
+			lim = 2;
 			break;
 		case ('['):
-			*start = ++*end;
 			term = ']';
 			break;
 		default:
-			*sz = 1;
+			lim = 1;
+			i--;
 			break;
 		}
 		break;
@@ -165,23 +193,18 @@ mandoc_escape(const char **end, const char **start, int *sz)
 		/* FALLTHROUGH */
 	case ('b'):
 		/* FALLTHROUGH */
-	case ('B'):
-		/* FALLTHROUGH */
 	case ('D'):
 		/* FALLTHROUGH */
 	case ('o'):
 		/* FALLTHROUGH */
 	case ('R'):
 		/* FALLTHROUGH */
-	case ('w'):
-		/* FALLTHROUGH */
 	case ('X'):
 		/* FALLTHROUGH */
 	case ('Z'):
-		if ('\'' != **start)
+		if ('\'' != cp[i++])
 			return(ESCAPE_ERROR);
 		gly = ESCAPE_IGNORE;
-		*start = ++*end;
 		term = '\'';
 		break;
 
@@ -189,6 +212,8 @@ mandoc_escape(const char **end, const char **start, int *sz)
 	 * These escapes are of the form \X'N', where 'X' is the trigger
 	 * and 'N' resolves to a numerical expression.
 	 */
+	case ('B'):
+		/* FALLTHROUGH */
 	case ('h'):
 		/* FALLTHROUGH */
 	case ('H'):
@@ -196,17 +221,20 @@ mandoc_escape(const char **end, const char **start, int *sz)
 	case ('L'):
 		/* FALLTHROUGH */
 	case ('l'):
+		gly = ESCAPE_NUMBERED;
 		/* FALLTHROUGH */
 	case ('S'):
 		/* FALLTHROUGH */
 	case ('v'):
 		/* FALLTHROUGH */
+	case ('w'):
+		/* FALLTHROUGH */
 	case ('x'):
-		if ('\'' != **start)
+		if (ESCAPE_ERROR == gly)
+			gly = ESCAPE_IGNORE;
+		if ('\'' != cp[i++])
 			return(ESCAPE_ERROR);
-		gly = ESCAPE_IGNORE;
-		*start = ++*end;
-		term = '\'';
+		term = numeric = '\'';
 		break;
 
 	/*
@@ -214,17 +242,17 @@ mandoc_escape(const char **end, const char **start, int *sz)
 	 * XXX Do any other escapes need similar handling?
 	 */
 	case ('N'):
-		if ('\0' == **start)
+		if ('\0' == cp[i])
 			return(ESCAPE_ERROR);
-		(*end)++;
-		if (isdigit((unsigned char)**start)) {
-			*sz = 1;
+		*end = &cp[++i];
+		if (isdigit((unsigned char)cp[i-1]))
 			return(ESCAPE_IGNORE);
-		}
-		(*start)++;
 		while (isdigit((unsigned char)**end))
 			(*end)++;
-		*sz = *end - *start;
+		if (start)
+			*start = &cp[i];
+		if (sz)
+			*sz = *end - &cp[i];
 		if ('\0' != **end)
 			(*end)++;
 		return(ESCAPE_NUMBERED);
@@ -235,93 +263,122 @@ mandoc_escape(const char **end, const char **start, int *sz)
 	case ('s'):
 		gly = ESCAPE_IGNORE;
 
-		/* See +/- counts as a sign. */
-		if ('+' == **end || '-' == **end || ASCII_HYPH == **end)
-			(*end)++;
+		rstart = &cp[i];
+		if (start) 
+			*start = rstart;
 
-		switch (**end) {
+		/* See +/- counts as a sign. */
+		c = cp[i];
+		if ('+' == c || '-' == c || ASCII_HYPH == c)
+			++i;
+
+		switch (cp[i++]) {
 		case ('('):
-			*start = ++*end;
-			*sz = 2;
+			lim = 2;
 			break;
 		case ('['):
-			*start = ++*end;
-			term = ']';
+			term = numeric = ']';
 			break;
 		case ('\''):
-			*start = ++*end;
-			term = '\'';
+			term = numeric = '\'';
 			break;
 		default:
-			*sz = 1;
+			lim = 1;
+			i--;
 			break;
 		}
+
+		/* See +/- counts as a sign. */
+		c = cp[i];
+		if ('+' == c || '-' == c || ASCII_HYPH == c)
+			++i;
 
 		break;
 
 	/*
 	 * Anything else is assumed to be a glyph.
-	 * In this case, pass back the character after the backslash.
 	 */
 	default:
 		gly = ESCAPE_SPECIAL;
-		*start = --*end;
-		*sz = 1;
+		lim = 1;
+		i--;
 		break;
 	}
 
 	assert(ESCAPE_ERROR != gly);
 
+	rstart = &cp[i];
+	if (start)
+		*start = rstart;
+
 	/*
-	 * Read up to the terminating character,
-	 * paying attention to nested escapes.
+	 * If a terminating block has been specified, we need to
+	 * handle the case of recursion, which could have their
+	 * own terminating blocks that mess up our parse.  This, by the
+	 * way, means that the "start" and "size" values will be
+	 * effectively meaningless.
+	 */
+
+	ssz = 0;
+	if (numeric && -1 == (ssz = numescape(&cp[i])))
+		return(ESCAPE_ERROR);
+
+	i += ssz;
+	rlim = -1;
+
+	/*
+	 * We have a character terminator.  Try to read up to that
+	 * character.  If we can't (i.e., we hit the nil), then return
+	 * an error; if we can, calculate our length, read past the
+	 * terminating character, and exit.
 	 */
 
 	if ('\0' != term) {
-		while (**end != term) {
-			switch (**end) {
-			case ('\0'):
-				return(ESCAPE_ERROR);
-			case ('\\'):
-				(*end)++;
-				if (ESCAPE_ERROR ==
-				    mandoc_escape(end, NULL, NULL))
-					return(ESCAPE_ERROR);
-				break;
-			default:
-				(*end)++;
-				break;
-			}
-		}
-		*sz = (*end)++ - *start;
-	} else {
-		assert(*sz > 0);
-		if ((size_t)*sz > strlen(*start))
+		*end = strchr(&cp[i], term);
+		if ('\0' == *end)
 			return(ESCAPE_ERROR);
-		*end += *sz;
+
+		rlim = *end - &cp[i];
+		if (sz)
+			*sz = rlim;
+		(*end)++;
+		goto out;
 	}
+
+	assert(lim > 0);
+
+	/*
+	 * We have a numeric limit.  If the string is shorter than that,
+	 * stop and return an error.  Else adjust our endpoint, length,
+	 * and return the current glyph.
+	 */
+
+	if ((size_t)lim > strlen(&cp[i]))
+		return(ESCAPE_ERROR);
+
+	rlim = lim;
+	if (sz)
+		*sz = rlim;
+
+	*end = &cp[i] + lim;
+
+out:
+	assert(rlim >= 0 && rstart);
 
 	/* Run post-processors. */
 
 	switch (gly) {
 	case (ESCAPE_FONT):
-		if (2 == *sz) {
-			if ('C' == **start) {
-				/*
-				 * Treat constant-width font modes
-				 * just like regular font modes.
-				 */
-				(*start)++;
-				(*sz)--;
-			} else {
-				if ('B' == (*start)[0] && 'I' == (*start)[1])
-					gly = ESCAPE_FONTBI;
-				break;
-			}
-		} else if (1 != *sz)
+		/*
+		 * Pretend that the constant-width font modes are the
+		 * same as the regular font modes.
+		 */
+		if (2 == rlim && 'C' == *rstart)
+			rstart++;
+		else if (1 != rlim)
 			break;
 
-		switch (**start) {
+		switch (*rstart) {
 		case ('3'):
 			/* FALLTHROUGH */
 		case ('B'):
@@ -343,7 +400,9 @@ mandoc_escape(const char **end, const char **start, int *sz)
 		}
 		break;
 	case (ESCAPE_SPECIAL):
-		if (1 == *sz && 'c' == **start)
+		if (1 != rlim)
+			break;
+		if ('c' == *rstart)
 			gly = ESCAPE_NOSPACE;
 		break;
 	default:
@@ -425,10 +484,10 @@ mandoc_strdup(const char *ptr)
  * Parse a quoted or unquoted roff-style request or macro argument.
  * Return a pointer to the parsed argument, which is either the original
  * pointer or advanced by one byte in case the argument is quoted.
- * NUL-terminate the argument in place.
+ * Null-terminate the argument in place.
  * Collapse pairs of quotes inside quoted arguments.
  * Advance the argument pointer to the next argument,
- * or to the NUL byte terminating the argument line.
+ * or to the null byte terminating the argument line.
  */
 char *
 mandoc_getarg(struct mparse *parse, char **cpp, int ln, int *pos)
@@ -447,35 +506,17 @@ mandoc_getarg(struct mparse *parse, char **cpp, int ln, int *pos)
 	pairs = 0;
 	white = 0;
 	for (cp = start; '\0' != *cp; cp++) {
-
-		/*
-		 * Move the following text left
-		 * after quoted quotes and after "\\" and "\t".
-		 */
+		/* Move left after quoted quotes and escaped backslashes. */
 		if (pairs)
 			cp[-pairs] = cp[0];
-
 		if ('\\' == cp[0]) {
-			/*
-			 * In copy mode, translate double to single
-			 * backslashes and backslash-t to literal tabs.
-			 */
-			switch (cp[1]) {
-			case ('t'):
-				cp[0] = '\t';
-				/* FALLTHROUGH */
-			case ('\\'):
+			if ('\\' == cp[1]) {
+				/* Poor man's copy mode. */
 				pairs++;
 				cp++;
-				break;
-			case (' '):
+			} else if (0 == quoted && ' ' == cp[1])
 				/* Skip escaped blanks. */
-				if (0 == quoted)
-					cp++;
-				break;
-			default:
-				break;
-			}
+				cp++;
 		} else if (0 == quoted) {
 			if (' ' == cp[0]) {
 				/* Unescaped blanks end unquoted args. */
@@ -499,7 +540,7 @@ mandoc_getarg(struct mparse *parse, char **cpp, int ln, int *pos)
 	if (1 == quoted)
 		mandoc_msg(MANDOCERR_BADQUOTE, parse, ln, *pos, NULL);
 
-	/* NUL-terminate this argument and move to the next one. */
+	/* Null-terminate this argument and move to the next one. */
 	if (pairs)
 		cp[-pairs] = '\0';
 	if ('\0' != *cp) {
@@ -594,10 +635,10 @@ mandoc_normdate(struct mparse *parse, char *in, int ln, int pos)
 }
 
 int
-mandoc_eos(const char *p, size_t sz)
+mandoc_eos(const char *p, size_t sz, int enclosed)
 {
-	const char	*q;
-	int		 enclosed, found;
+	const char *q;
+	int found;
 
 	if (0 == sz)
 		return(0);
@@ -608,7 +649,7 @@ mandoc_eos(const char *p, size_t sz)
 	 * propagate outward.
 	 */
 
-	enclosed = found = 0;
+	found = 0;
 	for (q = p + (int)sz - 1; q >= p; q--) {
 		switch (*q) {
 		case ('\"'):
@@ -634,6 +675,32 @@ mandoc_eos(const char *p, size_t sz)
 	}
 
 	return(found && !enclosed);
+}
+
+/*
+ * Find out whether a line is a macro line or not.  If it is, adjust the
+ * current position and return one; if it isn't, return zero and don't
+ * change the current position.
+ */
+int
+mandoc_getcontrol(const char *cp, int *ppos)
+{
+	int		pos;
+
+	pos = *ppos;
+
+	if ('\\' == cp[pos] && '.' == cp[pos + 1])
+		pos += 2;
+	else if ('.' == cp[pos] || '\'' == cp[pos])
+		pos++;
+	else
+		return(0);
+
+	while (' ' == cp[pos] || '\t' == cp[pos])
+		pos++;
+
+	*ppos = pos;
+	return(1);
 }
 
 /*

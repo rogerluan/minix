@@ -6,6 +6,7 @@
 #include "kernel/kernel.h"
 
 #include <minix/callnr.h>
+#include <minix/sysutil.h>
 #include <minix/u64.h>
 #include <limits.h>
 #include <string.h>
@@ -311,7 +312,7 @@ void print_proc_recursive(struct proc *pp)
 	print_proc_depends(pp, 0);
 }
 
-#if DEBUG_DUMPIPC || DEBUG_DUMPIPCF
+#if DEBUG_DUMPIPC
 static const char *mtypename(int mtype, int *possible_callname)
 {
 	char *callname = NULL, *errname = NULL;
@@ -383,7 +384,7 @@ static int namematch(char **names, int nnames, char *name)
 }
 #endif
 
-void printmsg(message *msg, struct proc *src, struct proc *dst,
+static void printmsg(message *msg, struct proc *src, struct proc *dst, 
 	char operation, int printparams)
 {
 	const char *name;

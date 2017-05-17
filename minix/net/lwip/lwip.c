@@ -1,381 +1,296 @@
-/* LWIP service - lwip.c - main program and dispatch code */
+#include <unistd.h>
+#include <minix/timers.h>
+#include <sys/svrctl.h>
+#include <minix/ds.h>
+#include <minix/endpoint.h>
+#include <errno.h>
+#include <minix/sef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <minix/chardriver.h>
+#include <minix/syslib.h>
+#include <minix/sysutil.h>
+#include <minix/timers.h>
+#include <minix/netsock.h>
 
-#include "lwip.h"
-#include "tcpisn.h"
-#include "mcast.h"
-#include "ethif.h"
-#include "rtsock.h"
-#include "route.h"
-#include "bpfdev.h"
+#include "proto.h"
 
-#include "lwip/init.h"
-#include "lwip/sys.h"
-#include "lwip/timeouts.h"
-#include "arch/cc.h"
+#include <lwip/mem.h>
+#include <lwip/pbuf.h>
+#include <lwip/stats.h>
+#include <lwip/netif.h>
+#include <netif/etharp.h>
+#include <lwip/tcp_impl.h>
 
-static int running, recheck_timer;
-static minix_timer_t lwip_timer;
+endpoint_t lwip_ep;
 
-static void expire_lwip_timer(int);
+static minix_timer_t tcp_ftmr, tcp_stmr, arp_tmr;
+static int arp_ticks, tcp_fticks, tcp_sticks;
 
-/*
- * Return the system uptime in milliseconds.  Also remember that lwIP retrieved
- * the system uptime during this call, so that we know to check for timer
- * updates at the end of the current iteration of the message loop.
- */
-uint32_t
-sys_now(void)
+static struct netif * netif_lo;
+
+extern struct sock_ops sock_udp_ops;
+extern struct sock_ops sock_tcp_ops;
+extern struct sock_ops sock_raw_ip_ops;
+
+static void sys_init(void)
 {
-
-	recheck_timer = TRUE;
-
-	/* TODO: avoid 64-bit arithmetic if possible. */
-	return (uint32_t)(((uint64_t)getticks() * 1000) / sys_hz());
 }
 
-/*
- * Check if and when lwIP has its next timeout, and set or cancel our timer
- * accordingly.
- */
-static void
-set_lwip_timer(void)
+static void arp_watchdog(__unused minix_timer_t *tp)
 {
-	uint32_t next_timeout;
-	clock_t ticks;
+	etharp_tmr();
+	set_timer(&arp_tmr, arp_ticks, arp_watchdog, 0);
+}
 
-	/* Ask lwIP when the next alarm is supposed to go off, if any. */
-	next_timeout = sys_timeouts_sleeptime();
+static void tcp_fwatchdog(__unused minix_timer_t *tp)
+{
+	tcp_fasttmr();
+	set_timer(&tcp_ftmr, tcp_fticks, tcp_fwatchdog, 0);
+}
 
-	/*
-	 * Set or update the lwIP timer.  We rely on set_timer() asking the
-	 * kernel for an alarm only if the timeout is different from the one we
-	 * gave it last time (if at all).  However, due to conversions between
-	 * absolute and relative times, and the fact that we cannot guarantee
-	 * that the uptime itself does not change while executing these
-	 * routines, set_timer() will sometimes be issuing a kernel call even
-	 * if the alarm has not changed.  Not a huge deal, but fixing this will
-	 * require a different interface to lwIP and/or the timers library.
-	 */
-	if (next_timeout != (uint32_t)-1) {
-		/*
-		 * Round up the next timeout (which is in milliseconds) to the
-		 * number of clock ticks to add to the current time.  Avoid any
-		 * potential for overflows, no matter how unrealistic..
-		 */
-		if (next_timeout > TMRDIFF_MAX / sys_hz())
-			ticks = TMRDIFF_MAX;
+static void tcp_swatchdog(__unused minix_timer_t *tp)
+{
+	tcp_slowtmr();
+	set_timer(&tcp_ftmr, tcp_sticks, tcp_swatchdog, 0);
+}
+
+static int sef_cb_init_fresh(__unused int type, __unused sef_init_info_t *info)
+{
+	int err;
+	unsigned int hz;
+
+	char my_name[16];
+	int my_priv;
+
+	err = sys_whoami(&lwip_ep, my_name, sizeof(my_name), &my_priv);
+	if (err != OK)
+		panic("Cannot get own endpoint");
+
+	nic_init_all();
+	inet_read_conf();
+
+	/* init lwip library */
+	stats_init();
+	sys_init();
+	mem_init();
+	memp_init();
+	pbuf_init();
+
+	hz = sys_hz();
+
+	arp_ticks = ARP_TMR_INTERVAL / (1000 / hz);
+	tcp_fticks = TCP_FAST_INTERVAL / (1000 / hz);
+	tcp_sticks = TCP_SLOW_INTERVAL / (1000 / hz);
+
+	etharp_init();
+	
+	set_timer(&arp_tmr, arp_ticks, arp_watchdog, 0);
+	set_timer(&tcp_ftmr, tcp_fticks, tcp_fwatchdog, 0);
+	set_timer(&tcp_stmr, tcp_sticks, tcp_swatchdog, 0);
+	
+	netif_init();
+	netif_lo = netif_find(__UNCONST("lo0"));
+
+	/* Read configuration. */
+#if 0
+	nw_conf();
+
+	/* Get a random number */
+	timerand= 1;
+	fd = open(RANDOM_DEV_NAME, O_RDONLY | O_NONBLOCK);
+	if (fd != -1)
+	{
+		err= read(fd, randbits, sizeof(randbits));
+		if (err == sizeof(randbits))
+			timerand= 0;
 		else
-			ticks = (next_timeout * sys_hz() + 999) / 1000;
-
-		set_timer(&lwip_timer, ticks, expire_lwip_timer, 0 /*unused*/);
-	} else
-		cancel_timer(&lwip_timer);	/* not really needed.. */
-}
-
-/*
- * The timer for lwIP timeouts has gone off.  Check timeouts, and possibly set
- * a new timer.
- */
-static void
-expire_lwip_timer(int arg __unused)
-{
-
-	/* Let lwIP do its work. */
-	sys_check_timeouts();
-
-	/*
-	 * See if we have to update our timer for the next lwIP timer.  Doing
-	 * this here, rather than from the main loop, avoids one kernel call.
-	 */
-	set_lwip_timer();
-
-	recheck_timer = FALSE;
-}
-
-/*
- * Check whether we should adjust our local timer based on a change in the next
- * lwIP timeout.
- */
-static void
-check_lwip_timer(void)
-{
-
-	/*
-	 * We make the assumption that whenever lwIP starts a timer, it will
-	 * need to retrieve the current time.  Thus, whenever sys_now() is
-	 * called, we set the 'recheck_timer' flag.  Here, we check whether to
-	 * (re)set our lwIP timer only if the flag is set.  As a result, we do
-	 * not have to mess with timers for literally every incoming message.
-	 *
-	 * When lwIP stops a timer, it does not call sys_now(), and thus, we
-	 * may miss such updates.  However, timers being stopped should be rare
-	 * and getting too many alarm messages is not a big deal.
-	 */
-	if (!recheck_timer)
-		return;
-
-	set_lwip_timer();
-
-	/* Reset the flag for the next message loop iteration. */
-	recheck_timer = FALSE;
-}
-
-/*
- * Return a random number, for use by lwIP.
- */
-uint32_t
-lwip_hook_rand(void)
-{
-
-	/*
-	 * The current known uses of this hook are for selection of initial
-	 * TCP/UDP port numbers and for multicast-related timer randomness.
-	 * The former case exists only to avoid picking the same starting port
-	 * numbers after a reboot.  After that, simple sequential iteration of
-	 * the port numbers is used.  The latter case varies the response time
-	 * for sending multicast messages.  Thus, none of the current uses of
-	 * this function require proper randomness, and so we use the simplest
-	 * approach, with time-based initialization to cover the reboot case.
-	 * The sequential port number selection could be improved upon, but
-	 * such an extension would probably bypass this hook anyway.
-	 */
-	return lrand48();
-}
-
-/*
- * Create a new socket, with the given domain, type, and protocol, for the user
- * process identified by 'user_endpt'.  On success, return the new socket's
- * identifier, with the libsockevent socket stored in 'sock' and an operations
- * table stored in 'ops'.  On failure, return a negative error code.
- */
-static sockid_t
-alloc_socket(int domain, int type, int protocol, endpoint_t user_endpt,
-	struct sock ** sock, const struct sockevent_ops **ops)
-{
-
-	switch (domain) {
-	case PF_INET:
-#ifdef INET6
-	case PF_INET6:
-#endif /* INET6 */
-		switch (type) {
-		case SOCK_STREAM:
-			return tcpsock_socket(domain, protocol, sock, ops);
-
-		case SOCK_DGRAM:
-			return udpsock_socket(domain, protocol, sock, ops);
-
-		case SOCK_RAW:
-			if (!util_is_root(user_endpt))
-				return EACCES;
-
-			return rawsock_socket(domain, protocol, sock, ops);
-
-		default:
-			return EPROTOTYPE;
+		{
+			printf("inet: unable to read random data from %s: %s\n",
+				RANDOM_DEV_NAME, err == -1 ? strerror(errno) :
+				err == 0 ? "EOF" : "not enough data");
 		}
-
-	case PF_ROUTE:
-		return rtsock_socket(type, protocol, sock, ops);
-
-	case PF_LINK:
-		return lnksock_socket(type, protocol, sock, ops);
-
-	default:
-		/* This means that the service has been misconfigured. */
-		printf("socket() with unsupported domain %d\n", domain);
-
-		return EAFNOSUPPORT;
+		close(fd);
 	}
+	else
+	{
+		printf("inet: unable to open random device %s: %s\n",
+				RANDOM_DEV_NAME, strerror(errno));
+	}
+	if (timerand)
+	{
+		printf("inet: using current time for random-number seed\n");
+		err= gettimeofday(&tv, NULL);
+		if (err == -1)
+		{
+			printf("sysutime failed: %s\n", strerror(errno));
+			exit(1);
+		}
+		memcpy(randbits, &tv, sizeof(tv));
+	}
+	init_rand256(randbits);
+#endif
+
+	/* Subscribe to driver events for network drivers. */
+	if ((err = ds_subscribe("drv\\.net\\..*",
+					DSF_INITIAL | DSF_OVERWRITE)) != OK)
+		panic(("inet: can't subscribe to driver events"));
+
+	/* Announce we are up. LWIP announces its presence to VFS just like
+	 * any other character driver.
+	 */
+	chardriver_announce();
+
+	return(OK);
 }
 
-/*
- * Initialize the service.
- */
-static int
-init(int type __unused, sef_init_info_t * init __unused)
+static void sef_local_startup(void)
 {
+	/* Register init callbacks. */
+	sef_setcb_init_fresh(sef_cb_init_fresh);
+	sef_setcb_init_restart(sef_cb_init_fresh);
 
-	/*
-	 * Initialize the random number seed.  See the lwip_hook_rand() comment
-	 * on why this weak random number source is currently sufficient.
-	 */
-	srand48(clock_time(NULL));
+	/* No live update support for now. */
 
-	/* Initialize the lwIP library. */
-	lwip_init();
-
-	/* Initialize the socket events library. */
-	sockevent_init(alloc_socket);
-
-	/* Initialize various helper modules. */
-	mempool_init();
-	tcpisn_init();
-	mcast_init();
-
-	/* Initialize the high-level socket modules. */
-	ipsock_init();
-	tcpsock_init();
-	udpsock_init();
-	rawsock_init();
-
-	/* Initialize the various network interface modules. */
-	ifdev_init();
-	loopif_init();
-	ethif_init();
-
-	/* Initialize the network device driver module. */
-	ndev_init();
-
-	/* Initialize the low-level socket modules. */
-	rtsock_init();
-	lnksock_init();
-
-	/* Initialize the routing module. */
-	route_init();
-
-	/* Initialize other device modules. */
-	bpfdev_init();
-
-	/*
-	 * Initialize the MIB module, after all other modules have registered
-	 * their subtrees with this module.
-	 */
-	mibtree_init();
-
-	/*
-	 * After everything else has been initialized, set up the default
-	 * configuration - in particular, a loopback interface.
-	 */
-	ifconf_init();
-
-	/*
-	 * Initialize the master timer for all the lwIP timers.  Just in case
-	 * lwIP starts a timer right away, perform a first check upon entry of
-	 * the message loop.
-	 */
-	init_timer(&lwip_timer);
-
-	recheck_timer = TRUE;
-
-	running = TRUE;
-
-	return OK;
-}
-
-/*
- * Perform initialization using the System Event Framework (SEF).
- */
-static void
-startup(void)
-{
-
-	sef_setcb_init_fresh(init);
-	/*
-	 * This service requires stateless restarts, in that several parts of
-	 * the system (including VFS and drivers) expect that if restarted,
-	 * this service comes back up with a new endpoint.  Therefore, do not
-	 * set a _restart callback here.
-	 *
-	 * TODO: support for live update.
-	 *
-	 * TODO: support for immediate shutdown if no sockets are in use, as
-	 * also done by UDS.  For now, we never shut down immediately, giving
-	 * other processes the opportunity to close sockets on system shutdown.
-	 */
-
+	/* Let SEF perform startup. */
 	sef_startup();
 }
 
-/*
- * The lwIP-based TCP/IP sockets driver.
- */
-int
-main(void)
+static void ds_event(void)
 {
-	message m;
-	int r, ipc_status;
+	char key[DS_MAX_KEYLEN];
+	const char *driver_prefix = "drv.net.";
+	char *label;
+	u32_t value;
+	int type;
+	endpoint_t owner_endpoint;
+	int r;
+        int prefix_len;
 
-	startup();
+        prefix_len = strlen(driver_prefix);
 
-	while (running) {
-		/*
-		 * For various reasons, the loopback interface does not pass
-		 * packets back into the stack right away.  Instead, it queues
-		 * them up for later processing.  We do that processing here.
-		 */
-		ifdev_poll();
-
-		/*
-		 * Unfortunately, lwIP does not tell us when it starts or stops
-		 * timers.  This means that we have to check ourselves every
-		 * time we have called into lwIP.  For simplicity, we perform
-		 * the check here.
-		 */
-		check_lwip_timer();
-
-		if ((r = sef_receive_status(ANY, &m, &ipc_status)) != OK) {
-			if (r == EINTR)
-				continue;	/* sef_cancel() was called */
-
-			panic("sef_receive_status failed: %d", r);
+	/* We may get one notification for multiple updates from DS. Get events
+	 * and owners from DS, until DS tells us that there are no more.
+	 */
+	while ((r = ds_check(key, &type, &owner_endpoint)) == OK) {
+		r = ds_retrieve_u32(key, &value);
+		if(r != OK) {
+			printf("LWIP : ds_event: ds_retrieve_u32 failed\n");
+			return;
 		}
 
-		/* Process the received message. */
-		if (is_ipc_notify(ipc_status)) {
-			switch (m.m_source) {
-			case CLOCK:
-				expire_timers(m.m_notify.timestamp);
+		/* Only check for network driver up events. */
+		if(strncmp(key, driver_prefix, prefix_len)
+		  || value != DS_DRIVER_UP) {
+			return;
+		}
 
-				break;
+		/* The driver label comes after the prefix. */
+		label = key + strlen(driver_prefix);
 
-			case DS_PROC_NR:
-				/* Network drivers went up and/or down. */
-				ndev_check();
+		/* A driver is (re)started. */
+		driver_up(label, owner_endpoint);
+	}
 
-				break;
+	if(r != ENOENT)
+		printf("LWIP : ds_event: ds_check failed: %d\n", r);
+}
 
-			default:
-				printf("unexpected notify from %d\n",
-				    m.m_source);
-			}
+static void netif_poll_lo(void)
+{
+	if (netif_lo == NULL)
+		return;
 
+	while (netif_lo->loop_first)
+		netif_poll(netif_lo);
+}
+
+int socket_open(devminor_t minor)
+{
+        struct sock_ops * ops;
+        struct socket * sock;
+        int ret = OK;
+
+        switch (minor) {
+        case SOCK_TYPE_TCP:
+                ops = &sock_tcp_ops;
+                break;
+        case SOCK_TYPE_UDP:
+                ops = &sock_udp_ops;
+                break;
+        case SOCK_TYPE_IP:
+                ops = &sock_raw_ip_ops;
+                break;
+        default:
+                if (minor - SOCK_TYPES  < MAX_DEVS)
+			return nic_open(minor - SOCK_TYPES);
+
+                printf("LWIP unknown socket type %d\n", minor);
+                return EINVAL;
+        }
+
+        sock = get_unused_sock();
+        if (!sock) {
+                printf("LWIP : no free socket\n");
+                return EAGAIN;
+        }
+
+        sock->ops = ops;
+        sock->select_ep = NONE;
+        sock->recv_data_size = 0;
+
+        if (sock->ops && sock->ops->open)
+                ret = sock->ops->open(sock);
+
+        if (ret == OK) {
+                debug_print("new socket %ld", get_sock_num(sock));
+                ret = get_sock_num(sock);
+        } else {
+                debug_print("failed %d", ret);
+		/* FIXME: shouldn't sock be freed now? */
+        }
+	return ret;
+}
+
+int main(__unused int argc, __unused char ** argv)
+{
+	sef_local_startup();
+
+	for(;;) {
+		int err, ipc_status;
+		message m;
+
+		netif_poll_lo();
+
+		mq_process();
+
+		if ((err = sef_receive_status(ANY, &m, &ipc_status)) != OK) {
+			printf("LWIP : sef_receive_status errr %d\n", err);
 			continue;
 		}
 
-		switch (m.m_source) {
-		case MIB_PROC_NR:
-			rmib_process(&m, ipc_status);
-
-			break;
-
-		case VFS_PROC_NR:
-			/* Is this a socket device request? */
-			if (IS_SDEV_RQ(m.m_type)) {
-				sockevent_process(&m, ipc_status);
-
+		if (m.m_source == VFS_PROC_NR)
+			socket_request(&m, ipc_status);
+		else if (is_ipc_notify(ipc_status)) {
+			switch (m.m_source) {
+			case CLOCK:
+				expire_timers(m.m_notify.timestamp);
 				break;
-			}
-
-			/* Is this a character (or block) device request? */
-			if (IS_CDEV_RQ(m.m_type) || IS_BDEV_RQ(m.m_type)) {
-				bpfdev_process(&m, ipc_status);
-
+			case DS_PROC_NR:
+				ds_event();
 				break;
-			}
-
-			/* FALLTHROUGH */
-		default:
-			/* Is this a network device driver response? */
-			if (IS_NDEV_RS(m.m_type)) {
-				ndev_process(&m, ipc_status);
-
+			case PM_PROC_NR:
+				panic("LWIP : unhandled event from PM");
 				break;
+			default:
+				printf("LWIP : unexpected notify from %d\n",
+								m.m_source);
+				continue;
 			}
-
-			printf("unexpected message %d from %d\n",
-			    m.m_type, m.m_source);
-		}
+		} else
+			/* all other request can be from drivers only */
+			driver_request(&m);
 	}
 
 	return 0;

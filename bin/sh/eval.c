@@ -1,4 +1,4 @@
-/*	$NetBSD: eval.c,v 1.110 2015/01/02 19:56:20 christos Exp $	*/
+/*	$NetBSD: eval.c,v 1.107 2013/06/27 23:22:04 yamt Exp $	*/
 
 /*-
  * Copyright (c) 1993
@@ -37,7 +37,7 @@
 #if 0
 static char sccsid[] = "@(#)eval.c	8.9 (Berkeley) 6/8/95";
 #else
-__RCSID("$NetBSD: eval.c,v 1.110 2015/01/02 19:56:20 christos Exp $");
+__RCSID("$NetBSD: eval.c,v 1.107 2013/06/27 23:22:04 yamt Exp $");
 #endif
 #endif /* not lint */
 
@@ -89,20 +89,11 @@ __RCSID("$NetBSD: eval.c,v 1.110 2015/01/02 19:56:20 christos Exp $");
 #define EV_TESTED 02		/* exit status is checked; ignore -e flag */
 #define EV_BACKCMD 04		/* command executing within back quotes */
 
-STATIC enum skipstate evalskip;	/* != SKIPNONE if we are skipping commands */
+int evalskip;			/* set if we are skipping commands */
 STATIC int skipcount;		/* number of levels to skip */
-STATIC int loopnest;		/* current loop nesting level */
-STATIC int funcnest;		/* depth of function calls */
+MKINIT int loopnest;		/* current loop nesting level */
+int funcnest;			/* depth of function calls */
 STATIC int builtin_flags;	/* evalcommand flags for builtins */
-/*
- * Base function nesting level inside a dot command.  Set to 0 initially
- * and to (funcnest + 1) before every dot command to enable 
- *   1) detection of being in a file sourced by a dot command and
- *   2) counting of function nesting in that file for the implementation
- *      of the return command.
- * The value is reset to its previous value after the dot command.
- */
-STATIC int dot_funcnest;
 
 
 const char *commandname;
@@ -120,7 +111,6 @@ STATIC void evalpipe(union node *);
 STATIC void evalcommand(union node *, int, struct backcmd *);
 STATIC void prehash(union node *);
 
-STATIC char *find_dot_file(char *);
 
 /*
  * Called to reset things after an exception.
@@ -130,22 +120,15 @@ STATIC char *find_dot_file(char *);
 INCLUDE "eval.h"
 
 RESET {
-	reset_eval();
+	evalskip = 0;
+	loopnest = 0;
+	funcnest = 0;
 }
 
 SHELLPROC {
 	exitstatus = 0;
 }
 #endif
-
-void
-reset_eval(void)
-{
-	evalskip = SKIPNONE;
-	dot_funcnest = 0;
-	loopnest = 0;
-	funcnest = 0;
-}
 
 static int
 sh_pipe(int fds[2])
@@ -344,11 +327,11 @@ evalloop(union node *n, int flags)
 		evaltree(n->nbinary.ch1, EV_TESTED);
 		if (evalskip) {
 skipping:	  if (evalskip == SKIPCONT && --skipcount <= 0) {
-				evalskip = SKIPNONE;
+				evalskip = 0;
 				continue;
 			}
 			if (evalskip == SKIPBREAK && --skipcount <= 0)
-				evalskip = SKIPNONE;
+				evalskip = 0;
 			break;
 		}
 		if (n->type == NWHILE) {
@@ -394,11 +377,11 @@ evalfor(union node *n, int flags)
 		status = exitstatus;
 		if (evalskip) {
 			if (evalskip == SKIPCONT && --skipcount <= 0) {
-				evalskip = SKIPNONE;
+				evalskip = 0;
 				continue;
 			}
 			if (evalskip == SKIPBREAK && --skipcount <= 0)
-				evalskip = SKIPNONE;
+				evalskip = 0;
 			break;
 		}
 	}
@@ -631,9 +614,12 @@ out:
 static const char *
 syspath(void)
 {
+#if !defined(__minix)
 	static char *sys_path = NULL;
 	static int mib[] = {CTL_USER, USER_CS_PATH};
+#endif /* !defined(__minix) */
 	static char def_path[] = "PATH=/usr/bin:/bin:/usr/sbin:/sbin";
+#if !defined(__minix)
 	size_t len;
 
 	if (sys_path == NULL) {
@@ -648,6 +634,10 @@ syspath(void)
 		}
 	}
 	return sys_path;
+#else
+	/* On Minix no support for CTL_USER. */
+	return def_path;
+#endif /* !defined(__minix) */
 }
 
 static int
@@ -860,19 +850,17 @@ evalcommand(union node *cmd, int flgs, struct backcmd *backcmd)
 		 * child's address space is actually shared with the parent as
 		 * we rely on this.
 		 */
-		if (usefork == 0 && cmdentry.cmdtype == CMDNORMAL) {
+		if (cmdentry.cmdtype == CMDNORMAL) {
 			pid_t	pid;
-			int serrno;
 
 			savelocalvars = localvars;
 			localvars = NULL;
 			vforked = 1;
 			switch (pid = vfork()) {
 			case -1:
-				serrno = errno;
-				TRACE(("Vfork failed, errno=%d\n", serrno));
+				TRACE(("Vfork failed, errno=%d\n", errno));
 				INTON;
-				error("Cannot vfork (%s)", strerror(serrno));
+				error("Cannot vfork");
 				break;
 			case 0:
 				/* Make sure that exceptions only unwind to
@@ -981,7 +969,7 @@ normal_fork:
 		popredir();
 		INTON;
 		if (evalskip == SKIPFUNC) {
-			evalskip = SKIPNONE;
+			evalskip = 0;
 			skipcount = 0;
 		}
 		if (flags & EV_EXIT)
@@ -1121,24 +1109,7 @@ prehash(union node *n)
 				     pathval());
 }
 
-STATIC int
-in_function(void)
-{
-	return funcnest;
-}
 
-STATIC enum skipstate
-current_skipstate(void)
-{
-	return evalskip;
-}
-
-STATIC void
-stop_skipping(void)
-{
-	evalskip = SKIPNONE;
-	skipcount = 0;
-}
 
 /*
  * Builtin commands.  Builtin commands whose functions are closely
@@ -1185,84 +1156,9 @@ breakcmd(int argc, char **argv)
 	return 0;
 }
 
-int
-dotcmd(int argc, char **argv)
-{
-	exitstatus = 0;
-
-	if (argc >= 2) {		/* That's what SVR2 does */
-		char *fullname;
-		/*
-		 * dot_funcnest needs to be 0 when not in a dotcmd, so it
-		 * cannot be restored with (funcnest + 1).
-		 */
-		int dot_funcnest_old;
-		struct stackmark smark;
-
-		setstackmark(&smark);
-		fullname = find_dot_file(argv[1]);
-		setinputfile(fullname, 1);
-		commandname = fullname;
-		dot_funcnest_old = dot_funcnest;
-		dot_funcnest = funcnest + 1;
-		cmdloop(0);
-		dot_funcnest = dot_funcnest_old;
-		popfile();
-		popstackmark(&smark);
-	}
-	return exitstatus;
-}
-
-/*
- * Take commands from a file.  To be compatible we should do a path
- * search for the file, which is necessary to find sub-commands.
- */
-
-STATIC char *
-find_dot_file(char *basename)
-{
-	char *fullname;
-	const char *path = pathval();
-	struct stat statb;
-
-	/* don't try this for absolute or relative paths */
-	if (strchr(basename, '/'))
-		return basename;
-
-	while ((fullname = padvance(&path, basename)) != NULL) {
-		if ((stat(fullname, &statb) == 0) && S_ISREG(statb.st_mode)) {
-			/*
-			 * Don't bother freeing here, since it will
-			 * be freed by the caller.
-			 */
-			return fullname;
-		}
-		stunalloc(fullname);
-	}
-
-	/* not found in the PATH */
-	error("%s: not found", basename);
-	/* NOTREACHED */
-}
-
-
 
 /*
  * The return command.
- *
- * Quoth the POSIX standard:
- *   The return utility shall cause the shell to stop executing the current
- *   function or dot script. If the shell is not currently executing
- *   a function or dot script, the results are unspecified.
- *
- * As for the unspecified part, there seems to be no de-facto standard: bash
- * ignores the return with a warning, zsh ignores the return in interactive
- * mode but seems to liken it to exit in a script.  (checked May 2014)
- *
- * We choose to silently ignore the return.  Older versions of this shell
- * set evalskip to SKIPFILE causing the shell to (indirectly) exit.  This
- * had at least the problem of circumventing the check for stopped jobs,
- * which would occur for exit or ^D.
  */
 
 int
@@ -1270,19 +1166,17 @@ returncmd(int argc, char **argv)
 {
 	int ret = argc > 1 ? number(argv[1]) : exitstatus;
 
-	if ((dot_funcnest == 0 && funcnest)
-	    || (dot_funcnest > 0 && funcnest - (dot_funcnest - 1) > 0)) {
+	if (funcnest) {
 		evalskip = SKIPFUNC;
 		skipcount = 1;
-	} else if (dot_funcnest > 0) {
+		return ret;
+	}
+	else {
+		/* Do what ksh does; skip the rest of the file */
 		evalskip = SKIPFILE;
 		skipcount = 1;
-	} else {
-		/* XXX: should a warning be issued? */
-		ret = 0;
+		return ret;
 	}
-
-	return ret;
 }
 
 

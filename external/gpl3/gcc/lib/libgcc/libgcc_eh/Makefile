@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.10 2014/06/01 19:51:01 mrg Exp $
+#	$NetBSD: Makefile,v 1.5 2012/08/06 00:21:09 matt Exp $
 
 REQUIRETOOLS=	yes
 NOLINT=		# defined
@@ -7,16 +7,14 @@ NOPROFILE=	# defined
 
 LIB=		gcc_eh
 
-.include "../../../Makefile.gcc_path"
 .include <bsd.own.mk>
 
 .if ${MKGCC} != "no"
 
 .cc: # disable .cc->NULL transform
 
-SRCS+=		${LIB2_EH} ${LIB2_EHASM} empty.c
-COPTS.c-typeck.c=	-Wno-stack-protector
-COPTS.unwind-dw2.c=	-Wno-stack-protector
+SRCS+=		${LIB2_EH} ${LIB2_EHASM}
+COPTS.unwind-dw2.c = -Wno-stack-protector
 
 MKPIC:=	no
 

@@ -1,4 +1,4 @@
-/*	$NetBSD: abs.S,v 1.8 2014/05/23 02:34:19 uebayasi Exp $	*/
+/*	$NetBSD: abs.S,v 1.7 2003/08/07 16:42:07 agc Exp $	*/
 
 /*-
  * Copyright (c) 1990 The Regents of the University of California.
@@ -36,7 +36,7 @@
 
 #include <machine/asm.h>
 #if defined(LIBC_SCCS)
-	RCSID("$NetBSD: abs.S,v 1.8 2014/05/23 02:34:19 uebayasi Exp $")
+	RCSID("$NetBSD: abs.S,v 1.7 2003/08/07 16:42:07 agc Exp $")
 #endif
 
 ENTRY(abs)
@@ -45,4 +45,3 @@ ENTRY(abs)
 	jns	1f
 	negl	%eax
 1:	ret
-END(abs)

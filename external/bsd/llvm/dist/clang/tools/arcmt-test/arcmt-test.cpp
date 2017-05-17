@@ -16,7 +16,7 @@
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/Signals.h"
-#include <system_error>
+#include "llvm/Support/system_error.h"
 
 using namespace clang;
 using namespace arcmt;
@@ -81,19 +81,19 @@ class PrintTransforms : public MigrationProcess::RewriteListener {
 
 public:
   PrintTransforms(raw_ostream &OS)
-    : Ctx(nullptr), OS(OS) {}
+    : Ctx(0), OS(OS) { }
 
-  void start(ASTContext &ctx) override { Ctx = &ctx; }
-  void finish() override { Ctx = nullptr; }
+  virtual void start(ASTContext &ctx) { Ctx = &ctx; }
+  virtual void finish() { Ctx = 0; }
 
-  void insert(SourceLocation loc, StringRef text) override {
+  virtual void insert(SourceLocation loc, StringRef text) {
     assert(Ctx);
     OS << "Insert: ";
     printSourceLocation(loc, *Ctx, OS);
     OS << " \"" << text << "\"\n";
   }
 
-  void remove(CharSourceRange range) override {
+  virtual void remove(CharSourceRange range) {
     assert(Ctx);
     OS << "Remove: ";
     printSourceRange(range, *Ctx, OS);
@@ -112,7 +112,7 @@ static bool checkForMigration(StringRef resourcesPath,
   IntrusiveRefCntPtr<DiagnosticsEngine> Diags(
       new DiagnosticsEngine(DiagID, &*DiagOpts, DiagClient));
   // Chain in -verify checker, if requested.
-  VerifyDiagnosticConsumer *verifyDiag = nullptr;
+  VerifyDiagnosticConsumer *verifyDiag = 0;
   if (VerifyDiags) {
     verifyDiag = new VerifyDiagnosticConsumer(*Diags);
     Diags->setClient(verifyDiag);
@@ -139,8 +139,10 @@ static void printResult(FileRemapper &remapper, raw_ostream &OS) {
   PreprocessorOptions PPOpts;
   remapper.applyMappings(PPOpts);
   // The changed files will be in memory buffers, print them.
-  for (const auto &RB : PPOpts.RemappedFileBuffers)
-    OS << RB.second->getBuffer();
+  for (unsigned i = 0, e = PPOpts.RemappedFileBuffers.size(); i != e; ++i) {
+    const llvm::MemoryBuffer *mem = PPOpts.RemappedFileBuffers[i].second;
+    OS << mem->getBuffer();
+  }
 }
 
 static bool performTransformations(StringRef resourcesPath,
@@ -176,7 +178,7 @@ static bool performTransformations(StringRef resourcesPath,
                                  origCI.getMigratorOpts().NoFinalizeRemoval);
   assert(!transforms.empty());
 
-  std::unique_ptr<PrintTransforms> transformPrinter;
+  OwningPtr<PrintTransforms> transformPrinter;
   if (OutputTransformations)
     transformPrinter.reset(new PrintTransforms(llvm::outs()));
 
@@ -205,15 +207,17 @@ static bool performTransformations(StringRef resourcesPath,
 static bool filesCompareEqual(StringRef fname1, StringRef fname2) {
   using namespace llvm;
 
-  ErrorOr<std::unique_ptr<MemoryBuffer>> file1 = MemoryBuffer::getFile(fname1);
+  OwningPtr<MemoryBuffer> file1;
+  MemoryBuffer::getFile(fname1, file1);
   if (!file1)
     return false;
-
-  ErrorOr<std::unique_ptr<MemoryBuffer>> file2 = MemoryBuffer::getFile(fname2);
+  
+  OwningPtr<MemoryBuffer> file2;
+  MemoryBuffer::getFile(fname2, file2);
   if (!file2)
     return false;
 
-  return file1.get()->getBuffer() == file2.get()->getBuffer();
+  return file1->getBuffer() == file2->getBuffer();
 }
 
 static bool verifyTransformedFiles(ArrayRef<std::string> resultFiles) {
@@ -234,19 +238,18 @@ static bool verifyTransformedFiles(ArrayRef<std::string> resultFiles) {
     resultMap[sys::path::stem(fname)] = fname;
   }
 
-  ErrorOr<std::unique_ptr<MemoryBuffer>> inputBuf = std::error_code();
+  OwningPtr<MemoryBuffer> inputBuf;
   if (RemappingsFile.empty())
-    inputBuf = MemoryBuffer::getSTDIN();
+    MemoryBuffer::getSTDIN(inputBuf);
   else
-    inputBuf = MemoryBuffer::getFile(RemappingsFile);
+    MemoryBuffer::getFile(RemappingsFile, inputBuf);
   if (!inputBuf) {
     errs() << "error: could not read remappings input\n";
     return true;
   }
 
   SmallVector<StringRef, 8> strs;
-  inputBuf.get()->getBuffer().split(strs, "\n", /*MaxSplit=*/-1,
-                                    /*KeepEmpty=*/false);
+  inputBuf->getBuffer().split(strs, "\n", /*MaxSplit=*/-1, /*KeepEmpty=*/false);
 
   if (strs.empty()) {
     errs() << "error: no files to verify from stdin\n";
@@ -269,11 +272,14 @@ static bool verifyTransformedFiles(ArrayRef<std::string> resultFiles) {
       return true;
     }
 
-    if (!sys::fs::exists(It->second)) {
+    bool exists = false;
+    sys::fs::exists(It->second, exists);
+    if (!exists) {
       errs() << "error: '" << It->second << "' does not exist\n";
       return true;
     }
-    if (!sys::fs::exists(inputResultFname)) {
+    sys::fs::exists(inputResultFname, exists);
+    if (!exists) {
       errs() << "error: '" << inputResultFname << "' does not exist\n";
       return true;
     }

@@ -4,12 +4,6 @@ PROG=		lua
 SRCS=		lua.c
 BINDIR=		/usr/bin
 
-.if defined(__MINIX)
-# BJG - lua has to be dynamic to allow loading modules
-# Diagnosed by Marc Balmer
-LDSTATIC=-dynamic
-.endif # defined(__MINIX)
-
 CPPFLAGS+=	-DLUA_USE_READLINE
 
 LDADD+=		-llua -lm -ledit -lterminfo

@@ -100,7 +100,7 @@ public:
   /// \brief Insert a new element into the SetVector.
   /// \returns true iff the element was inserted into the SetVector.
   bool insert(const value_type &X) {
-    bool result = set_.insert(X).second;
+    bool result = set_.insert(X);
     if (result)
       vector_.push_back(X);
     return result;
@@ -110,7 +110,7 @@ public:
   template<typename It>
   void insert(It Start, It End) {
     for (; Start != End; ++Start)
-      if (set_.insert(*Start).second)
+      if (set_.insert(*Start))
         vector_.push_back(*Start);
   }
 
@@ -195,10 +195,11 @@ private:
     set_type &set_;
 
   public:
+    typedef typename UnaryPredicate::argument_type argument_type;
+
     TestAndEraseFromSet(UnaryPredicate P, set_type &set_) : P(P), set_(set_) {}
 
-    template <typename ArgumentT>
-    bool operator()(const ArgumentT &Arg) {
+    bool operator()(argument_type Arg) {
       if (P(Arg)) {
         set_.erase(Arg);
         return true;

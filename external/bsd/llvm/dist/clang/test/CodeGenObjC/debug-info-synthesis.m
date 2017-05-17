@@ -31,4 +31,4 @@ int main(int argc, char *argv[]) {
 }
 
 // CHECK: ![[FILE:.*]] = {{.*}}[ DW_TAG_file_type ] [{{.*}}/foo.h]
-// CHECK: ![[FILE]], {{.*}} ; [ DW_TAG_subprogram ] [line 8] [local] [def] [-[Foo dict]]
+// CHECK: metadata ![[FILE]], {{.*}} ; [ DW_TAG_subprogram ] [line 8] [local] [def] [-[Foo dict]]

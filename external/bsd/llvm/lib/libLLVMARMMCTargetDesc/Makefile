@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.10 2014/05/30 18:28:14 joerg Exp $
+#	$NetBSD: Makefile,v 1.7 2013/05/28 17:37:34 joerg Exp $
 
 LIB=	LLVMARMMCTargetDesc
 
@@ -16,12 +16,9 @@ SRCS+=	ARMAsmBackend.cpp \
 	ARMMCCodeEmitter.cpp \
 	ARMMCExpr.cpp \
 	ARMMCTargetDesc.cpp \
-	ARMTargetStreamer.cpp \
 	ARMMachORelocationInfo.cpp \
 	ARMMachObjectWriter.cpp \
-	ARMUnwindOpAsm.cpp \
-	ARMWinCOFFObjectWriter.cpp \
-	ARMWinCOFFStreamer.cpp
+	ARMUnwindOpAsm.cpp
 
 .if defined(HOSTLIB)
 .include <bsd.hostlib.mk>

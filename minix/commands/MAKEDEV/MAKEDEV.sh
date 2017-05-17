@@ -26,29 +26,29 @@ RAMDISK_DEVICES="
 	c1d4 c1d4p0 c1d4p0s0 c1d5 c1d5p0 c1d5p0s0
 	c1d6 c1d6p0 c1d6p0s0 c1d7 c1d7p0 c1d7p0s0
 	fd0 fd1 fd0p0 fd1p0
-	pci
 	ttyc1 ttyc2 ttyc3 tty00 tty01 tty02 tty03
+	ttyp0 ttyp1 ttyp2 ttyp3 ttyp4 ttyp5 ttyp6 ttyp7 ttyp8 ttyp9
+	ttypa ttypb ttypc ttypd ttype ttypf
+	ttyq0 ttyq1 ttyq2 ttyq3 ttyq4 ttyq5 ttyq6 ttyq7 ttyq8 ttyq9
+	ttyqa ttyqb ttyqc ttyqd ttyqe ttyqf
 "
 
+#eth      => ip tcp udp
 STD_DEVICES="
 	${RAMDISK_DEVICES}
 	bmp085b1s77 bmp085b2s77 bmp085b3s77
-	bpf
 	eepromb1s50 eepromb1s51 eepromb1s52 eepromb1s53
 	eepromb1s54 eepromb1s55 eepromb1s56 eepromb1s57
 	eepromb2s50 eepromb2s51 eepromb2s52 eepromb2s53
 	eepromb2s54 eepromb2s55 eepromb2s56 eepromb2s57
 	eepromb3s50 eepromb3s51 eepromb3s52 eepromb3s53
 	eepromb3s54 eepromb3s55 eepromb3s56 eepromb3s57
-	fb0 fbd filter hello
+	eth fb0 fbd filter hello
 	i2c-1 i2c-2 i2c-3
-	klog ptmx random
+	klog random
 	sht21b1s40 sht21b2s40 sht21b3s40
 	tsl2550b1s39 tsl2550b2s39 tsl2550b3s39
-	ttyp0 ttyp1 ttyp2 ttyp3 ttyp4 ttyp5 ttyp6 ttyp7 ttyp8 ttyp9
-	ttypa ttypb ttypc ttypd ttype ttypf
-	ttyq0 ttyq1 ttyq2 ttyq3 ttyq4 ttyq5 ttyq6 ttyq7 ttyq8 ttyq9
-	ttyqa ttyqb ttyqc ttyqd ttyqe ttyqf
+	uds
 	vnd0 vnd0p0 vnd0p0s0 vnd1 vnd1p0 vnd1p0s0
 	vnd2 vnd3 vnd4 vnd5 vnd6 vnd7
 "
@@ -128,16 +128,15 @@ Where key is one of the following:
   ttyc1 ... ttyc7         # Virtual consoles
   tty00 ... tty03         # Make serial lines
   ttyp0 ... ttyq0 ...     # Make tty, pty pairs
+  eth ip tcp udp	  # One of these makes some TCP/IP devices
   audio mixer		  # Make audio devices
-  bpf                     # Make /dev/bpf
   klog                    # Make /dev/klog
-  ptmx                    # Make /dev/ptmx
   random                  # Make /dev/random, /dev/urandom
+  uds                     # Make /dev/uds
   filter                  # Make /dev/filter
   fbd                     # Make /dev/fbd
   hello                   # Make /dev/hello
   video                   # Make /dev/video
-  pci                     # Make /dev/pci
   vnd0 vnd0p0 vnd0p0s0 .. # Make vnode disks /dev/vnd[0-7] and (sub)partitions
   input                   # Make /dev/kbdmux, /dev/kbd[0-3], idem /dev/mouse~
 EOF
@@ -189,7 +188,7 @@ for dev in ${DEVICES}
 do
 	# Reset the defaults
 	uname=root
-	gname=wheel
+	gname=operator
 	permissions=600
 
 	case ${dev} in
@@ -216,13 +215,6 @@ do
 		major=`expr ${bus} + 52`
 
 		makedev bmp085b${bus}s77 c ${major} 0 ${uname} ${gname} 444
-		;;
-	bpf)
-		# Berkeley Packet Filter device, for the LWIP service
-		# This is a cloning device, but some programs (e.g., dhclient)
-		# assume individual devices are numbered, so also create bpf0.
-		makedev ${dev} c 7 0 ${uname} ${gname} 600
-		makedev ${dev}0 c 7 0 ${uname} ${gname} 600
 		;;
 	c[0-3]d[0-7])
 		# Whole disk devices.
@@ -283,6 +275,20 @@ do
 		major=`expr ${bus} '*' 8 + ${slave_low} + 17`
 
 		makedev eepromb${bus}s5${slave_low} b ${major} 0 ${uname} ${gname} ${permissions}
+		;;
+	eth|ip|tcp|udp|eth0|ip0|tcp0|udp0)
+		# TCP/IP devices.
+		makedev ipstat c 7 0 ${uname} ${gname} 666
+		makedev eth0 c 7 1 ${uname} ${gname} ${permissions}
+		makedev ip0 c 7 2 ${uname} ${gname} ${permissions}
+		makedev tcp0 c 7 3 ${uname} ${gname} 666
+		makedev udp0 c 7 4 ${uname} ${gname} 666
+
+		# Default interface
+		makedev eth c 7 1 ${uname} ${gname} ${permissions}
+		makedev ip c 7 2 ${uname} ${gname} ${permissions}
+		makedev tcp c 7 3 ${uname} ${gname} 666
+		makedev udp c 7 4 ${uname} ${gname} 666
 		;;
 	fb0)
 		# Framebuffer driver
@@ -357,14 +363,6 @@ do
 			minor=`expr ${minor} + 4`
 		done
 		;;
-	pci)
-		# PCI server, manages PCI buses
-		makedev pci c 134 0 ${uname} ${gname} ${permissions}
-		;;
-	ptmx)
-		# Unix98 pseudoterminal master
-		makedev ptmx c 9 0 ${uname} tty 666
-		;;
 	ram|mem|kmem|null|boot|zero|imgrd)
 		# Memory devices.
 		makedev ram   b 1 0 ${uname} kmem ${permissions}
@@ -428,6 +426,10 @@ do
 		minor=`expr ${dev} : '....\\(.*\\)'`
 
 		makedev ${dev} c 4 ${minor} ${uname} tty ${permissions}
+		;;
+	uds)
+		# Unix domain sockets device
+		makedev ${dev} c 18 0 ${uname} ${gname} 666
 		;;
 	vnd[0-7])
 		# Whole vnode disk devices.

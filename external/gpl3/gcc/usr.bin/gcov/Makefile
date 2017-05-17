@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.5 2014/03/05 21:37:02 tron Exp $
+#	$NetBSD: Makefile,v 1.3 2011/07/19 15:59:02 tron Exp $
 
 .include <bsd.own.mk>
 
@@ -11,24 +11,14 @@ BINDIR=		/usr/bin
 
 MAN=		gcov.1
 
-HOSTPROG_CXX=	1
-
 .include <bsd.prog.mk>
 
-# Force using C++ for this
-HOST_CC:=	${HOST_CXX}
-CC:=		${CXX}
-CFLAGS:=	${CXXFLAGS} -Wno-stack-protector
+.if defined(__MINIX)
+LDADD=		-L${LIBIBERTYOBJ} -liberty
+.else
+LDADD=		-L${LIBIBERTYOBJ} -liberty -lintl
+.endif # defined(__MINIX)
 
-.include "../Makefile.common"
-.include "../Makefile.libcpp"
-.include "../Makefile.backtrace"
-.include "../Makefile.libiberty"
-.include "../Makefile.libdecnumber"
-
-.if !defined(__MINIX)
-LDADD+=		-lintl
-DPADD+=		${LIBINTL}
-.endif # !defined(__MINIX)
+COPTS+=		-Wno-stack-protector
 
 .PATH: ${DIST}/gcc

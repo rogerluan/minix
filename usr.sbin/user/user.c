@@ -151,8 +151,12 @@ enum {
 #endif
 
 #ifndef DEF_SKELDIR
+#if defined(__minix)
+#define DEF_SKELDIR	"/usr/ast"
+#else
 #define DEF_SKELDIR	"/etc/skel"
 #endif
+#endif /* defined(__minix) */
 
 #ifndef DEF_SHELL
 #define DEF_SHELL	_PATH_BSHELL
@@ -381,13 +385,7 @@ creategid(char *group, int gid, const char *name)
 		warnx("Can't create group `%s': already exists", group);
 		return 0;
 	}
-#if defined(__minix)
-	/* LSC: Minix flock implementation is a wrapper around fctl, which
-	 * requires writeable fds for LOCK_EX to succeed. */
-	if ((from = fopen(_PATH_GROUP, "r+")) == NULL) {
-#else
 	if ((from = fopen(_PATH_GROUP, "r")) == NULL) {
-#endif /* defined(__minix) */
 		warn("Can't create group `%s': can't open `%s'", name,
 		    _PATH_GROUP);
 		return 0;
@@ -451,13 +449,7 @@ modify_gid(char *group, char *newent)
 	int		fd;
 	int		cc;
 
-#if defined(__minix)
-	/* LSC: Minix flock implementation is a wrapper around fctl, which
-	 * requires writeable fds for LOCK_EX to succeed. */
-	if ((from = fopen(_PATH_GROUP, "r+")) == NULL) {
-#else
 	if ((from = fopen(_PATH_GROUP, "r")) == NULL) {
-#endif /* defined(__minix) */
 		warn("Can't modify group `%s': can't open `%s'",
 		    group, _PATH_GROUP);
 		return 0;
@@ -580,13 +572,7 @@ append_group(char *user, int ngroups, const char **groups)
 			}
 		}
 	}
-#if defined(__minix)
-	/* LSC: Minix flock implementation is a wrapper around fctl, which
-	 * requires writeable fds for LOCK_EX to succeed. */
-	if ((from = fopen(_PATH_GROUP, "r+")) == NULL) {
-#else
 	if ((from = fopen(_PATH_GROUP, "r")) == NULL) {
-#endif /* defined(__minix) */
 		warn("Can't append group(s) for `%s': can't open `%s'",
 		    user, _PATH_GROUP);
 		return 0;
@@ -1101,13 +1087,7 @@ adduser(char *login_name, user_t *up)
 		    login_name, up->u_class);
 	}
 #endif
-#if defined(__minix)
-	/* LSC: Minix flock implementation is a wrapper around fctl, which
-	 * requires writeable fds for LOCK_EX to succeed. */
-	if ((masterfd = open(_PATH_MASTERPASSWD, O_RDWR)) < 0) {
-#else
 	if ((masterfd = open(_PATH_MASTERPASSWD, O_RDONLY)) < 0) {
-#endif /* defined(__minix) */
 		err(EXIT_FAILURE, "Can't add user `%s': can't open `%s'",
 		    login_name, _PATH_MASTERPASSWD);
 	}
@@ -1340,13 +1320,7 @@ rm_user_from_groups(char *login_name)
 		    buf);
 		return 0;
 	}
-#if defined(__minix)
-	/* LSC: Minix flock implementation is a wrapper around fctl, which
-	 * requires writeable fds for LOCK_EX to succeed. */
-	if ((from = fopen(_PATH_GROUP, "r+")) == NULL) {
-#else
 	if ((from = fopen(_PATH_GROUP, "r")) == NULL) {
-#endif /* defined(__minix) */
 		warn("Can't remove user `%s' from `%s': can't open `%s'",
 		    login_name, _PATH_GROUP, _PATH_GROUP);
 		return 0;
@@ -1475,13 +1449,7 @@ moduser(char *login_name, char *newlogin, user_t *up, int allow_samba)
 	/* keep dir name in case we need it for '-m' */
 	homedir = pwp->pw_dir;
 
-#if defined(__minix)
-	/* LSC: Minix flock implementation is a wrapper around fctl, which
-	 * requires writeable fds for LOCK_EX to succeed. */
-	if ((masterfd = open(_PATH_MASTERPASSWD, O_RDWR)) < 0) {
-#else
 	if ((masterfd = open(_PATH_MASTERPASSWD, O_RDONLY)) < 0) {
-#endif /* defined(__minix) */
 		err(EXIT_FAILURE, "Can't modify user `%s': can't open `%s'",
 		    login_name, _PATH_MASTERPASSWD);
 	}

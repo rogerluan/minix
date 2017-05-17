@@ -41,7 +41,7 @@ public:
       TM(tm) {
   }
 
-  SDNode *Select(SDNode *N) override;
+  SDNode *Select(SDNode *N);
 
   // Complex Pattern Selectors.
   bool SelectADDRrr(SDValue N, SDValue &R1, SDValue &R2);
@@ -49,11 +49,11 @@ public:
 
   /// SelectInlineAsmMemoryOperand - Implement addressing mode selection for
   /// inline asm expressions.
-  bool SelectInlineAsmMemoryOperand(const SDValue &Op,
-                                    char ConstraintCode,
-                                    std::vector<SDValue> &OutOps) override;
+  virtual bool SelectInlineAsmMemoryOperand(const SDValue &Op,
+                                            char ConstraintCode,
+                                            std::vector<SDValue> &OutOps);
 
-  const char *getPassName() const override {
+  virtual const char *getPassName() const {
     return "SPARC DAG->DAG Pattern Instruction Selection";
   }
 
@@ -66,15 +66,16 @@ private:
 }  // end anonymous namespace
 
 SDNode* SparcDAGToDAGISel::getGlobalBaseReg() {
-  unsigned GlobalBaseReg =
-      TM.getSubtargetImpl()->getInstrInfo()->getGlobalBaseReg(MF);
-  return CurDAG->getRegister(GlobalBaseReg, TLI->getPointerTy()).getNode();
+  unsigned GlobalBaseReg = TM.getInstrInfo()->getGlobalBaseReg(MF);
+  return CurDAG->getRegister(GlobalBaseReg,
+                             getTargetLowering()->getPointerTy()).getNode();
 }
 
 bool SparcDAGToDAGISel::SelectADDRri(SDValue Addr,
                                      SDValue &Base, SDValue &Offset) {
   if (FrameIndexSDNode *FIN = dyn_cast<FrameIndexSDNode>(Addr)) {
-    Base = CurDAG->getTargetFrameIndex(FIN->getIndex(), TLI->getPointerTy());
+    Base = CurDAG->getTargetFrameIndex(FIN->getIndex(),
+                                       getTargetLowering()->getPointerTy());
     Offset = CurDAG->getTargetConstant(0, MVT::i32);
     return true;
   }
@@ -89,8 +90,8 @@ bool SparcDAGToDAGISel::SelectADDRri(SDValue Addr,
         if (FrameIndexSDNode *FIN =
                 dyn_cast<FrameIndexSDNode>(Addr.getOperand(0))) {
           // Constant offset from frame ref.
-          Base =
-              CurDAG->getTargetFrameIndex(FIN->getIndex(), TLI->getPointerTy());
+          Base = CurDAG->getTargetFrameIndex(FIN->getIndex(),
+                                           getTargetLowering()->getPointerTy());
         } else {
           Base = Addr.getOperand(0);
         }
@@ -134,7 +135,7 @@ bool SparcDAGToDAGISel::SelectADDRrr(SDValue Addr, SDValue &R1, SDValue &R2) {
   }
 
   R1 = Addr;
-  R2 = CurDAG->getRegister(SP::G0, TLI->getPointerTy());
+  R2 = CurDAG->getRegister(SP::G0, getTargetLowering()->getPointerTy());
   return true;
 }
 
@@ -142,7 +143,7 @@ SDNode *SparcDAGToDAGISel::Select(SDNode *N) {
   SDLoc dl(N);
   if (N->isMachineOpcode()) {
     N->setNodeId(-1);
-    return nullptr;   // Already selected.
+    return NULL;   // Already selected.
   }
 
   switch (N->getOpcode()) {

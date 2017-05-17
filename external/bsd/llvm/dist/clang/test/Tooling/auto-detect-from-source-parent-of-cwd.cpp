@@ -11,3 +11,6 @@
 invalid;
 
 // REQUIRES: shell
+// PR15590
+// XFAIL: win64
+// XFAIL: mingw

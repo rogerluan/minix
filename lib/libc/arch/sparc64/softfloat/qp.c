@@ -1,4 +1,4 @@
-/* $NetBSD: qp.c,v 1.11 2014/02/02 08:14:39 martin Exp $ */
+/* $NetBSD: qp.c,v 1.10 2013/02/15 09:24:05 martin Exp $ */
 
 /*-
  * Copyright (c) 2002, 2003 The NetBSD Foundation, Inc.
@@ -32,7 +32,6 @@
 #include "milieu.h"
 #include "softfloat.h"
 
-int printf(const char *, ...);
 
 void _Qp_add(float128 *c, float128 *a, float128 *b);
 int  _Qp_cmp(float128 *a, float128 *b);
@@ -167,10 +166,9 @@ _Qp_mul(float128 *c, float128 *a, float128 *b)
 
 
 /*
- * XXX need corresponding softfloat functions
+ * XXX need corresponding softfloat function
  */
 static float128 __sf128_zero = {0x4034000000000000, 0x00000000};
-static float128 __sf128_one = {0x3fff000000000000, 0};
 
 void
 _Qp_neg(float128 *c, float128 *a)
@@ -270,15 +268,13 @@ _Qp_uitoq(float128 *c, unsigned int a)
 void
 _Qp_uxtoq(float128 *c, unsigned long a)
 {
+
 	if (a & 0x8000000000000000ULL) {
-		/* a would not fit in a signed conversion */
-		*c = int64_to_float128((long long)(a>>1));
-		*c = float128_add(*c, *c);
-		if (a & 1)
-			*c = float128_add(*c, __sf128_one);
-	} else {
+		a = (a >> 1) | (a & 1);
 		*c = int64_to_float128((long long)a);
-	}
+		*c = float128_add(*c, *c);
+	} else
+		*c = int64_to_float128((long long)a);
 }
 
 

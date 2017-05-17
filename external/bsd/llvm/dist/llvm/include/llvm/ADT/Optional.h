@@ -17,11 +17,13 @@
 #define LLVM_ADT_OPTIONAL_H
 
 #include "llvm/ADT/None.h"
-#include "llvm/Support/AlignOf.h"
 #include "llvm/Support/Compiler.h"
+#include "llvm/Support/AlignOf.h"
 #include <cassert>
-#include <new>
+
+#if LLVM_HAS_RVALUE_REFERENCES
 #include <utility>
+#endif
 
 namespace llvm {
 
@@ -30,8 +32,6 @@ class Optional {
   AlignedCharArrayUnion<T> storage;
   bool hasVal;
 public:
-  typedef T value_type;
-
   Optional(NoneType) : hasVal(false) {}
   explicit Optional() : hasVal(false) {}
   Optional(const T &y) : hasVal(true) {
@@ -42,6 +42,7 @@ public:
       new (storage.buffer) T(*O);
   }
 
+#if LLVM_HAS_RVALUE_REFERENCES
   Optional(T &&y) : hasVal(true) {
     new (storage.buffer) T(std::forward<T>(y));
   }
@@ -69,61 +70,7 @@ public:
     }
     return *this;
   }
-
-#if LLVM_HAS_VARIADIC_TEMPLATES
-
-  /// Create a new object by constructing it in place with the given arguments.
-  template<typename ...ArgTypes>
-  void emplace(ArgTypes &&...Args) {
-    reset();
-    hasVal = true;
-    new (storage.buffer) T(std::forward<ArgTypes>(Args)...);
-  }
-
-#else
-  
-  /// Create a new object by default-constructing it in place.
-  void emplace() {
-    reset();
-    hasVal = true;
-    new (storage.buffer) T();
-  }
-  
-  /// Create a new object by constructing it in place with the given arguments.
-  template<typename T1>
-  void emplace(T1 &&A1) {
-    reset();
-    hasVal = true;
-    new (storage.buffer) T(std::forward<T1>(A1));
-  }
-  
-  /// Create a new object by constructing it in place with the given arguments.
-  template<typename T1, typename T2>
-  void emplace(T1 &&A1, T2 &&A2) {
-    reset();
-    hasVal = true;
-    new (storage.buffer) T(std::forward<T1>(A1), std::forward<T2>(A2));
-  }
-  
-  /// Create a new object by constructing it in place with the given arguments.
-  template<typename T1, typename T2, typename T3>
-  void emplace(T1 &&A1, T2 &&A2, T3 &&A3) {
-    reset();
-    hasVal = true;
-    new (storage.buffer) T(std::forward<T1>(A1), std::forward<T2>(A2),
-        std::forward<T3>(A3));
-  }
-  
-  /// Create a new object by constructing it in place with the given arguments.
-  template<typename T1, typename T2, typename T3, typename T4>
-  void emplace(T1 &&A1, T2 &&A2, T3 &&A3, T4 &&A4) {
-    reset();
-    hasVal = true;
-    new (storage.buffer) T(std::forward<T1>(A1), std::forward<T2>(A2),
-        std::forward<T3>(A3), std::forward<T4>(A4));
-  }
-
-#endif // LLVM_HAS_VARIADIC_TEMPLATES
+#endif
 
   static inline Optional create(const T* y) {
     return y ? Optional(*y) : Optional();
@@ -175,19 +122,9 @@ public:
   const T& operator*() const LLVM_LVALUE_FUNCTION { assert(hasVal); return *getPointer(); }
   T& operator*() LLVM_LVALUE_FUNCTION { assert(hasVal); return *getPointer(); }
 
-  template <typename U>
-  LLVM_CONSTEXPR T getValueOr(U &&value) const LLVM_LVALUE_FUNCTION {
-    return hasValue() ? getValue() : std::forward<U>(value);
-  }
-
 #if LLVM_HAS_RVALUE_REFERENCE_THIS
   T&& getValue() && { assert(hasVal); return std::move(*getPointer()); }
   T&& operator*() && { assert(hasVal); return std::move(*getPointer()); }
-
-  template <typename U>
-  T getValueOr(U &&value) && {
-    return hasValue() ? std::move(getValue()) : std::forward<U>(value);
-  }
 #endif
 };
 

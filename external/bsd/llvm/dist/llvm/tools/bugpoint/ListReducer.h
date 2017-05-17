@@ -12,8 +12,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_TOOLS_BUGPOINT_LISTREDUCER_H
-#define LLVM_TOOLS_BUGPOINT_LISTREDUCER_H
+#ifndef BUGPOINT_LIST_REDUCER_H
+#define BUGPOINT_LIST_REDUCER_H
 
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/raw_ostream.h"

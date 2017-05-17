@@ -1,12 +1,10 @@
-#	$NetBSD: Makefile,v 1.4 2015/01/29 20:41:38 joerg Exp $
+#	$NetBSD: Makefile,v 1.1 2013/09/29 12:12:00 joerg Exp $
 
 LIB=	lldbCore
 
 .include <bsd.init.mk>
 
 .PATH: ${LLDB_SRCDIR}/source/Core
-
-CPPFLAGS.IOHandler.cpp+= -DLLDB_DISABLE_CURSES
 
 SRCS+=	Address.cpp \
 	AddressRange.cpp \
@@ -18,6 +16,7 @@ SRCS+=	Address.cpp \
 	Broadcaster.cpp \
 	Communication.cpp \
 	Connection.cpp \
+	ConnectionFileDescriptor.cpp \
 	ConnectionMachPort.cpp \
 	ConnectionSharedMemory.cpp \
 	ConstString.cpp \
@@ -31,11 +30,12 @@ SRCS+=	Address.cpp \
 	EmulateInstruction.cpp \
 	Error.cpp \
 	Event.cpp \
-	FastDemangle.cpp \
 	FileLineResolver.cpp \
 	FileSpecList.cpp \
 	History.cpp \
-	IOHandler.cpp \
+	InputReader.cpp \
+	InputReaderEZ.cpp \
+	InputReaderStack.cpp \
 	Language.cpp \
 	Listener.cpp \
 	Log.cpp \
@@ -59,7 +59,6 @@ SRCS+=	Address.cpp \
 	StreamGDBRemote.cpp \
 	StreamString.cpp \
 	StringList.cpp \
-	StructuredData.cpp \
 	Timer.cpp \
 	UserID.cpp \
 	UserSettingsController.cpp \

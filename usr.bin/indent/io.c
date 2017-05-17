@@ -1,4 +1,4 @@
-/*	$NetBSD: io.c,v 1.15 2014/09/04 04:06:07 mrg Exp $	*/
+/*	$NetBSD: io.c,v 1.14 2009/04/12 11:09:49 lukem Exp $	*/
 
 /*
  * Copyright (c) 1980, 1993
@@ -68,7 +68,7 @@
 #if 0
 static char sccsid[] = "@(#)io.c	8.1 (Berkeley) 6/6/93";
 #else
-__RCSID("$NetBSD: io.c,v 1.15 2014/09/04 04:06:07 mrg Exp $");
+__RCSID("$NetBSD: io.c,v 1.14 2009/04/12 11:09:49 lukem Exp $");
 #endif
 #endif				/* not lint */
 
@@ -516,11 +516,9 @@ pad_output(int current, int target)
 		if (current >= target)
 			return (current);	/* line is already long enough */
 		curr = current;
-		if (use_tabs) {
-			while ((tcur = ((curr - 1) & tabmask) + tabsize + 1) <= target) {
-				putc('\t', output);
-				curr = tcur;
-			}
+		while ((tcur = ((curr - 1) & tabmask) + tabsize + 1) <= target) {
+			putc('\t', output);
+			curr = tcur;
 		}
 		while (curr++ < target)
 			putc(' ', output);	/* pad with final blanks */

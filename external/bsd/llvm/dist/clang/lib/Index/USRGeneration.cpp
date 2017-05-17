@@ -11,7 +11,6 @@
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/DeclTemplate.h"
 #include "clang/AST/DeclVisitor.h"
-#include "clang/Lex/PreprocessingRecord.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/raw_ostream.h"
@@ -22,30 +21,6 @@ using namespace clang::index;
 //===----------------------------------------------------------------------===//
 // USR generation.
 //===----------------------------------------------------------------------===//
-
-/// \returns true on error.
-static bool printLoc(llvm::raw_ostream &OS, SourceLocation Loc,
-                     const SourceManager &SM, bool IncludeOffset) {
-  if (Loc.isInvalid()) {
-    return true;
-  }
-  Loc = SM.getExpansionLoc(Loc);
-  const std::pair<FileID, unsigned> &Decomposed = SM.getDecomposedLoc(Loc);
-  const FileEntry *FE = SM.getFileEntryForID(Decomposed.first);
-  if (FE) {
-    OS << llvm::sys::path::filename(FE->getName());
-  } else {
-    // This case really isn't interesting.
-    return true;
-  }
-  if (IncludeOffset) {
-    // Use the offest into the FileID to represent the location.  Using
-    // a line/column can cause us to look back at the original source file,
-    // which is expensive.
-    OS << '@' << Decomposed.second;
-  }
-  return false;
-}
 
 namespace {
 class USRGenerator : public ConstDeclVisitor<USRGenerator> {
@@ -105,16 +80,10 @@ public:
   void VisitUnresolvedUsingTypenameDecl(const UnresolvedUsingTypenameDecl *D) {
     IgnoreResults = true;
   }
-
-  bool ShouldGenerateLocation(const NamedDecl *D);
-
-  bool isLocal(const NamedDecl *D) {
-    return D->getParentFunctionOrMethod() != nullptr;
-  }
-
+  
   /// Generate the string component containing the location of the
   ///  declaration.
-  bool GenLoc(const Decl *D, bool IncludeOffset);
+  bool GenLoc(const Decl *D);
 
   /// String generation methods used both by the visitation methods
   /// and from other clients that want to directly generate USRs.  These
@@ -129,6 +98,16 @@ public:
   /// Generate a USR for an Objective-C class category.
   void GenObjCCategory(StringRef cls, StringRef cat) {
     generateUSRForObjCCategory(cls, cat, Out);
+  }
+  /// Generate a USR fragment for an Objective-C instance variable.  The
+  /// complete USR can be created by concatenating the USR for the
+  /// encompassing class with this USR fragment.
+  void GenObjCIvar(StringRef ivar) {
+    generateUSRForObjCIvar(ivar, Out);
+  }
+  /// Generate a USR fragment for an Objective-C method.
+  void GenObjCMethod(StringRef sel, bool isInstanceMethod) {
+    generateUSRForObjCMethod(sel, isInstanceMethod, Out);
   }
   /// Generate a USR fragment for an Objective-C property.
   void GenObjCProperty(StringRef prop) {
@@ -164,13 +143,8 @@ bool USRGenerator::EmitDeclName(const NamedDecl *D) {
   return startSize == endSize;
 }
 
-bool USRGenerator::ShouldGenerateLocation(const NamedDecl *D) {
-  if (D->isExternallyVisible())
-    return false;
-  if (D->getParentFunctionOrMethod())
-    return true;
-  const SourceManager &SM = Context->getSourceManager();
-  return !SM.isInSystemHeader(D->getLocation());
+static inline bool ShouldGenerateLocation(const NamedDecl *D) {
+  return !D->isExternallyVisible();
 }
 
 void USRGenerator::VisitDeclContext(const DeclContext *DC) {
@@ -194,13 +168,11 @@ void USRGenerator::VisitFieldDecl(const FieldDecl *D) {
 }
 
 void USRGenerator::VisitFunctionDecl(const FunctionDecl *D) {
-  if (ShouldGenerateLocation(D) && GenLoc(D, /*IncludeOffset=*/isLocal(D)))
+  if (ShouldGenerateLocation(D) && GenLoc(D))
     return;
 
   VisitDeclContext(D->getDeclContext());
-  bool IsTemplate = false;
   if (FunctionTemplateDecl *FunTmpl = D->getDescribedFunctionTemplate()) {
-    IsTemplate = true;
     Out << "@FT@";
     VisitTemplateParameterList(FunTmpl->getTemplateParameters());
   } else
@@ -222,32 +194,21 @@ void USRGenerator::VisitFunctionDecl(const FunctionDecl *D) {
   }
 
   // Mangle in type information for the arguments.
-  for (auto PD : D->params()) {
+  for (FunctionDecl::param_const_iterator I = D->param_begin(),
+                                          E = D->param_end();
+       I != E; ++I) {
     Out << '#';
-    VisitType(PD->getType());
+    if (ParmVarDecl *PD = *I)
+      VisitType(PD->getType());
   }
   if (D->isVariadic())
     Out << '.';
-  if (IsTemplate) {
-    // Function templates can be overloaded by return type, for example:
-    // \code
-    //   template <class T> typename T::A foo() {}
-    //   template <class T> typename T::B foo() {}
-    // \endcode
-    Out << '#';
-    VisitType(D->getReturnType());
-  }
   Out << '#';
   if (const CXXMethodDecl *MD = dyn_cast<CXXMethodDecl>(D)) {
     if (MD->isStatic())
       Out << 'S';
     if (unsigned quals = MD->getTypeQualifiers())
       Out << (char)('0' + quals);
-    switch (MD->getRefQualifier()) {
-    case RQ_None: break;
-    case RQ_LValue: Out << '&'; break;
-    case RQ_RValue: Out << "&&"; break;
-    }
   }
 }
 
@@ -268,7 +229,7 @@ void USRGenerator::VisitVarDecl(const VarDecl *D) {
   // VarDecls can be declared 'extern' within a function or method body,
   // but their enclosing DeclContext is the function, not the TU.  We need
   // to check the storage class to correctly generate the USR.
-  if (ShouldGenerateLocation(D) && GenLoc(D, /*IncludeOffset=*/isLocal(D)))
+  if (ShouldGenerateLocation(D) && GenLoc(D))
     return;
 
   VisitDeclContext(D->getDeclContext());
@@ -288,13 +249,13 @@ void USRGenerator::VisitVarDecl(const VarDecl *D) {
 
 void USRGenerator::VisitNonTypeTemplateParmDecl(
                                         const NonTypeTemplateParmDecl *D) {
-  GenLoc(D, /*IncludeOffset=*/true);
+  GenLoc(D);
   return;
 }
 
 void USRGenerator::VisitTemplateTemplateParmDecl(
                                         const TemplateTemplateParmDecl *D) {
-  GenLoc(D, /*IncludeOffset=*/true);
+  GenLoc(D);
   return;
 }
 
@@ -368,7 +329,7 @@ void USRGenerator::VisitObjCContainerDecl(const ObjCContainerDecl *D) {
       // We want to mangle in the location to uniquely distinguish them.
       if (CD->IsClassExtension()) {
         Out << "objc(ext)" << ID->getName() << '@';
-        GenLoc(CD, /*IncludeOffset=*/true);
+        GenLoc(CD);
       }
       else
         GenObjCCategory(ID->getName(), CD->getName());
@@ -417,7 +378,7 @@ void USRGenerator::VisitObjCPropertyImplDecl(const ObjCPropertyImplDecl *D) {
 void USRGenerator::VisitTagDecl(const TagDecl *D) {
   // Add the location of the tag decl to handle resolution across
   // translation units.
-  if (ShouldGenerateLocation(D) && GenLoc(D, /*IncludeOffset=*/isLocal(D)))
+  if (ShouldGenerateLocation(D) && GenLoc(D))
     return;
 
   D = D->getCanonicalDecl();
@@ -430,8 +391,8 @@ void USRGenerator::VisitTagDecl(const TagDecl *D) {
       
       switch (D->getTagKind()) {
       case TTK_Interface:
-      case TTK_Class:
       case TTK_Struct: Out << "@ST"; break;
+      case TTK_Class:  Out << "@CT"; break;
       case TTK_Union:  Out << "@UT"; break;
       case TTK_Enum: llvm_unreachable("enum template");
       }
@@ -442,8 +403,8 @@ void USRGenerator::VisitTagDecl(const TagDecl *D) {
       
       switch (D->getTagKind()) {
       case TTK_Interface:
-      case TTK_Class:
       case TTK_Struct: Out << "@SP"; break;
+      case TTK_Class:  Out << "@CP"; break;
       case TTK_Union:  Out << "@UP"; break;
       case TTK_Enum: llvm_unreachable("enum partial specialization");
       }      
@@ -454,8 +415,8 @@ void USRGenerator::VisitTagDecl(const TagDecl *D) {
   if (!AlreadyStarted) {
     switch (D->getTagKind()) {
       case TTK_Interface:
-      case TTK_Class:
       case TTK_Struct: Out << "@S"; break;
+      case TTK_Class:  Out << "@C"; break;
       case TTK_Union:  Out << "@U"; break;
       case TTK_Enum:   Out << "@E"; break;
     }
@@ -471,12 +432,8 @@ void USRGenerator::VisitTagDecl(const TagDecl *D) {
       Buf[off] = 'A';
       Out << '@' << *TD;
     }
-  else {
-    if (D->isEmbeddedInDeclarator() && !D->isFreeStanding()) {
-      printLoc(Out, D->getLocation(), Context->getSourceManager(), true);
-    } else
+    else
       Buf[off] = 'a';
-  }
   }
   
   // For a class template specialization, mangle the template arguments.
@@ -492,7 +449,7 @@ void USRGenerator::VisitTagDecl(const TagDecl *D) {
 }
 
 void USRGenerator::VisitTypedefDecl(const TypedefDecl *D) {
-  if (ShouldGenerateLocation(D) && GenLoc(D, /*IncludeOffset=*/isLocal(D)))
+  if (ShouldGenerateLocation(D) && GenLoc(D))
     return;
   const DeclContext *DC = D->getDeclContext();
   if (const NamedDecl *DCN = dyn_cast<NamedDecl>(DC))
@@ -502,15 +459,15 @@ void USRGenerator::VisitTypedefDecl(const TypedefDecl *D) {
 }
 
 void USRGenerator::VisitTemplateTypeParmDecl(const TemplateTypeParmDecl *D) {
-  GenLoc(D, /*IncludeOffset=*/true);
+  GenLoc(D);
   return;
 }
 
-bool USRGenerator::GenLoc(const Decl *D, bool IncludeOffset) {
+bool USRGenerator::GenLoc(const Decl *D) {
   if (generatedLoc)
     return IgnoreResults;
   generatedLoc = true;
-
+  
   // Guard against null declarations in invalid code.
   if (!D) {
     IgnoreResults = true;
@@ -520,10 +477,27 @@ bool USRGenerator::GenLoc(const Decl *D, bool IncludeOffset) {
   // Use the location of canonical decl.
   D = D->getCanonicalDecl();
 
-  IgnoreResults =
-      IgnoreResults || printLoc(Out, D->getLocStart(),
-                                Context->getSourceManager(), IncludeOffset);
-
+  const SourceManager &SM = Context->getSourceManager();
+  SourceLocation L = D->getLocStart();
+  if (L.isInvalid()) {
+    IgnoreResults = true;
+    return true;
+  }
+  L = SM.getExpansionLoc(L);
+  const std::pair<FileID, unsigned> &Decomposed = SM.getDecomposedLoc(L);
+  const FileEntry *FE = SM.getFileEntryForID(Decomposed.first);
+  if (FE) {
+    Out << llvm::sys::path::filename(FE->getName());
+  }
+  else {
+    // This case really isn't interesting.
+    IgnoreResults = true;
+    return true;
+  }
+  // Use the offest into the FileID to represent the location.  Using
+  // a line/column can cause us to look back at the original source file,
+  // which is expensive.
+  Out << '@' << Decomposed.second;
   return IgnoreResults;
 }
 
@@ -560,6 +534,7 @@ void USRGenerator::VisitType(QualType T) {
           c = 'v'; break;
         case BuiltinType::Bool:
           c = 'b'; break;
+        case BuiltinType::Char_U:
         case BuiltinType::UChar:
           c = 'c'; break;
         case BuiltinType::Char16:
@@ -576,11 +551,9 @@ void USRGenerator::VisitType(QualType T) {
           c = 'k'; break;
         case BuiltinType::UInt128:
           c = 'j'; break;
-        case BuiltinType::Char_U:
         case BuiltinType::Char_S:
-          c = 'C'; break;
         case BuiltinType::SChar:
-          c = 'r'; break;
+          c = 'C'; break;
         case BuiltinType::WChar_S:
         case BuiltinType::WChar_U:
           c = 'W'; break;
@@ -647,11 +620,6 @@ void USRGenerator::VisitType(QualType T) {
       T = PT->getPointeeType();
       continue;
     }
-    if (const RValueReferenceType *RT = T->getAs<RValueReferenceType>()) {
-      Out << "&&";
-      T = RT->getPointeeType();
-      continue;
-    }
     if (const ReferenceType *RT = T->getAs<ReferenceType>()) {
       Out << '&';
       T = RT->getPointeeType();
@@ -659,9 +627,11 @@ void USRGenerator::VisitType(QualType T) {
     }
     if (const FunctionProtoType *FT = T->getAs<FunctionProtoType>()) {
       Out << 'F';
-      VisitType(FT->getReturnType());
-      for (const auto &I : FT->param_types())
-        VisitType(I);
+      VisitType(FT->getResultType());
+      for (FunctionProtoType::arg_type_iterator
+            I = FT->arg_type_begin(), E = FT->arg_type_end(); I!=E; ++I) {
+        VisitType(*I);
+      }
       if (FT->isVariadic())
         Out << '.';
       return;
@@ -693,22 +663,6 @@ void USRGenerator::VisitType(QualType T) {
       for (unsigned I = 0, N = Spec->getNumArgs(); I != N; ++I)
         VisitTemplateArgument(Spec->getArg(I));
       return;
-    }
-    if (const DependentNameType *DNT = T->getAs<DependentNameType>()) {
-      Out << '^';
-      // FIXME: Encode the qualifier, don't just print it.
-      PrintingPolicy PO(Ctx.getLangOpts());
-      PO.SuppressTagKeyword = true;
-      PO.SuppressUnwrittenScope = true;
-      PO.ConstantArraySizeAsWritten = false;
-      PO.AnonymousTagLocations = false;
-      DNT->getQualifier()->print(Out, PO);
-      Out << ':' << DNT->getIdentifier()->getName();
-      return;
-    }
-    if (const InjectedClassNameType *InjT = T->getAs<InjectedClassNameType>()) {
-      T = InjT->getInjectedSpecializationType();
-      continue;
     }
     
     // Unhandled type.
@@ -789,8 +743,9 @@ void USRGenerator::VisitTemplateArgument(const TemplateArgument &Arg) {
       
   case TemplateArgument::Pack:
     Out << 'p' << Arg.pack_size();
-    for (const auto &P : Arg.pack_elements())
-      VisitTemplateArgument(P);
+    for (TemplateArgument::pack_iterator P = Arg.pack_begin(), PEnd = Arg.pack_end();
+         P != PEnd; ++P)
+      VisitTemplateArgument(*P);
     break;
       
   case TemplateArgument::Type:
@@ -846,26 +801,3 @@ bool clang::index::generateUSRForDecl(const Decl *D,
   UG.Visit(D);
   return UG.ignoreResults();
 }
-
-bool clang::index::generateUSRForMacro(const MacroDefinition *MD,
-                                       const SourceManager &SM,
-                                       SmallVectorImpl<char> &Buf) {
-  // Don't generate USRs for things with invalid locations.
-  if (!MD || MD->getLocation().isInvalid())
-    return true;
-
-  llvm::raw_svector_ostream Out(Buf);
-
-  // Assume that system headers are sane.  Don't put source location
-  // information into the USR if the macro comes from a system header.
-  SourceLocation Loc = MD->getLocation();
-  bool ShouldGenerateLocation = !SM.isInSystemHeader(Loc);
-
-  Out << getUSRSpacePrefix();
-  if (ShouldGenerateLocation)
-    printLoc(Out, Loc, SM, /*IncludeOffset=*/true);
-  Out << "@macro@";
-  Out << MD->getName()->getName();
-  return false;
-}
-

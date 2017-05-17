@@ -169,6 +169,6 @@ entry:
   ret void
 }
 
-!0 = !{}
+!0 = metadata !{}
 
 ; CHECK: attributes [[NUW]] = { nounwind }

@@ -1,4 +1,4 @@
-/*	$NetBSD: puffs_msgif.c,v 1.98 2015/05/06 15:57:08 hannken Exp $	*/
+/*	$NetBSD: puffs_msgif.c,v 1.94 2013/10/17 21:03:27 christos Exp $	*/
 
 /*
  * Copyright (c) 2005, 2006, 2007  Antti Kantee.  All Rights Reserved.
@@ -30,7 +30,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: puffs_msgif.c,v 1.98 2015/05/06 15:57:08 hannken Exp $");
+__KERNEL_RCSID(0, "$NetBSD: puffs_msgif.c,v 1.94 2013/10/17 21:03:27 christos Exp $");
 
 #include <sys/param.h>
 #include <sys/kernel.h>
@@ -38,6 +38,7 @@ __KERNEL_RCSID(0, "$NetBSD: puffs_msgif.c,v 1.98 2015/05/06 15:57:08 hannken Exp
 #include <sys/kmem.h>
 #include <sys/kthread.h>
 #include <sys/lock.h>
+#include <sys/malloc.h>
 #include <sys/mount.h>
 #include <sys/namei.h>
 #include <sys/proc.h>
@@ -50,6 +51,8 @@ __KERNEL_RCSID(0, "$NetBSD: puffs_msgif.c,v 1.98 2015/05/06 15:57:08 hannken Exp
 
 #include <fs/puffs/puffs_msgif.h>
 #include <fs/puffs/puffs_sys.h>
+
+#include <miscfs/syncfs/syncfs.h> /* XXX: for syncer_mutex reference */
 
 /*
  * waitq data structures
@@ -287,11 +290,11 @@ puffs_msg_setdelta(struct puffs_msgpark *park, size_t delta)
 }
 
 void
-puffs_msg_setinfo(struct puffs_msgpark *park, int opclass, int type,
+puffs_msg_setinfo(struct puffs_msgpark *park, int class, int type,
 	puffs_cookie_t ck)
 {
 
-	park->park_preq->preq_opclass = PUFFSOP_OPCLASS(opclass);
+	park->park_preq->preq_opclass = PUFFSOP_OPCLASS(class);
 	park->park_preq->preq_optype = type;
 	park->park_preq->preq_cookie = ck;
 }
@@ -602,10 +605,10 @@ puffs_msg_sendresp(struct puffs_mount *pmp, struct puffs_req *origpreq, int rv)
  * should block while waiting for input.  Handles all locking internally.
  */
 int
-puffs_msgif_getout(void *ctx, size_t maxsize, int nonblock,
+puffs_msgif_getout(void *this, size_t maxsize, int nonblock,
 	uint8_t **data, size_t *dlen, void **parkptr)
 {
-	struct puffs_mount *pmp = ctx;
+	struct puffs_mount *pmp = this;
 	struct puffs_msgpark *park = NULL;
 	struct puffs_req *preq = NULL;
 	int error;
@@ -709,9 +712,9 @@ puffs_msgif_getout(void *ctx, size_t maxsize, int nonblock,
  * or the death chamber.
  */
 void
-puffs_msgif_releaseout(void *ctx, void *parkptr, int status)
+puffs_msgif_releaseout(void *this, void *parkptr, int status)
 {
-	struct puffs_mount *pmp = ctx;
+	struct puffs_mount *pmp = this;
 	struct puffs_msgpark *park = parkptr;
 
 	DPRINTF(("puffs_releaseout: returning park %p, errno %d: " ,
@@ -739,9 +742,9 @@ puffs_msgif_releaseout(void *ctx, void *parkptr, int status)
 }
 
 size_t
-puffs_msgif_waitcount(void *ctx)
+puffs_msgif_waitcount(void *this)
 {
-	struct puffs_mount *pmp = ctx;
+	struct puffs_mount *pmp = this;
 	size_t rv;
 
 	mutex_enter(&pmp->pmp_lock);
@@ -755,9 +758,9 @@ puffs_msgif_waitcount(void *ctx)
  * XXX: locking with this one?
  */
 static void
-puffsop_msg(void *ctx, struct puffs_req *preq)
+puffsop_msg(void *this, struct puffs_req *preq)
 {
-	struct puffs_mount *pmp = ctx;
+	struct puffs_mount *pmp = this;
 	struct putter_hdr *pth = &preq->preq_pth;
 	struct puffs_msgpark *park;
 	int wgone;
@@ -853,7 +856,7 @@ puffsop_expire(struct puffs_mount *pmp, puffs_cookie_t cookie)
 	 * vrele should cause it to be reclaimed.
 	 * Otherwise, we have nothing to do.
 	 */
-	if (puffs_cookie2vnode(pmp, cookie, &vp) == 0) {
+	if (puffs_cookie2vnode(pmp, cookie, 0, 0, &vp) == 0) {
 		VPTOPP(vp)->pn_stat &= ~PNODE_SOPEXP;
 		vrele(vp); 
 	}
@@ -886,7 +889,7 @@ puffsop_flush(struct puffs_mount *pmp, struct puffs_flush *pf)
 	 * reason we need to eventually bump locking to userspace, as we
 	 * will need to lock the node if we wish to do flushes.
 	 */
-	rv = puffs_cookie2vnode(pmp, pf->pf_cookie, &vp);
+	rv = puffs_cookie2vnode(pmp, pf->pf_cookie, 0, 0, &vp);
 	if (rv) {
 		if (rv == PUFFS_NOSUCHCOOKIE)
 			rv = ENOENT;
@@ -947,9 +950,9 @@ puffsop_flush(struct puffs_mount *pmp, struct puffs_flush *pf)
 }
 
 int
-puffs_msgif_dispatch(void *ctx, struct putter_hdr *pth)
+puffs_msgif_dispatch(void *this, struct putter_hdr *pth)
 {
-	struct puffs_mount *pmp = ctx;
+	struct puffs_mount *pmp = this;
 	struct puffs_req *preq = (struct puffs_req *)pth;
 	struct puffs_sopreq *psopr;
 
@@ -1021,7 +1024,7 @@ puffs_msgif_dispatch(void *ctx, struct putter_hdr *pth)
 	}
 
 	default:
-		DPRINTF(("dispatch: invalid opclass 0x%x\n", preq->preq_opclass));
+		DPRINTF(("dispatch: invalid class 0x%x\n", preq->preq_opclass));
 		puffs_msg_sendresp(pmp, preq, EOPNOTSUPP);
 		break;
 	}
@@ -1144,9 +1147,9 @@ puffs_sop_thread(void *arg)
 }
 
 int
-puffs_msgif_close(void *ctx)
+puffs_msgif_close(void *this)
 {
-	struct puffs_mount *pmp = ctx;
+	struct puffs_mount *pmp = this;
 	struct mount *mp = PMPTOMP(pmp);
 
 	mutex_enter(&pmp->pmp_lock);

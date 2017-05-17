@@ -1,4 +1,4 @@
-/*	$NetBSD: _setjmp.S,v 1.2 2014/05/22 15:01:56 uebayasi Exp $	*/
+/*	$NetBSD: _setjmp.S,v 1.1 2001/06/19 00:25:02 fvdl Exp $	*/
 
 /*
  * Copyright (c) 2001 Wasabi Systems, Inc.
@@ -39,7 +39,7 @@
 #include <machine/asm.h>
 #include <machine/setjmp.h>
 #if defined(LIBC_SCCS)
-	RCSID("$NetBSD: _setjmp.S,v 1.2 2014/05/22 15:01:56 uebayasi Exp $")
+	RCSID("$NetBSD: _setjmp.S,v 1.1 2001/06/19 00:25:02 fvdl Exp $")
 #endif
 
 /*
@@ -65,7 +65,6 @@ ENTRY(_setjmp)
 
 	xorl	%eax,%eax
 	ret
-END(_setjmp)
 
 ENTRY(_longjmp)
 	movq    (_JB_RBX * 8)(%rdi),%rbx
@@ -83,4 +82,3 @@ ENTRY(_longjmp)
 	incl	%eax
 1:	movq	%r11,0(%rsp)
 	ret
-END(_longjmp)

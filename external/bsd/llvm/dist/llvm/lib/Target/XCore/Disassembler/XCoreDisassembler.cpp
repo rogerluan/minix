@@ -14,16 +14,14 @@
 
 #include "XCore.h"
 #include "XCoreRegisterInfo.h"
-#include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCDisassembler.h"
 #include "llvm/MC/MCFixedLenDisassembler.h"
 #include "llvm/MC/MCInst.h"
 #include "llvm/MC/MCSubtargetInfo.h"
+#include "llvm/Support/MemoryObject.h"
 #include "llvm/Support/TargetRegistry.h"
 
 using namespace llvm;
-
-#define DEBUG_TYPE "xcore-disassembler"
 
 typedef MCDisassembler::DecodeStatus DecodeStatus;
 
@@ -31,46 +29,59 @@ namespace {
 
 /// \brief A disassembler class for XCore.
 class XCoreDisassembler : public MCDisassembler {
+  OwningPtr<const MCRegisterInfo> RegInfo;
 public:
-  XCoreDisassembler(const MCSubtargetInfo &STI, MCContext &Ctx) :
-    MCDisassembler(STI, Ctx) {}
+  XCoreDisassembler(const MCSubtargetInfo &STI, const MCRegisterInfo *Info) :
+    MCDisassembler(STI), RegInfo(Info) {}
 
-  DecodeStatus getInstruction(MCInst &Instr, uint64_t &Size,
-                              ArrayRef<uint8_t> Bytes, uint64_t Address,
-                              raw_ostream &VStream,
-                              raw_ostream &CStream) const override;
+  /// \brief See MCDisassembler.
+  virtual DecodeStatus getInstruction(MCInst &instr,
+                                      uint64_t &size,
+                                      const MemoryObject &region,
+                                      uint64_t address,
+                                      raw_ostream &vStream,
+                                      raw_ostream &cStream) const;
+
+  const MCRegisterInfo *getRegInfo() const { return RegInfo.get(); }
 };
 }
 
-static bool readInstruction16(ArrayRef<uint8_t> Bytes, uint64_t Address,
-                              uint64_t &Size, uint16_t &Insn) {
+static bool readInstruction16(const MemoryObject &region,
+                              uint64_t address,
+                              uint64_t &size,
+                              uint16_t &insn) {
+  uint8_t Bytes[4];
+
   // We want to read exactly 2 Bytes of data.
-  if (Bytes.size() < 2) {
-    Size = 0;
+  if (region.readBytes(address, 2, Bytes) == -1) {
+    size = 0;
     return false;
   }
   // Encoded as a little-endian 16-bit word in the stream.
-  Insn = (Bytes[0] << 0) | (Bytes[1] << 8);
+  insn = (Bytes[0] <<  0) | (Bytes[1] <<  8);
   return true;
 }
 
-static bool readInstruction32(ArrayRef<uint8_t> Bytes, uint64_t Address,
-                              uint64_t &Size, uint32_t &Insn) {
+static bool readInstruction32(const MemoryObject &region,
+                              uint64_t address,
+                              uint64_t &size,
+                              uint32_t &insn) {
+  uint8_t Bytes[4];
+
   // We want to read exactly 4 Bytes of data.
-  if (Bytes.size() < 4) {
-    Size = 0;
+  if (region.readBytes(address, 4, Bytes) == -1) {
+    size = 0;
     return false;
   }
   // Encoded as a little-endian 32-bit word in the stream.
-  Insn =
-      (Bytes[0] << 0) | (Bytes[1] << 8) | (Bytes[2] << 16) | (Bytes[3] << 24);
+  insn = (Bytes[0] << 0) | (Bytes[1] << 8) | (Bytes[2] << 16) |
+         (Bytes[3] << 24);
   return true;
 }
 
 static unsigned getReg(const void *D, unsigned RC, unsigned RegNo) {
   const XCoreDisassembler *Dis = static_cast<const XCoreDisassembler*>(D);
-  const MCRegisterInfo *RegInfo = Dis->getContext().getRegisterInfo();
-  return *(RegInfo->getRegClass(RC).begin() + RegNo);
+  return *(Dis->getRegInfo()->getRegClass(RC).begin() + RegNo);
 }
 
 static DecodeStatus DecodeGRRegsRegisterClass(MCInst &Inst,
@@ -735,12 +746,16 @@ DecodeL4RSrcDstSrcDstInstruction(MCInst &Inst, unsigned Insn, uint64_t Address,
   return S;
 }
 
-MCDisassembler::DecodeStatus XCoreDisassembler::getInstruction(
-    MCInst &instr, uint64_t &Size, ArrayRef<uint8_t> Bytes, uint64_t Address,
-    raw_ostream &vStream, raw_ostream &cStream) const {
+MCDisassembler::DecodeStatus
+XCoreDisassembler::getInstruction(MCInst &instr,
+                                  uint64_t &Size,
+                                  const MemoryObject &Region,
+                                  uint64_t Address,
+                                  raw_ostream &vStream,
+                                  raw_ostream &cStream) const {
   uint16_t insn16;
 
-  if (!readInstruction16(Bytes, Address, Size, insn16)) {
+  if (!readInstruction16(Region, Address, Size, insn16)) {
     return Fail;
   }
 
@@ -754,7 +769,7 @@ MCDisassembler::DecodeStatus XCoreDisassembler::getInstruction(
 
   uint32_t insn32;
 
-  if (!readInstruction32(Bytes, Address, Size, insn32)) {
+  if (!readInstruction32(Region, Address, Size, insn32)) {
     return Fail;
   }
 
@@ -773,9 +788,8 @@ namespace llvm {
 }
 
 static MCDisassembler *createXCoreDisassembler(const Target &T,
-                                               const MCSubtargetInfo &STI,
-                                               MCContext &Ctx) {
-  return new XCoreDisassembler(STI, Ctx);
+                                               const MCSubtargetInfo &STI) {
+  return new XCoreDisassembler(STI, T.createMCRegInfo(""));
 }
 
 extern "C" void LLVMInitializeXCoreDisassembler() {

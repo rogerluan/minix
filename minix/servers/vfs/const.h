@@ -7,7 +7,6 @@
 #define NR_MNTS           16 	/* # slots in mount table */
 #define NR_VNODES       1024	/* # slots in vnode table */
 #define NR_WTHREADS	   9	/* # slots in worker thread table */
-#define NR_SOCKDEVS	   8	/* # slots in smap table */
 
 #define NR_NONEDEVS	NR_MNTS	/* # slots in nonedev bitmap */
 
@@ -18,11 +17,11 @@
 
 #define FP_BLOCKED_ON_NONE	0 /* not blocked */
 #define FP_BLOCKED_ON_PIPE	1 /* susp'd on pipe */
-#define FP_BLOCKED_ON_FLOCK	2 /* susp'd on file lock */
+#define FP_BLOCKED_ON_LOCK	2 /* susp'd on lock */
 #define FP_BLOCKED_ON_POPEN	3 /* susp'd on pipe open */
 #define FP_BLOCKED_ON_SELECT	4 /* susp'd on select */
-#define FP_BLOCKED_ON_CDEV	5 /* blocked on character device I/O */
-#define FP_BLOCKED_ON_SDEV	6 /* blocked on socket I/O */
+#define FP_BLOCKED_ON_OTHER	5 /* blocked on other process, check
+				     fp_task to find out */
 
 /* test if the process is blocked on something */
 #define fp_is_blocked(fp)	((fp)->fp_blocked_on != FP_BLOCKED_ON_NONE)
@@ -42,11 +41,6 @@
 #define SEL_WR		CDEV_OP_WR
 #define SEL_ERR		CDEV_OP_ERR
 #define SEL_NOTIFY	CDEV_NOTIFY /* not a real select operation */
-/* If these constants diverge, VFS must be extended to perform mapping. */
-#if (CDEV_OP_RD != SDEV_OP_RD || CDEV_OP_WR != SDEV_OP_WR || \
-    CDEV_OP_ERR != SDEV_OP_ERR || CDEV_NOTIFY != SDEV_NOTIFY)
-#error "CDEV and SDEV select constants are different"
-#endif
 
 /* special driver endpoint for CTTY_MAJOR; must be able to pass isokendpt() */
 #define CTTY_ENDPT	VFS_PROC_NR

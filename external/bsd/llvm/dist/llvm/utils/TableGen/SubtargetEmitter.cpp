@@ -11,6 +11,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+#define DEBUG_TYPE "subtarget-emitter"
+
 #include "CodeGenTarget.h"
 #include "CodeGenSchedule.h"
 #include "llvm/ADT/STLExtras.h"
@@ -26,8 +28,6 @@
 #include <string>
 #include <vector>
 using namespace llvm;
-
-#define DEBUG_TYPE "subtarget-emitter"
 
 namespace {
 class SubtargetEmitter {
@@ -386,7 +386,7 @@ EmitStageAndOperandCycleData(raw_ostream &OS,
   for (CodeGenSchedModels::ProcIter PI = SchedModels.procModelBegin(),
          PE = SchedModels.procModelEnd(); PI != PE; ++PI) {
 
-    if (!ItinsDefSet.insert(PI->ItinsDef).second)
+    if (!ItinsDefSet.insert(PI->ItinsDef))
       continue;
 
     std::vector<Record*> FUs = PI->ItinsDef->getValueAsListOfDefs("FU");
@@ -565,7 +565,7 @@ EmitItineraries(raw_ostream &OS,
          PE = SchedModels.procModelEnd(); PI != PE; ++PI, ++ProcItinListsIter) {
 
     Record *ItinsDef = PI->ItinsDef;
-    if (!ItinsDefSet.insert(ItinsDef).second)
+    if (!ItinsDefSet.insert(ItinsDef))
       continue;
 
     // Get processor itinerary name
@@ -575,13 +575,12 @@ EmitItineraries(raw_ostream &OS,
     assert(ProcItinListsIter != ProcItinLists.end() && "bad iterator");
     std::vector<InstrItinerary> &ItinList = *ProcItinListsIter;
 
-    // Empty itineraries aren't referenced anywhere in the tablegen output
-    // so don't emit them.
-    if (ItinList.empty())
-      continue;
-
     OS << "\n";
     OS << "static const llvm::InstrItinerary ";
+    if (ItinList.empty()) {
+      OS << '*' << Name << " = 0;\n";
+      continue;
+    }
 
     // Begin processor itinerary table
     OS << Name << "[] = {\n";
@@ -632,7 +631,7 @@ void SubtargetEmitter::EmitProcessorResources(const CodeGenProcModel &ProcModel,
   for (unsigned i = 0, e = ProcModel.ProcResourceDefs.size(); i < e; ++i) {
     Record *PRDef = ProcModel.ProcResourceDefs[i];
 
-    Record *SuperDef = nullptr;
+    Record *SuperDef = 0;
     unsigned SuperIdx = 0;
     unsigned NumUnits = 0;
     int BufferSize = PRDef->getValueAsInt("BufferSize");
@@ -677,7 +676,7 @@ Record *SubtargetEmitter::FindWriteResources(
   if (SchedWrite.TheDef->isSubClassOf("SchedWriteRes"))
     return SchedWrite.TheDef;
 
-  Record *AliasDef = nullptr;
+  Record *AliasDef = 0;
   for (RecIter AI = SchedWrite.Aliases.begin(), AE = SchedWrite.Aliases.end();
        AI != AE; ++AI) {
     const CodeGenSchedRW &AliasRW =
@@ -697,7 +696,7 @@ Record *SubtargetEmitter::FindWriteResources(
     return AliasDef;
 
   // Check this processor's list of write resources.
-  Record *ResDef = nullptr;
+  Record *ResDef = 0;
   for (RecIter WRI = ProcModel.WriteResDefs.begin(),
          WRE = ProcModel.WriteResDefs.end(); WRI != WRE; ++WRI) {
     if (!(*WRI)->isSubClassOf("WriteRes"))
@@ -731,7 +730,7 @@ Record *SubtargetEmitter::FindReadAdvance(const CodeGenSchedRW &SchedRead,
     return SchedRead.TheDef;
 
   // Check this processor's list of aliases for SchedRead.
-  Record *AliasDef = nullptr;
+  Record *AliasDef = 0;
   for (RecIter AI = SchedRead.Aliases.begin(), AE = SchedRead.Aliases.end();
        AI != AE; ++AI) {
     const CodeGenSchedRW &AliasRW =
@@ -751,7 +750,7 @@ Record *SubtargetEmitter::FindReadAdvance(const CodeGenSchedRW &SchedRead,
     return AliasDef;
 
   // Check this processor's ReadAdvanceList.
-  Record *ResDef = nullptr;
+  Record *ResDef = 0;
   for (RecIter RAI = ProcModel.ReadAdvanceDefs.begin(),
          RAE = ProcModel.ReadAdvanceDefs.end(); RAI != RAE; ++RAI) {
     if (!(*RAI)->isSubClassOf("ReadAdvance"))
@@ -885,7 +884,7 @@ void SubtargetEmitter::GenSchedClassTables(const CodeGenProcModel &ProcModel,
     if (!SCI->InstRWs.empty()) {
       // This class has a default ReadWrite list which can be overriden by
       // InstRW definitions.
-      Record *RWDef = nullptr;
+      Record *RWDef = 0;
       for (RecIter RWI = SCI->InstRWs.begin(), RWE = SCI->InstRWs.end();
            RWI != RWE; ++RWI) {
         Record *RWModelDef = (*RWI)->getValueAsDef("SchedModel");
@@ -1193,17 +1192,12 @@ void SubtargetEmitter::EmitProcessorModels(raw_ostream &OS) {
 
     // Begin processor itinerary properties
     OS << "\n";
-    OS << "static const llvm::MCSchedModel " << PI->ModelName << " = {\n";
+    OS << "static const llvm::MCSchedModel " << PI->ModelName << "(\n";
     EmitProcessorProp(OS, PI->ModelDef, "IssueWidth", ',');
     EmitProcessorProp(OS, PI->ModelDef, "MicroOpBufferSize", ',');
-    EmitProcessorProp(OS, PI->ModelDef, "LoopMicroOpBufferSize", ',');
     EmitProcessorProp(OS, PI->ModelDef, "LoadLatency", ',');
     EmitProcessorProp(OS, PI->ModelDef, "HighLatency", ',');
     EmitProcessorProp(OS, PI->ModelDef, "MispredictPenalty", ',');
-
-    OS << "  " << (bool)(PI->ModelDef ?
-                         PI->ModelDef->getValueAsBit("PostRAScheduler") : 0)
-       << ", // " << "PostRAScheduler\n";
 
     OS << "  " << (bool)(PI->ModelDef ?
                          PI->ModelDef->getValueAsBit("CompleteModel") : 0)
@@ -1218,10 +1212,10 @@ void SubtargetEmitter::EmitProcessorModels(raw_ostream &OS) {
                      - SchedModels.schedClassBegin()) << ",\n";
     else
       OS << "  0, 0, 0, 0, // No instruction-level machine model.\n";
-    if (PI->hasItineraries())
-      OS << "  " << PI->ItinsDef->getName() << "};\n";
+    if (SchedModels.hasItineraries())
+      OS << "  " << PI->ItinsDef->getName() << ");\n";
     else
-      OS << "  nullptr}; // No Itinerary\n";
+      OS << "  0); // No Itinerary\n";
   }
 }
 
@@ -1460,11 +1454,11 @@ void SubtargetEmitter::run(raw_ostream &OS) {
   if (NumFeatures)
     OS << Target << "FeatureKV, ";
   else
-    OS << "None, ";
+    OS << "0, ";
   if (NumProcs)
     OS << Target << "SubTypeKV, ";
   else
-    OS << "None, ";
+    OS << "0, ";
   OS << '\n'; OS.indent(22);
   OS << Target << "ProcSchedKV, "
      << Target << "WriteProcResTable, "
@@ -1474,10 +1468,10 @@ void SubtargetEmitter::run(raw_ostream &OS) {
     OS << '\n'; OS.indent(22);
     OS << Target << "Stages, "
        << Target << "OperandCycles, "
-       << Target << "ForwardingPaths";
+       << Target << "ForwardingPaths, ";
   } else
-    OS << "0, 0, 0";
-  OS << ");\n}\n\n";
+    OS << "0, 0, 0, ";
+  OS << NumFeatures << ", " << NumProcs << ");\n}\n\n";
 
   OS << "} // End llvm namespace \n";
 
@@ -1487,6 +1481,7 @@ void SubtargetEmitter::run(raw_ostream &OS) {
   OS << "#undef GET_SUBTARGETINFO_TARGET_DESC\n";
 
   OS << "#include \"llvm/Support/Debug.h\"\n";
+  OS << "#include \"llvm/Support/raw_ostream.h\"\n";
   ParseFeaturesFunction(OS, NumFeatures, NumProcs);
 
   OS << "#endif // GET_SUBTARGETINFO_TARGET_DESC\n\n";
@@ -1503,7 +1498,7 @@ void SubtargetEmitter::run(raw_ostream &OS) {
      << "StringRef FS);\n"
      << "public:\n"
      << "  unsigned resolveSchedClass(unsigned SchedClass, const MachineInstr *DefMI,"
-     << " const TargetSchedModel *SchedModel) const override;\n"
+     << " const TargetSchedModel *SchedModel) const;\n"
      << "  DFAPacketizer *createDFAPacketizer(const InstrItineraryData *IID)"
      << " const;\n"
      << "};\n";
@@ -1537,13 +1532,13 @@ void SubtargetEmitter::run(raw_ostream &OS) {
      << "  : TargetSubtargetInfo() {\n"
      << "  InitMCSubtargetInfo(TT, CPU, FS, ";
   if (NumFeatures)
-    OS << "makeArrayRef(" << Target << "FeatureKV, " << NumFeatures << "), ";
+    OS << Target << "FeatureKV, ";
   else
-    OS << "None, ";
+    OS << "0, ";
   if (NumProcs)
-    OS << "makeArrayRef(" << Target << "SubTypeKV, " << NumProcs << "), ";
+    OS << Target << "SubTypeKV, ";
   else
-    OS << "None, ";
+    OS << "0, ";
   OS << '\n'; OS.indent(22);
   OS << Target << "ProcSchedKV, "
      << Target << "WriteProcResTable, "
@@ -1553,10 +1548,10 @@ void SubtargetEmitter::run(raw_ostream &OS) {
   if (SchedModels.hasItineraries()) {
     OS << Target << "Stages, "
        << Target << "OperandCycles, "
-       << Target << "ForwardingPaths";
+       << Target << "ForwardingPaths, ";
   } else
-    OS << "0, 0, 0";
-  OS << ");\n}\n\n";
+    OS << "0, 0, 0, ";
+  OS << NumFeatures << ", " << NumProcs << ");\n}\n\n";
 
   EmitSchedModelHelpers(ClassName, OS);
 

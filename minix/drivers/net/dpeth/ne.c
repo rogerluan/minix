@@ -13,7 +13,8 @@
 */
 
 #include <minix/drivers.h>
-#include <minix/netdriver.h>
+#include <net/gen/ether.h>
+#include <net/gen/eth_io.h>
 #include "dp.h"
 
 #if (ENABLE_NE2000 == 1)
@@ -22,7 +23,7 @@
 #include "ne.h"
 
 /*
-**  Name:	ne_reset
+**  Name:	void ne_reset(dpeth_t * dep);
 **  Function:	Resets the board and checks if reset cycle completes
 */
 static int ne_reset(dpeth_t * dep)
@@ -33,13 +34,13 @@ static int ne_reset(dpeth_t * dep)
   outb_ne(dep, NE_RESET, inb_ne(dep, NE_RESET));
   do {
 	if (++count > 10) return FALSE;	/* 20 mSecs. timeout */
-	micro_delay(2000);
+	milli_delay(2);
   } while ((inb_ne(dep, DP_ISR) & ISR_RST) == 0);
   return TRUE;
 }
 
 /*
-**  Name:	ne_close
+**  Name:	void ne_close(dpeth_t * dep);
 **  Function:	Stops the board by resetting it and masking interrupts.
 */
 static void ne_close(dpeth_t * dep)
@@ -48,15 +49,16 @@ static void ne_close(dpeth_t * dep)
   (void)ne_reset(dep);
   outb_ne(dep, DP_ISR, 0xFF);
   sys_irqdisable(&dep->de_hook);
+  return;
 }
 
 /* 
-**  Name:	ne_init
+**  Name:	void ne_init(dpeth_t * dep);
 **  Function:	Initialize the board making it ready to work.
 */
 static void ne_init(dpeth_t * dep)
 {
-  unsigned int ix;
+  int ix;
 
   dep->de_data_port = dep->de_base_port + NE_DATA;
   if (dep->de_16bit) {
@@ -83,17 +85,17 @@ static void ne_init(dpeth_t * dep)
   ns_init(dep);			/* Initialize DP controller */
 
   printf("%s: NE%d000 (%dkB RAM) at %X:%d - ",
-         netdriver_name(),
+         dep->de_name,
          dep->de_16bit ? 2 : 1,
          dep->de_ramsize / 1024,
          dep->de_base_port, dep->de_irq);
   for (ix = 0; ix < SA_ADDR_LEN; ix += 1)
-	printf("%02X%c", dep->de_address.na_addr[ix],
-	    ix < SA_ADDR_LEN - 1 ? ':' : '\n');
+	printf("%02X%c", dep->de_address.ea_addr[ix], ix < SA_ADDR_LEN - 1 ? ':' : '\n');
+  return;
 }
 
 /*
-**  Name:	ne_probe
+**  Name:	int ne_probe(dpeth_t * dep);
 **  Function:	Probe for the presence of a NE*000 card by testing
 **  		whether the board is reachable through the dp8390.
 **  		Note that the NE1000 is an 8bit card and has a memory
@@ -101,7 +103,7 @@ static void ne_init(dpeth_t * dep)
 */
 int ne_probe(dpeth_t * dep)
 {
-  unsigned int ix, wd, loc1, loc2;
+  int ix, wd, loc1, loc2;
   char EPROM[32];
   static const struct {
 	unsigned char offset;
@@ -174,7 +176,7 @@ int ne_probe(dpeth_t * dep)
 
   /* Setup the ethernet address. */
   for (ix = 0; ix < SA_ADDR_LEN; ix += 1) {
-	dep->de_address.na_addr[ix] = EPROM[ix];
+	dep->de_address.ea_addr[ix] = EPROM[ix];
   }
   dep->de_16bit = wd;
   dep->de_linmem = 0;		/* Uses Programmed I/O only */

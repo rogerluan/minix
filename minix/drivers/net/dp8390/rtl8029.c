@@ -7,10 +7,11 @@ Created:	April 2000 by Philip Homburg <philip@f-mnx.phicoh.com>
 */
 
 #include <minix/drivers.h>
-#include <minix/netdriver.h>
 
 #include <stdlib.h>
 #include <sys/types.h>
+#include <net/gen/ether.h>
+#include <net/gen/eth_io.h>
 #include <machine/pci.h>
 
 #include "assert.h"
@@ -18,6 +19,8 @@ Created:	April 2000 by Philip Homburg <philip@f-mnx.phicoh.com>
 #include "local.h"
 #include "dp8390.h"
 #include "rtl8029.h"
+
+#if ENABLE_PCI
 
 static void rtl_init(struct dpeth *dep);
 #if 0
@@ -35,7 +38,7 @@ int skip;
 	u16_t vid, did;
 	u32_t bar;
 	u8_t ilr;
-	const char *dname;
+	char *dname;
 
 	pci_init();
 
@@ -54,7 +57,7 @@ int skip;
 	if (!dname)
 		dname= "unknown device";
 	printf("%s: %s (%04X/%04X) at %s\n",
-		netdriver_name(), dname, vid, did, pci_slot_name(devind));
+		dep->de_name, dname, vid, did, pci_slot_name(devind));
         if(pci_reserve_ok(devind) != OK)
                return 0;
 	/* printf("cr = 0x%x\n", pci_attr_r16(devind, PCI_CR)); */
@@ -70,7 +73,7 @@ int skip;
 	if (debug)
 	{
 		printf("%s: using I/O address 0x%lx, IRQ %d\n",
-			netdriver_name(), (unsigned long)bar, ilr);
+			dep->de_name, (unsigned long)bar, ilr);
 	}
 	dep->de_initf= rtl_init;
 
@@ -308,6 +311,8 @@ dpeth_t *dep;
 	outb_reg0(dep, DP_CR, CR_PS_P0);	/* back to bank 0 */
 }
 #endif
+
+#endif /* ENABLE_PCI */
 
 /*
  * $PchId: rtl8029.c,v 1.7 2004/08/03 12:16:58 philip Exp $

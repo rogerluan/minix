@@ -34,6 +34,20 @@ __RCSID("$NetBSD: traceroute.c,v 1.81 2012/08/16 00:40:28 zafer Exp $");
 #endif
 #endif
 
+
+#include <net/hton.h>
+#include <net/gen/in.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <net/gen/ether.h>
+#include <net/gen/eth_hdr.h>
+#include <net/gen/eth_io.h>
+#include <net/gen/ip_hdr.h>
+#include <net/gen/ip_io.h>
+#include <net/gen/udp.h>
+#include <net/gen/udp_hdr.h>
+#include <net/gen/udp_io.h>
+
 /*
  * traceroute host  - trace the route ip packets follow going to "host".
  *
@@ -494,7 +508,11 @@ main(int argc, char **argv)
 	 * running our traceroute code will forgive us.
 	 */
 #ifndef __hpux
+#ifdef __minix
+	sndsock = prog_socket(AF_INET, SOCK_RAW, IPPROTO_UDP);
+#else
 	sndsock = prog_socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
+#endif
 #else
 	sndsock = socket(AF_INET, SOCK_RAW, IPPROTO_RAW
 	    useicmp ? IPPROTO_ICMP : IPPROTO_UDP);
@@ -820,6 +838,7 @@ main(int argc, char **argv)
 	}
 #endif
 
+#ifndef __minix
 #ifdef SO_SNDBUF
 	if (prog_setsockopt(sndsock, SOL_SOCKET, SO_SNDBUF, (char *)&packlen,
 	    sizeof(packlen)) < 0)
@@ -844,6 +863,7 @@ main(int argc, char **argv)
 		if (prog_setsockopt(sndsock, SOL_SOCKET, SO_DONTROUTE, &on,
 		    sizeof(on)) < 0)
 			err(1, "setsockopt dontroute %d", tos);
+#endif
 
 	/* Get the interface address list */
 	n = ifaddrlist(&al, errbuf, sizeof errbuf);
@@ -1346,10 +1366,22 @@ again:
 		Printf("]\n");
 	}
 
+#ifndef __minix
 #if !defined(IP_HDRINCL) && defined(IP_TTL)
 	if (prog_setsockopt(sndsock, IPPROTO_IP, IP_TTL,
 	    (char *)&ttl, sizeof(ttl)) < 0)
 		err(1, "setsockopt ttl %d", ttl);
+#endif
+#else
+	{
+		nwio_ipopt_t ipopts; 
+		memset(&ipopts, 0, sizeof(ipopts));
+		ipopts.nwio_flags = NWIO_HDR_O_SPEC;
+		ipopts.nwio_ttl = ttl;
+		if(ioctl(sndsock, NWIOSIPOPT, &ipopts) < 0) {
+			err(1, "ttl ioctl");
+		}
+	}
 #endif
 	if (dump)
 		dump_packet();
@@ -1379,7 +1411,7 @@ again:
 				resize_packet();
 				goto again;
 			} else
-				warn("sendto");
+				warn("sendto..");
 		}
 		
 		Printf("%s: wrote %s %d chars, ret=%d\n",

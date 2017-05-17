@@ -24,15 +24,15 @@ int foo()
   C c;
   c.i = 42;
   // This breakpoint should be at/before the cleanup code.
-  // CHECK: ![[CLEANUP]] = !MDLocation(line: [[@LINE+1]], scope: !{{.*}})
+  // CHECK: ![[CLEANUP]] = metadata !{i32 [[@LINE+1]], i32 0, metadata !{{.*}}, null}
   return 0;
-  // CHECK: ![[RET]] = !MDLocation(line: [[@LINE+1]], scope: !{{.*}})
+  // CHECK: ![[RET]] = metadata !{i32 [[@LINE+1]], i32 0, metadata !{{.*}}, null}
 }
 
 void bar()
 {
   if (!foo())
-    // CHECK: {{.*}} = !MDLocation(line: [[@LINE+1]], scope: !{{.*}})
+    // CHECK: {{.*}} = metadata !{i32 [[@LINE+1]], i32 0, metadata !{{.*}}, null}
     return;
 
   if (foo()) {
@@ -40,21 +40,19 @@ void bar()
     c.i = foo();
   }
   // Clang creates only a single ret instruction. Make sure it is at a useful line.
-  // CHECK: ![[RETBAR]] = !MDLocation(line: [[@LINE+1]], scope: !{{.*}})
+  // CHECK: ![[RETBAR]] = metadata !{i32 [[@LINE+1]], i32 0, metadata !{{.*}}, null}
 }
 
 void baz()
 {
   if (!foo())
-    // CHECK: ![[SCOPE1:.*]] = !{!"0xb\00[[@LINE-1]]\00{{.*}}", {{.*}} ; [ DW_TAG_lexical_block ]
-    // CHECK: {{.*}} = !MDLocation(line: [[@LINE+1]], scope: ![[SCOPE1]])
+    // CHECK: {{.*}} = metadata !{i32 [[@LINE+1]], i32 0, metadata !{{.*}}, null}
     return;
 
   if (foo()) {
     // no cleanup
-    // CHECK: {{.*}} = !MDLocation(line: [[@LINE+2]], scope: ![[SCOPE2:.*]])
-    // CHECK: ![[SCOPE2]] = !{!"0xb\00[[@LINE-3]]\00{{.*}}", {{.*}} ; [ DW_TAG_lexical_block ]
+    // CHECK: {{.*}} = metadata !{i32 [[@LINE+1]], i32 0, metadata !{{.*}}, null}
     return;
   }
-  // CHECK: ![[RETBAZ]] = !MDLocation(line: [[@LINE+1]], scope: !{{.*}})
+  // CHECK: ![[RETBAZ]] = metadata !{i32 [[@LINE+1]], i32 0, metadata !{{.*}}, null}
 }

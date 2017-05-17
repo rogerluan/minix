@@ -15,14 +15,11 @@
 #include "llvm/Support/DataTypes.h"
 
 namespace llvm {
-class MCAsmInfo;
 class MCAsmLayout;
 class MCAssembler;
 class MCContext;
-class MCFixup;
 class MCSection;
 class MCSectionData;
-class MCStreamer;
 class MCSymbol;
 class MCValue;
 class raw_ostream;
@@ -50,20 +47,13 @@ private:
   bool EvaluateAsAbsolute(int64_t &Res, const MCAssembler *Asm,
                           const MCAsmLayout *Layout,
                           const SectionAddrMap *Addrs) const;
-
-  bool evaluateAsAbsolute(int64_t &Res, const MCAssembler *Asm,
-                          const MCAsmLayout *Layout,
-                          const SectionAddrMap *Addrs, bool InSet) const;
-
 protected:
   explicit MCExpr(ExprKind _Kind) : Kind(_Kind) {}
 
   bool EvaluateAsRelocatableImpl(MCValue &Res, const MCAssembler *Asm,
                                  const MCAsmLayout *Layout,
-                                 const MCFixup *Fixup,
-                                 const SectionAddrMap *Addrs, bool InSet,
-                                 bool ForceVarExpansion) const;
-
+                                 const SectionAddrMap *Addrs,
+                                 bool InSet) const;
 public:
   /// @name Accessors
   /// @{
@@ -94,26 +84,13 @@ public:
   bool EvaluateAsAbsolute(int64_t &Res, const MCAssembler &Asm) const;
   bool EvaluateAsAbsolute(int64_t &Res, const MCAsmLayout &Layout) const;
 
-  int64_t evaluateKnownAbsolute(const MCAsmLayout &Layout) const;
-
   /// EvaluateAsRelocatable - Try to evaluate the expression to a relocatable
   /// value, i.e. an expression of the fixed form (a - b + constant).
   ///
   /// @param Res - The relocatable value, if evaluation succeeds.
   /// @param Layout - The assembler layout object to use for evaluating values.
-  /// @param Fixup - The Fixup object if available.
   /// @result - True on success.
-  bool EvaluateAsRelocatable(MCValue &Res, const MCAsmLayout *Layout,
-                             const MCFixup *Fixup) const;
-
-  /// \brief Try to evaluate the expression to the form (a - b + constant) where
-  /// neither a nor b are variables.
-  ///
-  /// This is a more aggressive variant of EvaluateAsRelocatable. The intended
-  /// use is for when relocations are not available, like the symbol value in
-  /// the symbol table.
-  bool EvaluateAsValue(MCValue &Res, const MCAsmLayout *Layout,
-                       const MCFixup *Fixup) const;
+  bool EvaluateAsRelocatable(MCValue &Res, const MCAsmLayout &Layout) const;
 
   /// FindAssociatedSection - Find the "associated section" for this expression,
   /// which is currently defined as the absolute section for constants, or
@@ -180,25 +157,19 @@ public:
     VK_TLSLDM,
     VK_TPOFF,
     VK_DTPOFF,
-    VK_TLVP,      // Mach-O thread local variable relocations
-    VK_TLVPPAGE,
-    VK_TLVPPAGEOFF,
-    VK_PAGE,
-    VK_PAGEOFF,
-    VK_GOTPAGE,
-    VK_GOTPAGEOFF,
+    VK_TLVP,      // Mach-O thread local variable relocation
     VK_SECREL,
-    VK_WEAKREF,   // The link between the symbols in .weakref foo, bar
-
+    // FIXME: We'd really like to use the generic Kinds listed above for these.
     VK_ARM_NONE,
+    VK_ARM_PLT,   // ARM-style PLT references. i.e., (PLT) instead of @PLT
+    VK_ARM_TLSGD, //   ditto for TLSGD, GOT, GOTOFF, TPOFF and GOTTPOFF
+    VK_ARM_GOT,
+    VK_ARM_GOTOFF,
+    VK_ARM_TPOFF,
+    VK_ARM_GOTTPOFF,
     VK_ARM_TARGET1,
     VK_ARM_TARGET2,
     VK_ARM_PREL31,
-    VK_ARM_SBREL,          // symbol(sbrel)
-    VK_ARM_TLSLDO,         // symbol(tlsldo)
-    VK_ARM_TLSCALL,        // symbol(tlscall)
-    VK_ARM_TLSDESC,        // symbol(tlsdesc)
-    VK_ARM_TLSDESCSEQ,
 
     VK_PPC_LO,             // symbol@l
     VK_PPC_HI,             // symbol@h
@@ -251,7 +222,6 @@ public:
     VK_PPC_GOT_TLSLD_HI,   // symbol@got@tlsld@h
     VK_PPC_GOT_TLSLD_HA,   // symbol@got@tlsld@ha
     VK_PPC_TLSLD,          // symbol@tlsld
-    VK_PPC_LOCAL,          // symbol@local
 
     VK_Mips_GPREL,
     VK_Mips_GOT_CALL,
@@ -277,27 +247,21 @@ public:
     VK_Mips_GOT_LO16,
     VK_Mips_CALL_HI16,
     VK_Mips_CALL_LO16,
-    VK_Mips_PCREL_HI16,
-    VK_Mips_PCREL_LO16,
 
     VK_COFF_IMGREL32 // symbol@imgrel (image-relative)
   };
 
 private:
-  /// The symbol reference modifier.
-  const unsigned Kind : 16;
-
-  /// Specifies how the variant kind should be printed.
-  const unsigned UseParensForSymbolVariant : 1;
-
-  // FIXME: Remove this bit.
-  const unsigned HasSubsectionsViaSymbols : 1;
-
   /// The symbol being referenced.
   const MCSymbol *Symbol;
 
-  explicit MCSymbolRefExpr(const MCSymbol *Symbol, VariantKind Kind,
-                           const MCAsmInfo *MAI);
+  /// The symbol reference modifier.
+  const VariantKind Kind;
+
+  explicit MCSymbolRefExpr(const MCSymbol *_Symbol, VariantKind _Kind)
+    : MCExpr(MCExpr::SymbolRef), Symbol(_Symbol), Kind(_Kind) {
+    assert(Symbol);
+  }
 
 public:
   /// @name Construction
@@ -318,11 +282,7 @@ public:
 
   const MCSymbol &getSymbol() const { return *Symbol; }
 
-  VariantKind getKind() const { return static_cast<VariantKind>(Kind); }
-
-  void printVariantKind(raw_ostream &OS) const;
-
-  bool hasSubsectionsViaSymbols() const { return HasSubsectionsViaSymbols; }
+  VariantKind getKind() const { return Kind; }
 
   /// @}
   /// @name Static Utility Functions
@@ -540,9 +500,8 @@ public:
 
   virtual void PrintImpl(raw_ostream &OS) const = 0;
   virtual bool EvaluateAsRelocatableImpl(MCValue &Res,
-                                         const MCAsmLayout *Layout,
-                                         const MCFixup *Fixup) const = 0;
-  virtual void visitUsedExpr(MCStreamer& Streamer) const = 0;
+                                         const MCAsmLayout *Layout) const = 0;
+  virtual void AddValueSymbols(MCAssembler *) const = 0;
   virtual const MCSection *FindAssociatedSection() const = 0;
 
   virtual void fixELFSymbolsInTLSFixups(MCAssembler &) const = 0;

@@ -1,4 +1,4 @@
-/*	$NetBSD: init.c,v 1.106 2015/06/16 23:18:55 christos Exp $	*/
+/*	$NetBSD: init.c,v 1.105 2012/11/09 06:27:17 msaitoh Exp $	*/
 
 /*-
  * Copyright (c) 1991, 1993
@@ -42,7 +42,7 @@ __COPYRIGHT("@(#) Copyright (c) 1991, 1993\
 #if 0
 static char sccsid[] = "@(#)init.c	8.2 (Berkeley) 4/28/95";
 #else
-__RCSID("$NetBSD: init.c,v 1.106 2015/06/16 23:18:55 christos Exp $");
+__RCSID("$NetBSD: init.c,v 1.105 2012/11/09 06:27:17 msaitoh Exp $");
 #endif
 #endif /* not lint */
 
@@ -544,6 +544,9 @@ minixpowerdown(int sig)
 static int
 has_securelevel(void)
 {
+#if defined(__minix)
+	return 0;
+#else
 #ifdef KERN_SECURELVL
 	int name[2], curlevel;
 	size_t len;
@@ -560,6 +563,7 @@ has_securelevel(void)
 #else
 	return 0;
 #endif
+#endif /* defined(__minix) */
 }
 
 /*
@@ -1774,7 +1778,7 @@ mfs_dev(void)
 		if (waitpid(pid, &status, 0) == -1)
 			break;
 		if (status != 0)
-			warn("MAKEDEV exit status %d", status);
+			warn("MAKEDEV exit status %d\n", status);
 		/*
 		 * If /dev/console got created, then return 0
 		 * regardless of MAKEDEV exit status.
@@ -1811,6 +1815,7 @@ do_setttyent(void)
 static int
 createsysctlnode(void)
 {
+#if !defined(__minix)
 	struct sysctlnode node;
 	int mib[2];
 	size_t len;
@@ -1852,6 +1857,7 @@ createsysctlnode(void)
 		warning("could not create init.root node: %m");
 		return -1;
 	}
+#endif /* !defined(__minix) */
 
 	return 0;
 }
@@ -1859,6 +1865,7 @@ createsysctlnode(void)
 static int
 shouldchroot(void)
 {
+#if !defined(__minix)
 	struct sysctlnode node;
 	size_t len, cnt;
 	int mib;
@@ -1897,6 +1904,9 @@ shouldchroot(void)
 		return 0;
 
 	return 1;
+#else
+	return 0;
+#endif /* !defined(__minix) */
 }
 
 #endif /* !LETS_GET_SMALL && CHROOT */

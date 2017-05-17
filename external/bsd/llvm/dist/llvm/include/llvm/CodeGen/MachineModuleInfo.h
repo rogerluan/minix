@@ -35,14 +35,14 @@
 #include "llvm/ADT/PointerIntPair.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
-#include "llvm/IR/DebugLoc.h"
 #include "llvm/IR/Metadata.h"
-#include "llvm/IR/ValueHandle.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MachineLocation.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/DataTypes.h"
+#include "llvm/Support/DebugLoc.h"
 #include "llvm/Support/Dwarf.h"
+#include "llvm/Support/ValueHandle.h"
 
 namespace llvm {
 
@@ -71,7 +71,7 @@ struct LandingPadInfo {
   std::vector<int> TypeIds;              // List of type ids (filters negative)
 
   explicit LandingPadInfo(MachineBasicBlock *MBB)
-    : LandingPadBlock(MBB), LandingPadLabel(nullptr), Personality(nullptr) {}
+    : LandingPadBlock(MBB), LandingPadLabel(0), Personality(0) {}
 };
 
 //===----------------------------------------------------------------------===//
@@ -110,6 +110,10 @@ class MachineModuleInfo : public ImmutablePass {
   /// by debug and exception handling consumers.
   std::vector<MCCFIInstruction> FrameInstructions;
 
+  /// CompactUnwindEncoding - If the target supports it, this is the compact
+  /// unwind encoding. It replaces a function's CIE and FDE.
+  uint32_t CompactUnwindEncoding;
+
   /// LandingPads - List of LandingPadInfo describing the landing pad
   /// information in the current function.
   std::vector<LandingPadInfo> LandingPads;
@@ -127,7 +131,7 @@ class MachineModuleInfo : public ImmutablePass {
   unsigned CurCallSite;
 
   /// TypeInfos - List of C++ TypeInfo used in the current function.
-  std::vector<const GlobalValue *> TypeInfos;
+  std::vector<const GlobalVariable *> TypeInfos;
 
   /// FilterIds - List of typeids encoding filters used in the current function.
   std::vector<unsigned> FilterIds;
@@ -161,27 +165,13 @@ class MachineModuleInfo : public ImmutablePass {
   /// to _fltused on Windows targets.
   bool UsesVAFloatArgument;
 
-  /// UsesMorestackAddr - True if the module calls the __morestack function
-  /// indirectly, as is required under the large code model on x86. This is used
-  /// to emit a definition of a symbol, __morestack_addr, containing the
-  /// address. See comments in lib/Target/X86/X86FrameLowering.cpp for more
-  /// details.
-  bool UsesMorestackAddr;
-
 public:
   static char ID; // Pass identification, replacement for typeid
 
-  struct VariableDbgInfo {
-    TrackingMDNodeRef Var;
-    TrackingMDNodeRef Expr;
-    unsigned Slot;
-    DebugLoc Loc;
-
-    VariableDbgInfo(MDNode *Var, MDNode *Expr, unsigned Slot, DebugLoc Loc)
-        : Var(Var), Expr(Expr), Slot(Slot), Loc(Loc) {}
-  };
-  typedef SmallVector<VariableDbgInfo, 4> VariableDbgInfoMapTy;
-  VariableDbgInfoMapTy VariableDbgInfos;
+  typedef std::pair<unsigned, DebugLoc> UnsignedDebugLocPair;
+  typedef SmallVector<std::pair<TrackingVH<MDNode>, UnsignedDebugLocPair>, 4>
+    VariableDbgInfoMapTy;
+  VariableDbgInfoMapTy VariableDbgInfo;
 
   MachineModuleInfo();  // DUMMY CONSTRUCTOR, DO NOT CALL.
   // Real constructor.
@@ -190,8 +180,8 @@ public:
   ~MachineModuleInfo();
 
   // Initialization and Finalization
-  bool doInitialization(Module &) override;
-  bool doFinalization(Module &) override;
+  virtual bool doInitialization(Module &);
+  virtual bool doFinalization(Module &);
 
   /// EndFunction - Discard function meta information.
   ///
@@ -208,7 +198,7 @@ public:
   ///
   template<typename Ty>
   Ty &getObjFileInfo() {
-    if (ObjFileMMI == nullptr)
+    if (ObjFileMMI == 0)
       ObjFileMMI = new Ty(*this);
     return *static_cast<Ty*>(ObjFileMMI);
   }
@@ -241,14 +231,6 @@ public:
     UsesVAFloatArgument = b;
   }
 
-  bool usesMorestackAddr() const {
-    return UsesMorestackAddr;
-  }
-
-  void setUsesMorestackAddr(bool b) {
-    UsesMorestackAddr = b;
-  }
-
   /// \brief Returns a reference to a list of cfi instructions in the current
   /// function's prologue.  Used to construct frame maps for debug and exception
   /// handling comsumers.
@@ -256,11 +238,18 @@ public:
     return FrameInstructions;
   }
 
-  unsigned LLVM_ATTRIBUTE_UNUSED_RESULT
-  addFrameInst(const MCCFIInstruction &Inst) {
+  void addFrameInst(const MCCFIInstruction &Inst) {
     FrameInstructions.push_back(Inst);
-    return FrameInstructions.size() - 1;
   }
+
+  /// getCompactUnwindEncoding - Returns the compact unwind encoding for a
+  /// function if the target supports the encoding. This encoding replaces a
+  /// function's CIE and FDE.
+  uint32_t getCompactUnwindEncoding() const { return CompactUnwindEncoding; }
+
+  /// setCompactUnwindEncoding - Set the compact unwind encoding for a function
+  /// if the target supports the encoding.
+  void setCompactUnwindEncoding(uint32_t Enc) { CompactUnwindEncoding = Enc; }
 
   /// getAddrLabelSymbol - Return the symbol to be used for the specified basic
   /// block when its address is taken.  This cannot be its normal LBB label
@@ -319,12 +308,12 @@ public:
   /// addCatchTypeInfo - Provide the catch typeinfo for a landing pad.
   ///
   void addCatchTypeInfo(MachineBasicBlock *LandingPad,
-                        ArrayRef<const GlobalValue *> TyInfo);
+                        ArrayRef<const GlobalVariable *> TyInfo);
 
   /// addFilterTypeInfo - Provide the filter typeinfo for a landing pad.
   ///
   void addFilterTypeInfo(MachineBasicBlock *LandingPad,
-                         ArrayRef<const GlobalValue *> TyInfo);
+                         ArrayRef<const GlobalVariable *> TyInfo);
 
   /// addCleanup - Add a cleanup action for a landing pad.
   ///
@@ -332,7 +321,7 @@ public:
 
   /// getTypeIDFor - Return the type id for the specified typeinfo.  This is
   /// function wide.
-  unsigned getTypeIDFor(const GlobalValue *TI);
+  unsigned getTypeIDFor(const GlobalVariable *TI);
 
   /// getFilterIDFor - Return the id of the filter encoded by TyIds.  This is
   /// function wide.
@@ -340,7 +329,7 @@ public:
 
   /// TidyLandingPads - Remap landing pad labels and remove any deleted landing
   /// pads.
-  void TidyLandingPads(DenseMap<MCSymbol*, uintptr_t> *LPMap = nullptr);
+  void TidyLandingPads(DenseMap<MCSymbol*, uintptr_t> *LPMap = 0);
 
   /// getLandingPads - Return a reference to the landing pad info for the
   /// current function.
@@ -393,7 +382,7 @@ public:
 
   /// getTypeInfos - Return a reference to the C++ typeinfo for the current
   /// function.
-  const std::vector<const GlobalValue *> &getTypeInfos() const {
+  const std::vector<const GlobalVariable *> &getTypeInfos() const {
     return TypeInfos;
   }
 
@@ -409,12 +398,11 @@ public:
 
   /// setVariableDbgInfo - Collect information used to emit debugging
   /// information of a variable.
-  void setVariableDbgInfo(MDNode *Var, MDNode *Expr, unsigned Slot,
-                          DebugLoc Loc) {
-    VariableDbgInfos.emplace_back(Var, Expr, Slot, Loc);
+  void setVariableDbgInfo(MDNode *N, unsigned Slot, DebugLoc Loc) {
+    VariableDbgInfo.push_back(std::make_pair(N, std::make_pair(Slot, Loc)));
   }
 
-  VariableDbgInfoMapTy &getVariableDbgInfo() { return VariableDbgInfos; }
+  VariableDbgInfoMapTy &getVariableDbgInfo() { return VariableDbgInfo; }
 
 }; // End class MachineModuleInfo
 

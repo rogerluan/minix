@@ -78,7 +78,7 @@ struct FindFileIdRefVisitData {
   /// itself, so both 'C' can be highlighted.
   const Decl *getCanonical(const Decl *D) const {
     if (!D)
-      return nullptr;
+      return 0;
 
     D = D->getCanonicalDecl();
 
@@ -265,7 +265,7 @@ struct FindFileMacroRefVisitData {
 static enum CXChildVisitResult findFileMacroRefVisit(CXCursor cursor,
                                                      CXCursor parent,
                                                      CXClientData client_data) {
-  const IdentifierInfo *Macro = nullptr;
+  const IdentifierInfo *Macro = 0;
   if (cursor.kind == CXCursor_MacroDefinition)
     Macro = getCursorMacroDefinition(cursor)->getName();
   else if (cursor.kind == CXCursor_MacroExpansion)
@@ -317,7 +317,7 @@ static bool findMacroRefsInFile(CXTranslationUnit TU, CXCursor Cursor,
   SourceManager &SM = Unit->getSourceManager();
 
   FileID FID = SM.translateFile(File);
-  const IdentifierInfo *Macro = nullptr;
+  const IdentifierInfo *Macro = 0;
   if (Cursor.kind == CXCursor_MacroDefinition)
     Macro = getCursorMacroDefinition(Cursor)->getName();
   else
@@ -480,12 +480,13 @@ CXResult clang_findReferencesInFile(CXCursor cursor, CXFile file,
 
 CXResult clang_findIncludesInFile(CXTranslationUnit TU, CXFile file,
                              CXCursorAndRangeVisitor visitor) {
-  if (cxtu::isNotUsableTU(TU)) {
-    LOG_BAD_TU(TU);
+  LogRef Log = Logger::make(LLVM_FUNCTION_NAME);
+
+  if (!TU) {
+    if (Log)
+      *Log << "Null CXTranslationUnit";
     return CXResult_Invalid;
   }
-
-  LogRef Log = Logger::make(LLVM_FUNCTION_NAME);
   if (!file) {
     if (Log)
       *Log << "Null file";
@@ -522,7 +523,7 @@ CXResult clang_findReferencesInFileWithBlock(CXCursor cursor,
                                              CXFile file,
                                            CXCursorAndRangeVisitorBlock block) {
   CXCursorAndRangeVisitor visitor = { block,
-                                      block ? _visitCursorAndRange : nullptr };
+                                      block ? _visitCursorAndRange : 0 };
   return clang_findReferencesInFile(cursor, file, visitor);
 }
 
@@ -530,7 +531,7 @@ CXResult clang_findIncludesInFileWithBlock(CXTranslationUnit TU,
                                            CXFile file,
                                            CXCursorAndRangeVisitorBlock block) {
   CXCursorAndRangeVisitor visitor = { block,
-                                      block ? _visitCursorAndRange : nullptr };
+                                      block ? _visitCursorAndRange : 0 };
   return clang_findIncludesInFile(TU, file, visitor);
 }
 

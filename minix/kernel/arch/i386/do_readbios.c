@@ -8,6 +8,7 @@
  */
 
 #include "kernel/system.h"
+#include <minix/type.h>
 
 /*===========================================================================*
  *				do_readbios				     *

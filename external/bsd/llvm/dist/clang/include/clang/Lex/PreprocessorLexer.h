@@ -12,8 +12,8 @@
 ///
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_CLANG_LEX_PREPROCESSORLEXER_H
-#define LLVM_CLANG_LEX_PREPROCESSORLEXER_H
+#ifndef LLVM_CLANG_PreprocessorLexer_H
+#define LLVM_CLANG_PreprocessorLexer_H
 
 #include "clang/Lex/MultipleIncludeOpt.h"
 #include "clang/Lex/Token.h"
@@ -76,7 +76,7 @@ protected:
   PreprocessorLexer(Preprocessor *pp, FileID fid);
 
   PreprocessorLexer()
-    : PP(nullptr), InitialNumSLocEntries(0),
+    : PP(0), InitialNumSLocEntries(0),
       ParsingPreprocessorDirective(false),
       ParsingFilename(false),
       LexingRawMode(false) {}

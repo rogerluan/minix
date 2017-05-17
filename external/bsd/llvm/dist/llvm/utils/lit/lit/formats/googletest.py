@@ -31,6 +31,7 @@ class GoogleTest(TestFormat):
         try:
             lines = lit.util.capture([path, '--gtest_list_tests'],
                                      env=localConfig.environment)
+            lines = lines.decode('ascii')
             if kIsWindows:
               lines = lines.replace('\r', '')
             lines = lines.split('\n')
@@ -65,7 +66,7 @@ class GoogleTest(TestFormat):
         # Discover the tests in this executable.
         for testname in self.getGTestTests(execpath, litConfig, localConfig):
             testPath = path_in_suite + (basename, testname)
-            yield lit.Test.Test(testSuite, testPath, localConfig, file_path=execpath)
+            yield lit.Test.Test(testSuite, testPath, localConfig)
 
     def getTestsInDirectory(self, testSuite, path_in_suite,
                             litConfig, localConfig):

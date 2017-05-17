@@ -1,3 +1,5 @@
+/*	$NetBSD: mywc.c,v 1.1.1.1 2009/10/26 00:28:34 christos Exp $	*/
+
 /* A simple but fairly efficient C version of the Unix "wc" tool */
 
 #include <stdio.h>

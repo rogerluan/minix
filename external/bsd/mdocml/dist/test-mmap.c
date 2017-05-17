@@ -2,7 +2,9 @@
 #include <sys/mman.h>
 
 int
-main(void)
+main(int argc, char **argv)
 {
-	return(MAP_FAILED != mmap(NULL, 1, PROT_READ, MAP_SHARED, -1, 0));
+
+	mmap(0, 0, PROT_READ, MAP_FILE|MAP_SHARED, -1, 0);
+	return 0;
 }

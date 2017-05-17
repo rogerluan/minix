@@ -10,26 +10,21 @@
 // Subclass of MipsTargetLowering specialized for mips16.
 //
 //===----------------------------------------------------------------------===//
+#define DEBUG_TYPE "mips-lower"
 #include "Mips16ISelLowering.h"
-#include "MCTargetDesc/MipsBaseInfo.h"
-#include "Mips16HardFloatInfo.h"
-#include "MipsMachineFunction.h"
 #include "MipsRegisterInfo.h"
 #include "MipsTargetMachine.h"
-#include "llvm/ADT/StringRef.h"
+#include "MCTargetDesc/MipsBaseInfo.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Target/TargetInstrInfo.h"
-#include <string>
 
 using namespace llvm;
-
-#define DEBUG_TYPE "mips-lower"
 
 static cl::opt<bool> DontExpandCondPseudos16(
   "mips16-dont-expand-cond-pseudo",
   cl::init(false),
-  cl::desc("Don't expand conditional move related "
+  cl::desc("Dont expand conditional move related "
            "pseudos for Mips 16"),
   cl::Hidden);
 
@@ -120,14 +115,20 @@ static const Mips16IntrinsicHelperType Mips16IntrinsicHelper[] = {
   {"truncf", "__mips16_call_stub_sf_1"},
 };
 
-Mips16TargetLowering::Mips16TargetLowering(const MipsTargetMachine &TM,
-                                           const MipsSubtarget &STI)
-    : MipsTargetLowering(TM, STI) {
+Mips16TargetLowering::Mips16TargetLowering(MipsTargetMachine &TM)
+  : MipsTargetLowering(TM) {
+  //
+  // set up as if mips32 and then revert so we can test the mechanism
+  // for switching
+  addRegisterClass(MVT::i32, &Mips::GPR32RegClass);
+  addRegisterClass(MVT::f32, &Mips::FGR32RegClass);
+  computeRegisterProperties();
+  clearRegisterClasses();
 
   // Set up the register classes
   addRegisterClass(MVT::i32, &Mips::CPU16RegsRegClass);
 
-  if (!TM.Options.UseSoftFloat)
+  if (Subtarget->inMips16HardFloat())
     setMips16HardFloatLibCalls();
 
   setOperationAction(ISD::ATOMIC_FENCE,       MVT::Other, Expand);
@@ -153,16 +154,12 @@ Mips16TargetLowering::Mips16TargetLowering(const MipsTargetMachine &TM,
 }
 
 const MipsTargetLowering *
-llvm::createMips16TargetLowering(const MipsTargetMachine &TM,
-                                 const MipsSubtarget &STI) {
-  return new Mips16TargetLowering(TM, STI);
+llvm::createMips16TargetLowering(MipsTargetMachine &TM) {
+  return new Mips16TargetLowering(TM);
 }
 
 bool
-Mips16TargetLowering::allowsMisalignedMemoryAccesses(EVT VT,
-                                                     unsigned,
-                                                     unsigned,
-                                                     bool *Fast) const {
+Mips16TargetLowering::allowsUnalignedMemoryAccesses(EVT VT, bool *Fast) const {
   return false;
 }
 
@@ -244,9 +241,10 @@ Mips16TargetLowering::EmitInstrWithCustomInserter(MachineInstr *MI,
   }
 }
 
-bool Mips16TargetLowering::isEligibleForTailCallOptimization(
-    const CCState &CCInfo, unsigned NextStackOffset,
-    const MipsFunctionInfo &FI) const {
+bool Mips16TargetLowering::
+isEligibleForTailCallOptimization(const MipsCC &MipsCCInfo,
+                                  unsigned NextStackOffset,
+                                  const MipsFunctionInfo& FI) const {
   // No tail call optimization for mips16.
   return false;
 }
@@ -321,7 +319,7 @@ unsigned int Mips16TargetLowering::getMips16HelperFunctionStubNumber
 }
 
 //
-// Prefixes are attached to stub numbers depending on the return type.
+// prefixs are attached to stub numbers depending on the return type .
 // return type: float  sf_
 //              double df_
 //              single complex sc_
@@ -332,16 +330,17 @@ unsigned int Mips16TargetLowering::getMips16HelperFunctionStubNumber
 // The full name of a helper function is__mips16_call_stub +
 //    return type dependent prefix + stub number
 //
-// FIXME: This is something that probably should be in a different source file
-// and perhaps done differently but my main purpose is to not waste runtime
+//
+// This is something that probably should be in a different source file and
+// perhaps done differently but my main purpose is to not waste runtime
 // on something that we can enumerate in the source. Another possibility is
 // to have a python script to generate these mapping tables. This will do
 // for now. There are a whole series of helper function mapping arrays, one
 // for each return type class as outlined above. There there are 11 possible
-// entries. Ones with 0 are ones which should never be selected.
+//  entries. Ones with 0 are ones which should never be selected
 //
 // All the arrays are similar except for ones which return neither
-// sf, df, sc, dc, in which we only care about ones which have sf or df as a
+// sf, df, sc, dc, in which only care about ones which have sf or df as a
 // first parameter.
 //
 #define P_ "__mips16_call_stub_"
@@ -350,7 +349,7 @@ unsigned int Mips16TargetLowering::getMips16HelperFunctionStubNumber
 #define T P "0" , T1
 #define P P_
 static char const * vMips16Helper[MAX_STUB_NUMBER+1] =
-  {nullptr, T1 };
+  {0, T1 };
 #undef P
 #define P P_ "sf_"
 static char const * sfMips16Helper[MAX_STUB_NUMBER+1] =
@@ -423,15 +422,15 @@ void Mips16TargetLowering::
 getOpndList(SmallVectorImpl<SDValue> &Ops,
             std::deque< std::pair<unsigned, SDValue> > &RegsToPass,
             bool IsPICCall, bool GlobalOrExternal, bool InternalLinkage,
-            bool IsCallReloc, CallLoweringInfo &CLI, SDValue Callee,
-            SDValue Chain) const {
+            CallLoweringInfo &CLI, SDValue Callee, SDValue Chain) const {
   SelectionDAG &DAG = CLI.DAG;
   MachineFunction &MF = DAG.getMachineFunction();
   MipsFunctionInfo *FuncInfo = MF.getInfo<MipsFunctionInfo>();
-  const char* Mips16HelperFunction = nullptr;
+  const char* Mips16HelperFunction = 0;
   bool NeedMips16Helper = false;
 
-  if (Subtarget.inMips16HardFloat()) {
+  if (getTargetMachine().Options.UseSoftFloat &&
+      Subtarget->inMips16HardFloat()) {
     //
     // currently we don't have symbols tagged with the mips16 or mips32
     // qualifier so we will assume that we don't know what kind it is.
@@ -441,40 +440,19 @@ getOpndList(SmallVectorImpl<SDValue> &Ops,
     if (ExternalSymbolSDNode *S = dyn_cast<ExternalSymbolSDNode>(CLI.Callee)) {
       Mips16Libcall Find = { RTLIB::UNKNOWN_LIBCALL, S->getSymbol() };
 
-      if (std::binary_search(std::begin(HardFloatLibCalls),
-                             std::end(HardFloatLibCalls), Find))
+      if (std::binary_search(HardFloatLibCalls, array_endof(HardFloatLibCalls),
+                             Find))
         LookupHelper = false;
       else {
-        const char *Symbol = S->getSymbol();
-        Mips16IntrinsicHelperType IntrinsicFind = { Symbol, "" };
-        const Mips16HardFloatInfo::FuncSignature *Signature =
-            Mips16HardFloatInfo::findFuncSignature(Symbol);
-        if (!IsPICCall && (Signature && (FuncInfo->StubsNeeded.find(Symbol) ==
-                                         FuncInfo->StubsNeeded.end()))) {
-          FuncInfo->StubsNeeded[Symbol] = Signature;
-          //
-          // S2 is normally saved if the stub is for a function which
-          // returns a float or double value and is not otherwise. This is
-          // because more work is required after the function the stub
-          // is calling completes, and so the stub cannot directly return
-          // and the stub has no stack space to store the return address so
-          // S2 is used for that purpose.
-          // In order to take advantage of not saving S2, we need to also
-          // optimize the call in the stub and this requires some further
-          // functionality in MipsAsmPrinter which we don't have yet.
-          // So for now we always save S2. The optimization will be done
-          // in a follow-on patch.
-          //
-          if (1 || (Signature->RetSig != Mips16HardFloatInfo::NoFPRet))
-            FuncInfo->setSaveS2();
-        }
+        Mips16IntrinsicHelperType IntrinsicFind = {S->getSymbol(), ""};
         // one more look at list of intrinsics
-        const Mips16IntrinsicHelperType *Helper =
-            std::lower_bound(std::begin(Mips16IntrinsicHelper),
-                             std::end(Mips16IntrinsicHelper), IntrinsicFind);
-        if (Helper != std::end(Mips16IntrinsicHelper) &&
-            *Helper == IntrinsicFind) {
-          Mips16HelperFunction = Helper->Helper;
+        if (std::binary_search(Mips16IntrinsicHelper,
+            array_endof(Mips16IntrinsicHelper),
+                                     IntrinsicFind)) {
+          const Mips16IntrinsicHelperType *h =(std::find(Mips16IntrinsicHelper,
+              array_endof(Mips16IntrinsicHelper),
+                                       IntrinsicFind));
+          Mips16HelperFunction = h->Helper;
           NeedMips16Helper = true;
           LookupHelper = false;
         }
@@ -485,26 +463,26 @@ getOpndList(SmallVectorImpl<SDValue> &Ops,
       Mips16Libcall Find = { RTLIB::UNKNOWN_LIBCALL,
                              G->getGlobal()->getName().data() };
 
-      if (std::binary_search(std::begin(HardFloatLibCalls),
-                             std::end(HardFloatLibCalls), Find))
+      if (std::binary_search(HardFloatLibCalls, array_endof(HardFloatLibCalls),
+                             Find))
         LookupHelper = false;
     }
-    if (LookupHelper)
-      Mips16HelperFunction =
-        getMips16HelperFunction(CLI.RetTy, CLI.getArgs(), NeedMips16Helper);
+    if (LookupHelper) Mips16HelperFunction =
+      getMips16HelperFunction(CLI.RetTy, CLI.Args, NeedMips16Helper);
+
   }
 
   SDValue JumpTarget = Callee;
 
   // T9 should contain the address of the callee function if
-  // -relocation-model=pic or it is an indirect call.
+  // -reloction-model=pic or it is an indirect call.
   if (IsPICCall || !GlobalOrExternal) {
     unsigned V0Reg = Mips::V0;
     if (NeedMips16Helper) {
       RegsToPass.push_front(std::make_pair(V0Reg, Callee));
       JumpTarget = DAG.getExternalSymbol(Mips16HelperFunction, getPointerTy());
       ExternalSymbolSDNode *S = cast<ExternalSymbolSDNode>(JumpTarget);
-      JumpTarget = getAddrGlobal(S, CLI.DL, JumpTarget.getValueType(), DAG,
+      JumpTarget = getAddrGlobal(S, JumpTarget.getValueType(), DAG,
                                  MipsII::MO_GOT, Chain,
                                  FuncInfo->callPtrInfo(S->getSymbol()));
     } else
@@ -514,16 +492,14 @@ getOpndList(SmallVectorImpl<SDValue> &Ops,
   Ops.push_back(JumpTarget);
 
   MipsTargetLowering::getOpndList(Ops, RegsToPass, IsPICCall, GlobalOrExternal,
-                                  InternalLinkage, IsCallReloc, CLI, Callee,
-                                  Chain);
+                                  InternalLinkage, CLI, Callee, Chain);
 }
 
 MachineBasicBlock *Mips16TargetLowering::
 emitSel16(unsigned Opc, MachineInstr *MI, MachineBasicBlock *BB) const {
   if (DontExpandCondPseudos16)
     return BB;
-  const TargetInstrInfo *TII =
-      getTargetMachine().getSubtargetImpl()->getInstrInfo();
+  const TargetInstrInfo *TII = getTargetMachine().getInstrInfo();
   DebugLoc DL = MI->getDebugLoc();
   // To "insert" a SELECT_CC instruction, we actually have to insert the
   // diamond control-flow pattern.  The incoming instruction knows the
@@ -548,7 +524,8 @@ emitSel16(unsigned Opc, MachineInstr *MI, MachineBasicBlock *BB) const {
 
   // Transfer the remainder of BB and its successor edges to sinkMBB.
   sinkMBB->splice(sinkMBB->begin(), BB,
-                  std::next(MachineBasicBlock::iterator(MI)), BB->end());
+                  llvm::next(MachineBasicBlock::iterator(MI)),
+                  BB->end());
   sinkMBB->transferSuccessorsAndUpdatePHIs(BB);
 
   // Next, add the true and fallthrough blocks as its successors.
@@ -585,8 +562,7 @@ MachineBasicBlock *Mips16TargetLowering::emitSelT16
    MachineInstr *MI, MachineBasicBlock *BB) const {
   if (DontExpandCondPseudos16)
     return BB;
-  const TargetInstrInfo *TII =
-      getTargetMachine().getSubtargetImpl()->getInstrInfo();
+  const TargetInstrInfo *TII = getTargetMachine().getInstrInfo();
   DebugLoc DL = MI->getDebugLoc();
   // To "insert" a SELECT_CC instruction, we actually have to insert the
   // diamond control-flow pattern.  The incoming instruction knows the
@@ -611,7 +587,8 @@ MachineBasicBlock *Mips16TargetLowering::emitSelT16
 
   // Transfer the remainder of BB and its successor edges to sinkMBB.
   sinkMBB->splice(sinkMBB->begin(), BB,
-                  std::next(MachineBasicBlock::iterator(MI)), BB->end());
+                  llvm::next(MachineBasicBlock::iterator(MI)),
+                  BB->end());
   sinkMBB->transferSuccessorsAndUpdatePHIs(BB);
 
   // Next, add the true and fallthrough blocks as its successors.
@@ -650,8 +627,7 @@ MachineBasicBlock *Mips16TargetLowering::emitSeliT16
    MachineInstr *MI, MachineBasicBlock *BB) const {
   if (DontExpandCondPseudos16)
     return BB;
-  const TargetInstrInfo *TII =
-      getTargetMachine().getSubtargetImpl()->getInstrInfo();
+  const TargetInstrInfo *TII = getTargetMachine().getInstrInfo();
   DebugLoc DL = MI->getDebugLoc();
   // To "insert" a SELECT_CC instruction, we actually have to insert the
   // diamond control-flow pattern.  The incoming instruction knows the
@@ -676,7 +652,8 @@ MachineBasicBlock *Mips16TargetLowering::emitSeliT16
 
   // Transfer the remainder of BB and its successor edges to sinkMBB.
   sinkMBB->splice(sinkMBB->begin(), BB,
-                  std::next(MachineBasicBlock::iterator(MI)), BB->end());
+                  llvm::next(MachineBasicBlock::iterator(MI)),
+                  BB->end());
   sinkMBB->transferSuccessorsAndUpdatePHIs(BB);
 
   // Next, add the true and fallthrough blocks as its successors.
@@ -716,8 +693,7 @@ MachineBasicBlock
                                              MachineBasicBlock *BB) const {
   if (DontExpandCondPseudos16)
     return BB;
-  const TargetInstrInfo *TII =
-      getTargetMachine().getSubtargetImpl()->getInstrInfo();
+  const TargetInstrInfo *TII = getTargetMachine().getInstrInfo();
   unsigned regX = MI->getOperand(0).getReg();
   unsigned regY = MI->getOperand(1).getReg();
   MachineBasicBlock *target = MI->getOperand(2).getMBB();
@@ -733,8 +709,7 @@ MachineBasicBlock *Mips16TargetLowering::emitFEXT_T8I8I16_ins(
   MachineInstr *MI,  MachineBasicBlock *BB) const {
   if (DontExpandCondPseudos16)
     return BB;
-  const TargetInstrInfo *TII =
-      getTargetMachine().getSubtargetImpl()->getInstrInfo();
+  const TargetInstrInfo *TII = getTargetMachine().getInstrInfo();
   unsigned regX = MI->getOperand(0).getReg();
   int64_t imm = MI->getOperand(1).getImm();
   MachineBasicBlock *target = MI->getOperand(2).getMBB();
@@ -768,13 +743,12 @@ MachineBasicBlock *Mips16TargetLowering::emitFEXT_CCRX16_ins(
   MachineInstr *MI,  MachineBasicBlock *BB) const {
   if (DontExpandCondPseudos16)
     return BB;
-  const TargetInstrInfo *TII =
-      getTargetMachine().getSubtargetImpl()->getInstrInfo();
+  const TargetInstrInfo *TII = getTargetMachine().getInstrInfo();
   unsigned CC = MI->getOperand(0).getReg();
   unsigned regX = MI->getOperand(1).getReg();
   unsigned regY = MI->getOperand(2).getReg();
-  BuildMI(*BB, MI, MI->getDebugLoc(), TII->get(SltOpc)).addReg(regX).addReg(
-      regY);
+  BuildMI(*BB, MI, MI->getDebugLoc(),
+		  TII->get(SltOpc)).addReg(regX).addReg(regY);
   BuildMI(*BB, MI, MI->getDebugLoc(),
           TII->get(Mips::MoveR3216), CC).addReg(Mips::T8);
   MI->eraseFromParent();   // The pseudo instruction is gone now.
@@ -786,8 +760,7 @@ MachineBasicBlock *Mips16TargetLowering::emitFEXT_CCRXI16_ins(
   MachineInstr *MI,  MachineBasicBlock *BB )const {
   if (DontExpandCondPseudos16)
     return BB;
-  const TargetInstrInfo *TII =
-      getTargetMachine().getSubtargetImpl()->getInstrInfo();
+  const TargetInstrInfo *TII = getTargetMachine().getInstrInfo();
   unsigned CC = MI->getOperand(0).getReg();
   unsigned regX = MI->getOperand(1).getReg();
   int64_t Imm = MI->getOperand(2).getImm();

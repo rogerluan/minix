@@ -1,4 +1,4 @@
-/*	$NetBSD: exec.c,v 1.59 2014/04/06 19:18:00 jakllsch Exp $	 */
+/*	$NetBSD: exec.c,v 1.55 2013/11/27 18:29:45 jakllsch Exp $	 */
 
 /*-
  * Copyright (c) 2008, 2009 The NetBSD Foundation, Inc.
@@ -144,7 +144,7 @@ static struct btinfo_userconfcommands *btinfo_userconfcommands = NULL;
 static size_t btinfo_userconfcommands_size = 0;
 
 static void	module_init(const char *);
-static void	module_add_common(const char *, uint8_t);
+static void	module_add_common(char *, uint8_t);
 
 static void	userconf_init(void);
 
@@ -184,7 +184,7 @@ fs_add(char *name)
 }
 
 static void
-module_add_common(const char *name, uint8_t type)
+module_add_common(char *name, uint8_t type)
 {
 	boot_module_t *bm, *bmp;
 	size_t len;
@@ -303,11 +303,13 @@ common_load_kernel(const char *file, u_long *basemem, u_long *extmem,
 
 	close(fd);
 
-#if !defined(__minix) /* this just gives us a cd9660-not-found warning.. */
 	/* If the root fs type is unusual, load its module. */
 	if (fsmod != NULL)
-		module_add_common(fsmod, BM_TYPE_KMOD);
-#endif /* !defined(__minix) */
+		module_add(fsmod);
+#if defined(__minix)
+	if (fsmod !=NULL && fsmod2 != NULL && strcmp(fsmod, fsmod2) != 0)
+		module_add(fsmod2);
+#endif /* defined(__minix) */
 
 	/*
 	 * Gather some information for the kernel. Do this after the
@@ -364,8 +366,6 @@ exec_netbsd(const char *file, physaddr_t loadaddr, int boothowto, int floppy,
 
 	howto = boothowto;
 
-	memset(marks, 0, sizeof(marks));
-
 	if (common_load_kernel(file, &basemem, &extmem, loadaddr, floppy, marks))
 		goto out;
 
@@ -388,7 +388,7 @@ exec_netbsd(const char *file, physaddr_t loadaddr, int boothowto, int floppy,
 	userconf_init();
 	if (btinfo_userconfcommands != NULL)
 		BI_ADD(btinfo_userconfcommands, BTINFO_USERCONFCOMMANDS,
-		    btinfo_userconfcommands_size);
+	btinfo_userconfcommands_size);
 
 #ifdef DEBUG
 	printf("Start @ 0x%lx [%ld=0x%lx-0x%lx]...\n", marks[MARK_ENTRY],
@@ -420,7 +420,7 @@ out:
 static void
 extract_device(const char *path, char *buf, size_t buflen)
 {
-	size_t i;
+	int i;
 
 	if (strchr(path, ':') != NULL) {
 		for (i = 0; i < buflen - 2 && path[i] != ':'; i++)
@@ -442,7 +442,7 @@ module_path(boot_module_t *bm, const char *kdev)
 	for (name2 = name; *name2; ++name2) {
 		if (*name2 == ' ' || *name2 == '\t') {
 			strlcpy(name_buf, name, sizeof(name_buf));
-			if ((uintptr_t)name2 - (uintptr_t)name < sizeof(name_buf))
+			if (name2 - name < sizeof(name_buf))
 				name_buf[name2 - name] = '\0';
 			name = name_buf;
 			break;
@@ -460,7 +460,7 @@ module_path(boot_module_t *bm, const char *kdev)
 		}
 	} else {
 		/* device not specified; load from kernel device if known */
-		if (name[0] == '/')
+ 		if (name[0] == '/')
 			snprintf(buf, sizeof(buf), "%s%s", kdev, name);
 		else
 			snprintf(buf, sizeof(buf), "%s%s/%s/%s.kmod",
@@ -506,7 +506,7 @@ module_init(const char *kernel_path)
 	char kdev[64];
 	char *buf;
 	boot_module_t *bm;
-	ssize_t len;
+	size_t len;
 	off_t off;
 	int err, fd, nfail = 0;
 
@@ -666,49 +666,6 @@ userconf_init(void)
 	}
 }
 
-#if defined(PASS_MEMMAP) && defined(__minix)
-/*
- * Construct a memory map for the multiboot info structure, with memory ranges
- * as reported by the BIOS.  If successful, set the HAS_MMAP flag.  Code copied
- * largely from bootinfo_memmap.c.
- */
-static void
-memmap_init(struct multiboot_info * mbi)
-{
-	multiboot_memory_map_t *mmap;
-	int buf[5], i, nranges;
-
-	nranges = 0;
-	i = 0;
-	do {
-		if (getmementry(&i, buf))
-			break;
-		nranges++;
-	} while (i);
-
-	if (nranges == 0)
-		return;
-
-	mbi->mmap_length = sizeof(multiboot_memory_map_t) * nranges;
-
-	mmap = alloc(mbi->mmap_length);
-
-	mbi->mmap_addr = vtophys(mmap);
-
-	i = 0;
-	while (nranges-- > 0) {
-		getmementry(&i, buf);
-
-		/* Stupid tricks to deal with alignment issues. */
-		memcpy(&mmap->mm_base_addr, buf, sizeof(buf));
-		mmap->mm_size = sizeof(*mmap) - sizeof(mmap->mm_size);
-		mmap++;
-	}
-
-	mbi->mi_flags |= MULTIBOOT_INFO_HAS_MMAP;
-}
-#endif /* PASS_MEMMAP && __minix */
-
 int
 exec_multiboot(const char *file, char *args)
 {
@@ -760,14 +717,6 @@ exec_multiboot(const char *file, char *args)
 			mbi->mi_mods_addr = vtophys(mbm);
 		}
 	}
-
-#if defined(PASS_MEMMAP) && defined(__minix)
-	/*
-	 * The MINIX3 kernel needs a full memory map.  Without it, it will do
-	 * silly things such as overwriting the ACPI tables.
-	 */
-	memmap_init(mbi);
-#endif /* PASS_MEMMAP && __minix */
 
 #ifdef DEBUG
 	printf("Start @ 0x%lx [%ld=0x%lx-0x%lx]...\n", marks[MARK_ENTRY],

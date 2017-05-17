@@ -15,6 +15,7 @@
 #include <minix/vfsif.h>
 #include <sys/param.h>
 #include <sys/stat.h>
+#include <sys/un.h>
 #include <sys/dirent.h>
 #include "vmnt.h"
 #include "vnode.h"
@@ -32,12 +33,16 @@
 
 static int lookup(struct vnode *dirp, struct lookup *resolve,
 	node_details_t *node, struct fproc *rfp);
+static int check_perms(endpoint_t ep, cp_grant_id_t io_gr, size_t
+	pathlen);
 
 /*===========================================================================*
  *				advance					     *
  *===========================================================================*/
-struct vnode *
-advance(struct vnode *dirp, struct lookup *resolve, struct fproc *rfp)
+struct vnode *advance(dirp, resolve, rfp)
+struct vnode *dirp;
+struct lookup *resolve;
+struct fproc *rfp;
 {
 /* Resolve a path name starting at dirp to a vnode. */
   int r;
@@ -129,8 +134,9 @@ advance(struct vnode *dirp, struct lookup *resolve, struct fproc *rfp)
 /*===========================================================================*
  *				eat_path				     *
  *===========================================================================*/
-struct vnode *
-eat_path(struct lookup *resolve, struct fproc *rfp)
+struct vnode *eat_path(resolve, rfp)
+struct lookup *resolve;
+struct fproc *rfp;
 {
 /* Resolve path to a vnode. advance does the actual work. */
   struct vnode *start_dir;
@@ -142,8 +148,9 @@ eat_path(struct lookup *resolve, struct fproc *rfp)
 /*===========================================================================*
  *				last_dir				     *
  *===========================================================================*/
-struct vnode *
-last_dir(struct lookup *resolve, struct fproc *rfp)
+struct vnode *last_dir(resolve, rfp)
+struct lookup *resolve;
+struct fproc *rfp;
 {
 /* Parse a path, as far as the last directory, fetch the vnode
  * for the last directory into the vnode table, and return a pointer to the
@@ -380,8 +387,11 @@ last_dir(struct lookup *resolve, struct fproc *rfp)
 /*===========================================================================*
  *				lookup					     *
  *===========================================================================*/
-static int
-lookup(struct vnode *start_node, struct lookup *resolve, node_details_t *result_node, struct fproc *rfp)
+static int lookup(start_node, resolve, result_node, rfp)
+struct vnode *start_node;
+struct lookup *resolve;
+node_details_t *result_node;
+struct fproc *rfp;
 {
 /* Resolve a path name relative to start_node. */
 
@@ -420,7 +430,7 @@ lookup(struct vnode *start_node, struct lookup *resolve, node_details_t *result_
 
   /* Is the process' root directory on the same partition?,
    * if so, set the chroot directory too. */
-  if (rfp->fp_rd->v_dev == start_node->v_dev)
+  if (rfp->fp_rd->v_dev == rfp->fp_wd->v_dev)
 	root_ino = rfp->fp_rd->v_inode_nr;
   else
 	root_ino = 0;
@@ -571,8 +581,12 @@ lookup(struct vnode *start_node, struct lookup *resolve, node_details_t *result_
 /*===========================================================================*
  *				lookup_init				     *
  *===========================================================================*/
-void
-lookup_init(struct lookup *resolve, char *path, int flags, struct vmnt **vmp, struct vnode **vp)
+void lookup_init(resolve, path, flags, vmp, vp)
+struct lookup *resolve;
+char *path;
+int flags;
+struct vmnt **vmp;
+struct vnode **vp;
 {
   assert(vmp != NULL);
   assert(vp != NULL);
@@ -590,8 +604,10 @@ lookup_init(struct lookup *resolve, char *path, int flags, struct vmnt **vmp, st
 /*===========================================================================*
  *				get_name				     *
  *===========================================================================*/
-int
-get_name(struct vnode *dirp, struct vnode *entry, char ename[NAME_MAX + 1])
+int get_name(dirp, entry, ename)
+struct vnode *dirp;
+struct vnode *entry;
+char ename[NAME_MAX + 1];
 {
 #define DIR_ENTRIES 8
 #define DIR_ENTRY_SIZE (sizeof(struct dirent) + NAME_MAX)
@@ -644,8 +660,9 @@ get_name(struct vnode *dirp, struct vnode *entry, char ename[NAME_MAX + 1])
 /*===========================================================================*
  *				canonical_path				     *
  *===========================================================================*/
-int
-canonical_path(char orig_path[PATH_MAX], struct fproc *rfp)
+int canonical_path(orig_path, rfp)
+char orig_path[PATH_MAX];
+struct fproc *rfp;
 {
 /* Find canonical path of a given path */
   int len = 0;
@@ -798,136 +815,64 @@ canonical_path(char orig_path[PATH_MAX], struct fproc *rfp)
 }
 
 /*===========================================================================*
- *				do_socketpath				     *
+ *				check_perms				     *
  *===========================================================================*/
-int do_socketpath(void)
+static int check_perms(ep, io_gr, pathlen)
+endpoint_t ep;
+cp_grant_id_t io_gr;
+size_t pathlen;
 {
-/*
- * Perform a path action on an on-disk socket file.  This call may be performed
- * by the UDS service only.  The action is always on behalf of a user process
- * that is currently making a socket call to the UDS service, and thus, VFS may
- * rely on the fact that the user process is blocked.  TODO: there should be
- * checks in place to prevent (even accidental) abuse of this function, though.
- */
-  int r, what, slot;
-  endpoint_t ep;
-  cp_grant_id_t io_gr;
-  size_t pathlen;
-  struct vnode *dirp, *vp;
-  struct vmnt *vmp, *vmp2;
+  int r, slot;
+  struct vnode *vp;
+  struct vmnt *vmp;
   struct fproc *rfp;
-  char path[PATH_MAX];
-  struct lookup resolve, resolve2;
-  mode_t bits;
+  char canon_path[PATH_MAX];
+  struct lookup resolve;
+  struct sockaddr_un sun;
 
+  if (isokendpt(ep, &slot) != OK) return(EINVAL);
+  if (pathlen < sizeof(sun.sun_path) || pathlen >= PATH_MAX) return(EINVAL);
+
+  rfp = &(fproc[slot]);
+  r = sys_safecopyfrom(who_e, io_gr, (vir_bytes) 0, (vir_bytes) canon_path,
+	pathlen);
+  if (r != OK) return(r);
+  canon_path[pathlen] = '\0';
+
+  /* Turn path into canonical path to the socket file */
+  if ((r = canonical_path(canon_path, rfp)) != OK) return(r);
+  if (strlen(canon_path) >= pathlen) return(ENAMETOOLONG);
+
+  /* copy canon_path back to the caller */
+  r = sys_safecopyto(who_e, (cp_grant_id_t) io_gr, (vir_bytes) 0,
+	(vir_bytes) canon_path, pathlen);
+  if (r != OK) return(r);
+
+  /* Now do permissions checking */
+  lookup_init(&resolve, canon_path, PATH_NOFLAGS, &vmp, &vp);
+  resolve.l_vmnt_lock = VMNT_READ;
+  resolve.l_vnode_lock = VNODE_READ;
+  if ((vp = eat_path(&resolve, rfp)) == NULL) return(err_code);
+
+  /* check permissions */
+  r = forbidden(rfp, vp, (R_BIT | W_BIT));
+
+  unlock_vnode(vp);
+  unlock_vmnt(vmp);
+
+  put_vnode(vp);
+  return(r);
+}
+
+/*===========================================================================*
+ *				do_checkperms				     *
+ *===========================================================================*/
+int do_checkperms(void)
+{
   /* This should be replaced by an ACL check. */
   if (!super_user) return EPERM;
 
-  ep = job_m_in.m_lsys_vfs_socketpath.endpt;
-  io_gr = job_m_in.m_lsys_vfs_socketpath.grant;
-  pathlen = job_m_in.m_lsys_vfs_socketpath.count;
-  what = job_m_in.m_lsys_vfs_socketpath.what;
-
-  if (isokendpt(ep, &slot) != OK) return(EINVAL);
-  rfp = &fproc[slot];
-
-  /* Copy in the path name, which must not be empty.  It is typically not null
-   * terminated.
-   */
-  if (pathlen < 1 || pathlen >= sizeof(path)) return(EINVAL);
-  r = sys_safecopyfrom(who_e, io_gr, (vir_bytes)0, (vir_bytes)path, pathlen);
-  if (r != OK) return(r);
-  path[pathlen] = '\0';
-
-  /* Now perform the requested action.  For the SPATH_CHECK action, a socket
-   * file is expected to exist already, and we should check whether the given
-   * user process has access to it.  For the SPATH_CREATE action, no file is
-   * expected to exist yet, and a socket file should be created on behalf of
-   * the user process.  In both cases, on success, return the socket file's
-   * device and inode numbers to the caller.
-   *
-   * Since the above canonicalization releases all locks once done, we need to
-   * recheck absolutely everything now.  TODO: do not release locks in between.
-   */
-  switch (what) {
-  case SPATH_CHECK:
-	lookup_init(&resolve, path, PATH_NOFLAGS, &vmp, &vp);
-	resolve.l_vmnt_lock = VMNT_READ;
-	resolve.l_vnode_lock = VNODE_READ;
-	if ((vp = eat_path(&resolve, rfp)) == NULL) return(err_code);
-
-	/* Check file type and permissions. */
-	if (!S_ISSOCK(vp->v_mode))
-		r = ENOTSOCK; /* not in POSIX spec; this is what NetBSD does */
-	else
-		r = forbidden(rfp, vp, R_BIT | W_BIT);
-
-	if (r == OK) {
-		job_m_out.m_vfs_lsys_socketpath.device = vp->v_dev;
-		job_m_out.m_vfs_lsys_socketpath.inode = vp->v_inode_nr;
-	}
-
-	unlock_vnode(vp);
-	unlock_vmnt(vmp);
-	put_vnode(vp);
-	break;
-
-  case SPATH_CREATE:
-	/* This is effectively simulating a mknod(2) call by the user process,
-	 * including the application of its umask to the file permissions.
-	 */
-	lookup_init(&resolve, path, PATH_RET_SYMLINK, &vmp, &dirp);
-	resolve.l_vmnt_lock = VMNT_WRITE;
-	resolve.l_vnode_lock = VNODE_WRITE;
-
-	if ((dirp = last_dir(&resolve, rfp)) == NULL) return(err_code);
-
-	bits = S_IFSOCK | (ACCESSPERMS & rfp->fp_umask);
-
-	if (!S_ISDIR(dirp->v_mode))
-		r = ENOTDIR;
-	else if ((r = forbidden(rfp, dirp, W_BIT | X_BIT)) == OK) {
-		r = req_mknod(dirp->v_fs_e, dirp->v_inode_nr, path,
-		    rfp->fp_effuid, rfp->fp_effgid, bits, NO_DEV);
-		if (r == OK) {
-			/* Now we need to find out the device and inode number
-			 * of the socket file we just created.  The vmnt lock
-			 * should prevent any trouble here.
-			 */
-			lookup_init(&resolve2, resolve.l_path,
-			    PATH_RET_SYMLINK, &vmp2, &vp);
-			resolve2.l_vmnt_lock = VMNT_READ;
-			resolve2.l_vnode_lock = VNODE_READ;
-			vp = advance(dirp, &resolve2, rfp);
-			assert(vmp2 == NULL);
-			if (vp != NULL) {
-				job_m_out.m_vfs_lsys_socketpath.device =
-				    vp->v_dev;
-				job_m_out.m_vfs_lsys_socketpath.inode =
-				    vp->v_inode_nr;
-				unlock_vnode(vp);
-				put_vnode(vp);
-			} else {
-				/* Huh.  This should never happen.  If it does,
-				 * we assume the socket file has somehow been
-				 * lost, so we do not try to unlink it.
-				 */
-				printf("VFS: socketpath did not find created "
-				    "node at %s (%d)\n", path, err_code);
-				r = err_code;
-			}
-		} else if (r == EEXIST)
-			r = EADDRINUSE;
-	}
-
-	unlock_vnode(dirp);
-	unlock_vmnt(vmp);
-	put_vnode(dirp);
-	break;
-
-  default:
-	r = ENOSYS;
-  }
-
-  return(r);
+  return check_perms(job_m_in.m_lsys_vfs_checkperms.endpt,
+	job_m_in.m_lsys_vfs_checkperms.grant,
+	job_m_in.m_lsys_vfs_checkperms.count);
 }

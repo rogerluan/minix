@@ -1,13 +1,10 @@
-#if HAVE_NBTOOL_CONFIG_H
-#include "nbtool_config.h"
-#endif
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <errno.h>
 #include <sys/stat.h>
-#include <limits.h>
+#include <sys/bootblock.h>
+#include <sys/syslimits.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <string.h>

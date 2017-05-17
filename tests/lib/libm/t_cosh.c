@@ -1,4 +1,4 @@
-/* $NetBSD: t_cosh.c,v 1.6 2014/03/03 10:39:08 martin Exp $ */
+/* $NetBSD: t_cosh.c,v 1.5 2013/04/09 12:11:04 isaki Exp $ */
 
 /*-
  * Copyright (c) 2011 The NetBSD Foundation, Inc.
@@ -29,7 +29,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 #include <sys/cdefs.h>
-__RCSID("$NetBSD: t_cosh.c,v 1.6 2014/03/03 10:39:08 martin Exp $");
+__RCSID("$NetBSD: t_cosh.c,v 1.5 2013/04/09 12:11:04 isaki Exp $");
 
 #include <atf-c.h>
 #include <math.h>
@@ -64,6 +64,7 @@ ATF_TC_HEAD(cosh_inrange, tc)
 
 ATF_TC_BODY(cosh_inrange, tc)
 {
+#ifndef __vax__
 	double eps;
 	double x;
 	double y;
@@ -77,6 +78,7 @@ ATF_TC_BODY(cosh_inrange, tc)
 		if (fabs(cosh(x) - y) > eps)
 			atf_tc_fail_nonfatal("cosh(%g) != %g\n", x, y);
 	}
+#endif
 }
 
 ATF_TC(cosh_nan);
@@ -87,10 +89,12 @@ ATF_TC_HEAD(cosh_nan, tc)
 
 ATF_TC_BODY(cosh_nan, tc)
 {
+#ifndef __vax__
 	const double x = 0.0L / 0.0L;
 
 	ATF_CHECK(isnan(x) != 0);
 	ATF_CHECK(isnan(cosh(x)) != 0);
+#endif
 }
 
 ATF_TC(cosh_inf_neg);
@@ -101,11 +105,13 @@ ATF_TC_HEAD(cosh_inf_neg, tc)
 
 ATF_TC_BODY(cosh_inf_neg, tc)
 {
+#ifndef __vax__
 	const double x = -1.0L / 0.0L;
 	double y = cosh(x);
 
 	ATF_CHECK(isinf(y) != 0);
 	ATF_CHECK(signbit(y) == 0);
+#endif
 }
 
 ATF_TC(cosh_inf_pos);
@@ -116,11 +122,13 @@ ATF_TC_HEAD(cosh_inf_pos, tc)
 
 ATF_TC_BODY(cosh_inf_pos, tc)
 {
+#ifndef __vax__
 	const double x = 1.0L / 0.0L;
 	double y = cosh(x);
 
 	ATF_CHECK(isinf(y) != 0);
 	ATF_CHECK(signbit(y) == 0);
+#endif
 }
 
 ATF_TC(cosh_zero_neg);
@@ -131,10 +139,12 @@ ATF_TC_HEAD(cosh_zero_neg, tc)
 
 ATF_TC_BODY(cosh_zero_neg, tc)
 {
+#ifndef __vax__
 	const double x = -0.0L;
 
 	if (cosh(x) != 1.0)
 		atf_tc_fail_nonfatal("cosh(-0.0) != 1.0");
+#endif
 }
 
 ATF_TC(cosh_zero_pos);
@@ -145,10 +155,12 @@ ATF_TC_HEAD(cosh_zero_pos, tc)
 
 ATF_TC_BODY(cosh_zero_pos, tc)
 {
+#ifndef __vax__
 	const double x = 0.0L;
 
 	if (cosh(x) != 1.0)
 		atf_tc_fail_nonfatal("cosh(+0.0) != 1.0");
+#endif
 }
 
 /*
@@ -162,6 +174,7 @@ ATF_TC_HEAD(coshf_inrange, tc)
 
 ATF_TC_BODY(coshf_inrange, tc)
 {
+#ifndef __vax__
 	float eps;
 	float x;
 	float y;
@@ -175,6 +188,7 @@ ATF_TC_BODY(coshf_inrange, tc)
 		if (fabsf(coshf(x) - y) > eps)
 			atf_tc_fail_nonfatal("coshf(%g) != %g\n", x, y);
 	}
+#endif
 }
 
 ATF_TC(coshf_nan);
@@ -185,10 +199,12 @@ ATF_TC_HEAD(coshf_nan, tc)
 
 ATF_TC_BODY(coshf_nan, tc)
 {
+#ifndef __vax__
 	const float x = 0.0L / 0.0L;
 
 	ATF_CHECK(isnan(x) != 0);
 	ATF_CHECK(isnan(coshf(x)) != 0);
+#endif
 }
 
 ATF_TC(coshf_inf_neg);
@@ -199,11 +215,13 @@ ATF_TC_HEAD(coshf_inf_neg, tc)
 
 ATF_TC_BODY(coshf_inf_neg, tc)
 {
+#ifndef __vax__
 	const float x = -1.0L / 0.0L;
 	float y = coshf(x);
 
 	ATF_CHECK(isinf(y) != 0);
 	ATF_CHECK(signbit(y) == 0);
+#endif
 }
 
 ATF_TC(coshf_inf_pos);
@@ -214,11 +232,13 @@ ATF_TC_HEAD(coshf_inf_pos, tc)
 
 ATF_TC_BODY(coshf_inf_pos, tc)
 {
+#ifndef __vax__
 	const float x = 1.0L / 0.0L;
 	float y = coshf(x);
 
 	ATF_CHECK(isinf(y) != 0);
 	ATF_CHECK(signbit(y) == 0);
+#endif
 }
 
 ATF_TC(coshf_zero_neg);
@@ -229,10 +249,12 @@ ATF_TC_HEAD(coshf_zero_neg, tc)
 
 ATF_TC_BODY(coshf_zero_neg, tc)
 {
+#ifndef __vax__
 	const float x = -0.0L;
 
 	if (coshf(x) != 1.0)
 		atf_tc_fail_nonfatal("coshf(-0.0) != 1.0");
+#endif
 }
 
 ATF_TC(coshf_zero_pos);
@@ -243,10 +265,12 @@ ATF_TC_HEAD(coshf_zero_pos, tc)
 
 ATF_TC_BODY(coshf_zero_pos, tc)
 {
+#ifndef __vax__
 	const float x = 0.0L;
 
 	if (coshf(x) != 1.0)
 		atf_tc_fail_nonfatal("coshf(+0.0) != 1.0");
+#endif
 }
 
 ATF_TP_ADD_TCS(tp)

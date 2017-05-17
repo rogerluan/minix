@@ -7,8 +7,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-// REQUIRES: locale.fr_FR.UTF-8
-
 // <locale>
 
 // locale(const locale& other) throw();

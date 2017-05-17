@@ -35,6 +35,7 @@ add_clang_library(clangAST
   ItaniumCXXABI.cpp
   ItaniumMangle.cpp
   Mangle.cpp
+  MangleNumberingContext.cpp
   MicrosoftCXXABI.cpp
   MicrosoftMangle.cpp
   NestedNameSpecifier.cpp
@@ -56,8 +57,29 @@ add_clang_library(clangAST
   TypePrinter.cpp
   VTableBuilder.cpp
   VTTBuilder.cpp
+  )
 
-  LINK_LIBS
+add_dependencies(clangAST
+  ClangARMNeon
+  ClangAttrClasses
+  ClangAttrList
+  ClangAttrImpl
+  ClangAttrDump
+  ClangCommentCommandInfo
+  ClangCommentCommandList
+  ClangCommentNodes
+  ClangCommentHTMLTags
+  ClangCommentHTMLTagsProperties
+  ClangCommentHTMLNamedCharacterReferences
+  ClangDeclNodes
+  ClangDiagnosticAST
+  ClangDiagnosticComment
+  ClangDiagnosticCommon
+  ClangDiagnosticSema
+  ClangStmtNodes
+  )
+
+target_link_libraries(clangAST
   clangBasic
   clangLex
   )

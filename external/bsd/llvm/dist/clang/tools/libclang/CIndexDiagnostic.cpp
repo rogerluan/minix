@@ -30,11 +30,13 @@ using namespace clang::cxloc;
 using namespace clang::cxdiag;
 using namespace llvm;
 
-CXDiagnosticSetImpl::~CXDiagnosticSetImpl() {}
 
-void
-CXDiagnosticSetImpl::appendDiagnostic(std::unique_ptr<CXDiagnosticImpl> D) {
-  Diagnostics.push_back(std::move(D));
+CXDiagnosticSetImpl::~CXDiagnosticSetImpl() {
+  for (std::vector<CXDiagnosticImpl *>::iterator it = Diagnostics.begin(),
+       et = Diagnostics.end();
+       it != et; ++it) {
+    delete *it;
+  }
 }
 
 CXDiagnosticImpl::~CXDiagnosticImpl() {}
@@ -49,35 +51,32 @@ public:
       Message(Msg), Loc(L) {}
 
   virtual ~CXDiagnosticCustomNoteImpl() {}
-
-  CXDiagnosticSeverity getSeverity() const override {
+  
+  CXDiagnosticSeverity getSeverity() const {
     return CXDiagnostic_Note;
   }
-
-  CXSourceLocation getLocation() const override {
+  
+  CXSourceLocation getLocation() const {
     return Loc;
   }
-
-  CXString getSpelling() const override {
+  
+  CXString getSpelling() const {
     return cxstring::createRef(Message.c_str());
   }
-
-  CXString getDiagnosticOption(CXString *Disable) const override {
+  
+  CXString getDiagnosticOption(CXString *Disable) const {
     if (Disable)
       *Disable = cxstring::createEmpty();
     return cxstring::createEmpty();
   }
+  
+  unsigned getCategory() const { return 0; }
+  CXString getCategoryText() const { return cxstring::createEmpty(); }
 
-  unsigned getCategory() const override { return 0; }
-  CXString getCategoryText() const override { return cxstring::createEmpty(); }
-
-  unsigned getNumRanges() const override { return 0; }
-  CXSourceRange getRange(unsigned Range) const override {
-    return clang_getNullRange();
-  }
-  unsigned getNumFixIts() const override { return 0; }
-  CXString getFixIt(unsigned FixIt,
-                    CXSourceRange *ReplacementRange) const override {
+  unsigned getNumRanges() const { return 0; }
+  CXSourceRange getRange(unsigned Range) const { return clang_getNullRange(); }
+  unsigned getNumFixIts() const { return 0; }
+  CXString getFixIt(unsigned FixIt, CXSourceRange *ReplacementRange) const {
     if (ReplacementRange)
       *ReplacementRange = clang_getNullRange();
     return cxstring::createEmpty();
@@ -94,30 +93,29 @@ public:
   
   virtual ~CXDiagnosticRenderer() {}
 
-  void beginDiagnostic(DiagOrStoredDiag D,
-                       DiagnosticsEngine::Level Level) override {
-
+  virtual void beginDiagnostic(DiagOrStoredDiag D,
+                               DiagnosticsEngine::Level Level) {    
+    
     const StoredDiagnostic *SD = D.dyn_cast<const StoredDiagnostic*>();
     if (!SD)
       return;
     
     if (Level != DiagnosticsEngine::Note)
       CurrentSet = MainSet;
-
-    auto Owner = llvm::make_unique<CXStoredDiagnostic>(*SD, LangOpts);
-    CXStoredDiagnostic &CD = *Owner;
-    CurrentSet->appendDiagnostic(std::move(Owner));
-
+    
+    CXStoredDiagnostic *CD = new CXStoredDiagnostic(*SD, LangOpts);
+    CurrentSet->appendDiagnostic(CD);
+    
     if (Level != DiagnosticsEngine::Note)
-      CurrentSet = &CD.getChildDiagnostics();
+      CurrentSet = &CD->getChildDiagnostics();
   }
-
-  void emitDiagnosticMessage(SourceLocation Loc, PresumedLoc PLoc,
-                             DiagnosticsEngine::Level Level,
-                             StringRef Message,
-                             ArrayRef<CharSourceRange> Ranges,
-                             const SourceManager *SM,
-                             DiagOrStoredDiag D) override {
+  
+  virtual void emitDiagnosticMessage(SourceLocation Loc, PresumedLoc PLoc,
+                                     DiagnosticsEngine::Level Level,
+                                     StringRef Message,
+                                     ArrayRef<CharSourceRange> Ranges,
+                                     const SourceManager *SM,
+                                     DiagOrStoredDiag D) {
     if (!D.isNull())
       return;
     
@@ -126,30 +124,30 @@ public:
       L = translateSourceLocation(*SM, LangOpts, Loc);
     else
       L = clang_getNullLocation();
-    CurrentSet->appendDiagnostic(
-        llvm::make_unique<CXDiagnosticCustomNoteImpl>(Message, L));
+    CXDiagnosticImpl *CD = new CXDiagnosticCustomNoteImpl(Message, L);
+    CurrentSet->appendDiagnostic(CD);
   }
+  
+  virtual void emitDiagnosticLoc(SourceLocation Loc, PresumedLoc PLoc,
+                                 DiagnosticsEngine::Level Level,
+                                 ArrayRef<CharSourceRange> Ranges,
+                                 const SourceManager &SM) {}
 
-  void emitDiagnosticLoc(SourceLocation Loc, PresumedLoc PLoc,
-                         DiagnosticsEngine::Level Level,
-                         ArrayRef<CharSourceRange> Ranges,
-                         const SourceManager &SM) override {}
-
-  void emitCodeContext(SourceLocation Loc,
-                       DiagnosticsEngine::Level Level,
-                       SmallVectorImpl<CharSourceRange>& Ranges,
-                       ArrayRef<FixItHint> Hints,
-                       const SourceManager &SM) override {}
-
-  void emitNote(SourceLocation Loc, StringRef Message,
-                const SourceManager *SM) override {
+  virtual void emitCodeContext(SourceLocation Loc,
+                               DiagnosticsEngine::Level Level,
+                               SmallVectorImpl<CharSourceRange>& Ranges,
+                               ArrayRef<FixItHint> Hints,
+                               const SourceManager &SM) {}
+  
+  virtual void emitNote(SourceLocation Loc, StringRef Message,
+                        const SourceManager *SM) {
     CXSourceLocation L;
     if (SM)
       L = translateSourceLocation(*SM, LangOpts, Loc);
     else
       L = clang_getNullLocation();
-    CurrentSet->appendDiagnostic(
-        llvm::make_unique<CXDiagnosticCustomNoteImpl>(Message, L));
+    CurrentSet->appendDiagnostic(new CXDiagnosticCustomNoteImpl(Message,
+                                                                L));
   }
 
   CXDiagnosticSetImpl *CurrentSet;
@@ -185,7 +183,7 @@ CXDiagnosticSetImpl *cxdiag::lazyCreateDiags(CXTranslationUnit TU,
       // Diagnostics in the ASTUnit were updated, reset the associated
       // diagnostics.
       delete Set;
-      TU->Diagnostics = nullptr;
+      TU->Diagnostics = 0;
     }
   }
 
@@ -210,39 +208,26 @@ CXDiagnosticSetImpl *cxdiag::lazyCreateDiags(CXTranslationUnit TU,
 extern "C" {
 
 unsigned clang_getNumDiagnostics(CXTranslationUnit Unit) {
-  if (cxtu::isNotUsableTU(Unit)) {
-    LOG_BAD_TU(Unit);
-    return 0;
-  }
   if (!cxtu::getASTUnit(Unit))
     return 0;
   return lazyCreateDiags(Unit, /*checkIfChanged=*/true)->getNumDiagnostics();
 }
 
 CXDiagnostic clang_getDiagnostic(CXTranslationUnit Unit, unsigned Index) {
-  if (cxtu::isNotUsableTU(Unit)) {
-    LOG_BAD_TU(Unit);
-    return nullptr;
-  }
-
   CXDiagnosticSet D = clang_getDiagnosticSetFromTU(Unit);
   if (!D)
-    return nullptr;
+    return 0;
 
   CXDiagnosticSetImpl *Diags = static_cast<CXDiagnosticSetImpl*>(D);
   if (Index >= Diags->getNumDiagnostics())
-    return nullptr;
+    return 0;
 
   return Diags->getDiagnostic(Index);
 }
-
+  
 CXDiagnosticSet clang_getDiagnosticSetFromTU(CXTranslationUnit Unit) {
-  if (cxtu::isNotUsableTU(Unit)) {
-    LOG_BAD_TU(Unit);
-    return nullptr;
-  }
   if (!cxtu::getASTUnit(Unit))
-    return nullptr;
+    return 0;
   return static_cast<CXDiagnostic>(lazyCreateDiags(Unit));
 }
 
@@ -266,7 +251,7 @@ CXString clang_formatDiagnostic(CXDiagnostic Diagnostic, unsigned Options) {
     CXFile File;
     unsigned Line, Column;
     clang_getSpellingLocation(clang_getDiagnosticLocation(Diagnostic),
-                              &File, &Line, &Column, nullptr);
+                              &File, &Line, &Column, 0);
     if (File) {
       CXString FName = clang_getFileName(File);
       Out << clang_getCString(FName) << ":" << Line << ":";
@@ -284,10 +269,10 @@ CXString clang_formatDiagnostic(CXDiagnostic Diagnostic, unsigned Options) {
           unsigned StartLine, StartColumn, EndLine, EndColumn;
           clang_getSpellingLocation(clang_getRangeStart(Range),
                                     &StartFile, &StartLine, &StartColumn,
-                                    nullptr);
+                                    0);
           clang_getSpellingLocation(clang_getRangeEnd(Range),
-                                    &EndFile, &EndLine, &EndColumn, nullptr);
-
+                                    &EndFile, &EndLine, &EndColumn, 0);
+          
           if (StartFile != EndFile || StartFile != File)
             continue;
           
@@ -325,7 +310,7 @@ CXString clang_formatDiagnostic(CXDiagnostic Diagnostic, unsigned Options) {
     bool NeedComma = false;
 
     if (Options & CXDiagnostic_DisplayOption) {
-      CXString OptionName = clang_getDiagnosticOption(Diagnostic, nullptr);
+      CXString OptionName = clang_getDiagnosticOption(Diagnostic, 0);
       if (const char *OptionText = clang_getCString(OptionName)) {
         if (OptionText[0]) {
           Out << " [" << OptionText;
@@ -411,7 +396,7 @@ unsigned clang_getDiagnosticCategory(CXDiagnostic Diag) {
 }
   
 CXString clang_getDiagnosticCategoryName(unsigned Category) {
-  // Kept for backward compatibility.
+  // Kept for backwards compatibility.
   return cxstring::createRef(DiagnosticIDs::getCategoryNameFromID(Category));
 }
   
@@ -452,10 +437,9 @@ CXString clang_getDiagnosticFixIt(CXDiagnostic Diag, unsigned FixIt,
 }
 
 void clang_disposeDiagnosticSet(CXDiagnosticSet Diags) {
-  if (CXDiagnosticSetImpl *D = static_cast<CXDiagnosticSetImpl *>(Diags)) {
-    if (D->isExternallyManaged())
-      delete D;
-  }
+  CXDiagnosticSetImpl *D = static_cast<CXDiagnosticSetImpl*>(Diags);
+  if (D->isExternallyManaged())
+    delete D;
 }
   
 CXDiagnostic clang_getDiagnosticInSet(CXDiagnosticSet Diags,
@@ -463,15 +447,15 @@ CXDiagnostic clang_getDiagnosticInSet(CXDiagnosticSet Diags,
   if (CXDiagnosticSetImpl *D = static_cast<CXDiagnosticSetImpl*>(Diags))
     if (Index < D->getNumDiagnostics())
       return D->getDiagnostic(Index);
-  return nullptr;
+  return 0;  
 }
   
 CXDiagnosticSet clang_getChildDiagnostics(CXDiagnostic Diag) {
   if (CXDiagnosticImpl *D = static_cast<CXDiagnosticImpl *>(Diag)) {
     CXDiagnosticSetImpl &ChildDiags = D->getChildDiagnostics();
-    return ChildDiags.empty() ? nullptr : (CXDiagnosticSet) &ChildDiags;
+    return ChildDiags.empty() ? 0 : (CXDiagnosticSet) &ChildDiags;
   }
-  return nullptr;
+  return 0;
 }
 
 unsigned clang_getNumDiagnosticsInSet(CXDiagnosticSet Diags) {

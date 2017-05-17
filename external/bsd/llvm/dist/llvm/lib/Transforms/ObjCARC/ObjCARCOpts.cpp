@@ -24,6 +24,7 @@
 ///
 //===----------------------------------------------------------------------===//
 
+#define DEBUG_TYPE "objc-arc-opts"
 #include "ObjCARC.h"
 #include "ARCRuntimeEntryPoints.h"
 #include "DependencyAnalysis.h"
@@ -34,16 +35,14 @@
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/Statistic.h"
-#include "llvm/IR/CFG.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/LLVMContext.h"
+#include "llvm/Support/CFG.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
 
 using namespace llvm;
 using namespace llvm::objcarc;
-
-#define DEBUG_TYPE "objc-arc-opts"
 
 /// \defgroup MiscUtils Miscellaneous utilities that are not ARC specific.
 /// @{
@@ -157,21 +156,24 @@ static const Value *FindSingleUseIdentifiedObject(const Value *Arg) {
       return FindSingleUseIdentifiedObject(
                cast<CallInst>(Arg)->getArgOperand(0));
     if (!IsObjCIdentifiedObject(Arg))
-      return nullptr;
+      return 0;
     return Arg;
   }
 
   // If we found an identifiable object but it has multiple uses, but they are
   // trivial uses, we can still consider this to be a single-use value.
   if (IsObjCIdentifiedObject(Arg)) {
-    for (const User *U : Arg->users())
+    for (Value::const_use_iterator UI = Arg->use_begin(), UE = Arg->use_end();
+         UI != UE; ++UI) {
+      const User *U = *UI;
       if (!U->use_empty() || StripPointerCastsAndObjCCalls(U) != Arg)
-         return nullptr;
+         return 0;
+    }
 
     return Arg;
   }
 
-  return nullptr;
+  return 0;
 }
 
 /// This is a wrapper around getUnderlyingObjCPtr along the lines of
@@ -188,7 +190,7 @@ static inline bool AreAnyUnderlyingObjectsAnAlloca(const Value *V) {
     if (isa<AllocaInst>(P))
       return true;
 
-    if (!Visited.insert(P).second)
+    if (!Visited.insert(P))
       continue;
 
     if (const SelectInst *SI = dyn_cast<const SelectInst>(P)) {
@@ -374,13 +376,13 @@ namespace {
     bool CFGHazardAfflicted;
 
     RRInfo() :
-      KnownSafe(false), IsTailCallRelease(false), ReleaseMetadata(nullptr),
+      KnownSafe(false), IsTailCallRelease(false), ReleaseMetadata(0),
       CFGHazardAfflicted(false) {}
 
     void clear();
 
     /// Conservatively merge the two RRInfo. Returns true if a partial merge has
-    /// occurred, false otherwise.
+    /// occured, false otherwise.
     bool Merge(const RRInfo &Other);
 
   };
@@ -389,7 +391,7 @@ namespace {
 void RRInfo::clear() {
   KnownSafe = false;
   IsTailCallRelease = false;
-  ReleaseMetadata = nullptr;
+  ReleaseMetadata = 0;
   Calls.clear();
   ReverseInsertPts.clear();
   CFGHazardAfflicted = false;
@@ -398,7 +400,7 @@ void RRInfo::clear() {
 bool RRInfo::Merge(const RRInfo &Other) {
     // Conservatively merge the ReleaseMetadata information.
     if (ReleaseMetadata != Other.ReleaseMetadata)
-      ReleaseMetadata = nullptr;
+      ReleaseMetadata = 0;
 
     // Conservatively merge the boolean state.
     KnownSafe &= Other.KnownSafe;
@@ -411,8 +413,10 @@ bool RRInfo::Merge(const RRInfo &Other) {
     // Merge the insert point sets. If there are any differences,
     // that makes this a partial merge.
     bool Partial = ReverseInsertPts.size() != Other.ReverseInsertPts.size();
-    for (Instruction *Inst : Other.ReverseInsertPts)
-      Partial |= ReverseInsertPts.insert(Inst).second;
+    for (SmallPtrSet<Instruction *, 2>::const_iterator
+         I = Other.ReverseInsertPts.begin(),
+         E = Other.ReverseInsertPts.end(); I != E; ++I)
+      Partial |= ReverseInsertPts.insert(*I);
     return Partial;
 }
 
@@ -428,7 +432,7 @@ namespace {
     bool Partial;
 
     /// The current position in the sequence.
-    unsigned char Seq : 8;
+    Sequence Seq : 8;
 
     /// Unidirectional information about the current sequence.
     RRInfo RRI;
@@ -455,7 +459,7 @@ namespace {
     }
 
     bool IsTrackingImpreciseReleases() const {
-      return RRI.ReleaseMetadata != nullptr;
+      return RRI.ReleaseMetadata != 0;
     }
 
     const MDNode *GetReleaseMetadata() const {
@@ -494,7 +498,7 @@ namespace {
     }
 
     Sequence GetSeq() const {
-      return static_cast<Sequence>(Seq);
+      return Seq;
     }
 
     void ClearSequenceProgress() {
@@ -534,7 +538,7 @@ namespace {
 
 void
 PtrState::Merge(const PtrState &Other, bool TopDown) {
-  Seq = MergeSeqs(GetSeq(), Other.GetSeq(), TopDown);
+  Seq = MergeSeqs(Seq, Other.Seq, TopDown);
   KnownPositiveRefCount &= Other.KnownPositiveRefCount;
 
   // If we're not in a sequence (anymore), drop all associated state.
@@ -655,7 +659,7 @@ namespace {
     /// which pass through this block. This is only valid after both the
     /// top-down and bottom-up traversals are complete.
     ///
-    /// Returns true if overflow occurred. Returns false if overflow did not
+    /// Returns true if overflow occured. Returns false if overflow did not
     /// occur.
     bool GetAllPathCountWithOverflow(unsigned &PathCount) const {
       if (TopDownPathCount == OverflowOccurredValue ||
@@ -663,7 +667,7 @@ namespace {
         return true;
       unsigned long long Product =
         (unsigned long long)TopDownPathCount*BottomUpPathCount;
-      // Overflow occurred if any of the upper bits of Product are set or if all
+      // Overflow occured if any of the upper bits of Product are set or if all
       // the lower bits of Product are all set.
       return (Product >> 32) ||
              ((PathCount = Product) == OverflowOccurredValue);
@@ -707,7 +711,7 @@ void BBState::MergePred(const BBState &Other) {
 
   // In order to be consistent, we clear the top down pointers when by adding
   // TopDownPathCount becomes OverflowOccurredValue even though "true" overflow
-  // has not occurred.
+  // has not occured.
   if (TopDownPathCount == OverflowOccurredValue) {
     clearTopDownPointers();
     return;
@@ -751,7 +755,7 @@ void BBState::MergeSucc(const BBState &Other) {
 
   // In order to be consistent, we clear the top down pointers when by adding
   // BottomUpPathCount becomes OverflowOccurredValue even though "true" overflow
-  // has not occurred.
+  // has not occured.
   if (BottomUpPathCount == OverflowOccurredValue) {
     clearBottomUpPointers();
     return;
@@ -817,7 +821,7 @@ ARCAnnotationTargetIdentifier("objc-arc-annotation-target-identifier",
 /// arc annotation processor tool. If the function is an
 static MDString *AppendMDNodeToSourcePtr(unsigned NodeId,
                                          Value *Ptr) {
-  MDString *Hash = nullptr;
+  MDString *Hash = 0;
 
   // If pointer is a result of an instruction and it does not have a source
   // MDNode it, attach a new MDNode onto it. If pointer is a result of
@@ -879,11 +883,14 @@ static void AppendMDNodeToInstForPtr(unsigned NodeId,
                                      MDString *PtrSourceMDNodeID,
                                      Sequence OldSeq,
                                      Sequence NewSeq) {
-  MDNode *Node = nullptr;
-  Metadata *tmp[3] = {PtrSourceMDNodeID,
-                      SequenceToMDString(Inst->getContext(), OldSeq),
-                      SequenceToMDString(Inst->getContext(), NewSeq)};
-  Node = MDNode::get(Inst->getContext(), tmp);
+  MDNode *Node = 0;
+  Value *tmp[3] = {PtrSourceMDNodeID,
+                   SequenceToMDString(Inst->getContext(),
+                                      OldSeq),
+                   SequenceToMDString(Inst->getContext(),
+                                      NewSeq)};
+  Node = MDNode::get(Inst->getContext(),
+                     ArrayRef<Value*>(tmp, 3));
 
   Inst->setMetadata(NodeId, Node);
 }
@@ -903,7 +910,8 @@ static void GenerateARCBBEntranceAnnotation(const char *Name, BasicBlock *BB,
   Type *I8X = PointerType::getUnqual(Type::getInt8Ty(C));
   Type *I8XX = PointerType::getUnqual(I8X);
   Type *Params[] = {I8XX, I8XX};
-  FunctionType *FTy = FunctionType::get(Type::getVoidTy(C), Params,
+  FunctionType *FTy = FunctionType::get(Type::getVoidTy(C),
+                                        ArrayRef<Type*>(Params, 2),
                                         /*isVarArg=*/false);
   Constant *Callee = M->getOrInsertFunction(Name, FTy);
 
@@ -911,7 +919,7 @@ static void GenerateARCBBEntranceAnnotation(const char *Name, BasicBlock *BB,
 
   Value *PtrName;
   StringRef Tmp = Ptr->getName();
-  if (nullptr == (PtrName = M->getGlobalVariable(Tmp, true))) {
+  if (0 == (PtrName = M->getGlobalVariable(Tmp, true))) {
     Value *ActualPtrName = Builder.CreateGlobalStringPtr(Tmp,
                                                          Tmp + "_STR");
     PtrName = new GlobalVariable(*M, I8X, true, GlobalVariable::InternalLinkage,
@@ -920,7 +928,7 @@ static void GenerateARCBBEntranceAnnotation(const char *Name, BasicBlock *BB,
 
   Value *S;
   std::string SeqStr = SequenceToString(Seq);
-  if (nullptr == (S = M->getGlobalVariable(SeqStr, true))) {
+  if (0 == (S = M->getGlobalVariable(SeqStr, true))) {
     Value *ActualPtrName = Builder.CreateGlobalStringPtr(SeqStr,
                                                          SeqStr + "_STR");
     S = new GlobalVariable(*M, I8X, true, GlobalVariable::InternalLinkage,
@@ -945,15 +953,16 @@ static void GenerateARCBBTerminatorAnnotation(const char *Name, BasicBlock *BB,
   Type *I8X = PointerType::getUnqual(Type::getInt8Ty(C));
   Type *I8XX = PointerType::getUnqual(I8X);
   Type *Params[] = {I8XX, I8XX};
-  FunctionType *FTy = FunctionType::get(Type::getVoidTy(C), Params,
+  FunctionType *FTy = FunctionType::get(Type::getVoidTy(C),
+                                        ArrayRef<Type*>(Params, 2),
                                         /*isVarArg=*/false);
   Constant *Callee = M->getOrInsertFunction(Name, FTy);
 
-  IRBuilder<> Builder(BB, std::prev(BB->end()));
+  IRBuilder<> Builder(BB, llvm::prior(BB->end()));
 
   Value *PtrName;
   StringRef Tmp = Ptr->getName();
-  if (nullptr == (PtrName = M->getGlobalVariable(Tmp, true))) {
+  if (0 == (PtrName = M->getGlobalVariable(Tmp, true))) {
     Value *ActualPtrName = Builder.CreateGlobalStringPtr(Tmp,
                                                          Tmp + "_STR");
     PtrName = new GlobalVariable(*M, I8X, true, GlobalVariable::InternalLinkage,
@@ -962,7 +971,7 @@ static void GenerateARCBBTerminatorAnnotation(const char *Name, BasicBlock *BB,
 
   Value *S;
   std::string SeqStr = SequenceToString(Seq);
-  if (nullptr == (S = M->getGlobalVariable(SeqStr, true))) {
+  if (0 == (S = M->getGlobalVariable(SeqStr, true))) {
     Value *ActualPtrName = Builder.CreateGlobalStringPtr(SeqStr,
                                                          SeqStr + "_STR");
     S = new GlobalVariable(*M, I8X, true, GlobalVariable::InternalLinkage,
@@ -996,7 +1005,7 @@ static void GenerateARCAnnotation(unsigned InstMDId,
     // llvm-arc-annotation-processor tool to cross reference where the source
     // pointer is in the LLVM IR since the LLVM IR parser does not submit such
     // information via debug info for backends to use (since why would anyone
-    // need such a thing from LLVM IR besides in non-standard cases
+    // need such a thing from LLVM IR besides in non standard cases
     // [i.e. this]).
     MDString *SourcePtrMDNode =
       AppendMDNodeToSourcePtr(PtrMDId, Ptr);
@@ -1154,10 +1163,10 @@ namespace {
     void GatherStatistics(Function &F, bool AfterOptimization = false);
 #endif
 
-    void getAnalysisUsage(AnalysisUsage &AU) const override;
-    bool doInitialization(Module &M) override;
-    bool runOnFunction(Function &F) override;
-    void releaseMemory() override;
+    virtual void getAnalysisUsage(AnalysisUsage &AU) const;
+    virtual bool doInitialization(Module &M);
+    virtual bool runOnFunction(Function &F);
+    virtual void releaseMemory();
 
   public:
     static char ID;
@@ -1257,11 +1266,13 @@ ObjCARCOpt::OptimizeAutoreleaseRVCall(Function &F, Instruction *AutoreleaseRV,
   Users.push_back(Ptr);
   do {
     Ptr = Users.pop_back_val();
-    for (const User *U : Ptr->users()) {
-      if (isa<ReturnInst>(U) || GetBasicInstructionClass(U) == IC_RetainRV)
+    for (Value::const_use_iterator UI = Ptr->use_begin(), UE = Ptr->use_end();
+         UI != UE; ++UI) {
+      const User *I = *UI;
+      if (isa<ReturnInst>(I) || GetBasicInstructionClass(I) == IC_RetainRV)
         return;
-      if (isa<BitCastInst>(U))
-        Users.push_back(U);
+      if (isa<BitCastInst>(I))
+        Users.push_back(I);
     }
   } while (!Users.empty());
 
@@ -1712,7 +1723,7 @@ ObjCARCOpt::VisitInstructionBottomUp(Instruction *Inst,
                                      BBState &MyStates) {
   bool NestingDetected = false;
   InstructionClass Class = GetInstructionClass(Inst);
-  const Value *Arg = nullptr;
+  const Value *Arg = 0;
 
   DEBUG(dbgs() << "Class: " << Class << "\n");
 
@@ -1797,13 +1808,13 @@ ObjCARCOpt::VisitInstructionBottomUp(Instruction *Inst,
     // pointer has multiple owners implying that we must be more conservative.
     //
     // This comes up in the context of a pointer being ``KnownSafe''. In the
-    // presence of a block being initialized, the frontend will emit the
+    // presense of a block being initialized, the frontend will emit the
     // objc_retain on the original pointer and the release on the pointer loaded
     // from the alloca. The optimizer will through the provenance analysis
     // realize that the two are related, but since we only require KnownSafe in
     // one direction, will match the inner retain on the original pointer with
     // the guard release on the original pointer. This is fixed by ensuring that
-    // in the presence of allocas we only unconditionally remove pointers if
+    // in the presense of allocas we only unconditionally remove pointers if
     // both our retain and our release are KnownSafe.
     if (StoreInst *SI = dyn_cast<StoreInst>(Inst)) {
       if (AreAnyUnderlyingObjectsAnAlloca(SI->getPointerOperand())) {
@@ -1863,7 +1874,7 @@ ObjCARCOpt::VisitInstructionBottomUp(Instruction *Inst,
         if (isa<InvokeInst>(Inst))
           S.InsertReverseInsertPt(BB->getFirstInsertionPt());
         else
-          S.InsertReverseInsertPt(std::next(BasicBlock::iterator(Inst)));
+          S.InsertReverseInsertPt(llvm::next(BasicBlock::iterator(Inst)));
         S.SetSeq(S_Use);
         ANNOTATE_BOTTOMUP(Inst, Ptr, Seq, S_Use);
       } else if (Seq == S_Release && IsUser(Class)) {
@@ -1877,7 +1888,7 @@ ObjCARCOpt::VisitInstructionBottomUp(Instruction *Inst,
         if (isa<InvokeInst>(Inst))
           S.InsertReverseInsertPt(BB->getFirstInsertionPt());
         else
-          S.InsertReverseInsertPt(std::next(BasicBlock::iterator(Inst)));
+          S.InsertReverseInsertPt(llvm::next(BasicBlock::iterator(Inst)));
       }
       break;
     case S_Stop:
@@ -1934,7 +1945,7 @@ ObjCARCOpt::VisitBottomUp(BasicBlock *BB,
 
   // Visit all the instructions, bottom-up.
   for (BasicBlock::iterator I = BB->end(), E = BB->begin(); I != E; --I) {
-    Instruction *Inst = std::prev(I);
+    Instruction *Inst = llvm::prior(I);
 
     // Invoke instructions are visited as part of their successors (below).
     if (isa<InvokeInst>(Inst))
@@ -1968,7 +1979,7 @@ ObjCARCOpt::VisitInstructionTopDown(Instruction *Inst,
                                     BBState &MyStates) {
   bool NestingDetected = false;
   InstructionClass Class = GetInstructionClass(Inst);
-  const Value *Arg = nullptr;
+  const Value *Arg = 0;
 
   switch (Class) {
   case IC_RetainBlock:
@@ -2020,7 +2031,7 @@ ObjCARCOpt::VisitInstructionTopDown(Instruction *Inst,
     switch (OldSeq) {
     case S_Retain:
     case S_CanRelease:
-      if (OldSeq == S_Retain || ReleaseMetadata != nullptr)
+      if (OldSeq == S_Retain || ReleaseMetadata != 0)
         S.ClearReverseInsertPts();
       // FALL THROUGH
     case S_Use:
@@ -2192,7 +2203,7 @@ ComputePostOrders(Function &F,
 
     while (SuccStack.back().second != SE) {
       BasicBlock *SuccBB = *SuccStack.back().second++;
-      if (Visited.insert(SuccBB).second) {
+      if (Visited.insert(SuccBB)) {
         TerminatorInst *TI = cast<TerminatorInst>(&SuccBB->back());
         SuccStack.push_back(std::make_pair(SuccBB, succ_iterator(TI)));
         BBStates[CurrBB].addSucc(SuccBB);
@@ -2233,7 +2244,7 @@ ComputePostOrders(Function &F,
       BBState::edge_iterator PE = BBStates[PredStack.back().first].pred_end();
       while (PredStack.back().second != PE) {
         BasicBlock *BB = *PredStack.back().second++;
-        if (Visited.insert(BB).second) {
+        if (Visited.insert(BB)) {
           PredStack.push_back(std::make_pair(BB, BBStates[BB].pred_begin()));
           goto reverse_dfs_next_succ;
         }
@@ -2292,7 +2303,10 @@ void ObjCARCOpt::MoveCalls(Value *Arg,
   DEBUG(dbgs() << "== ObjCARCOpt::MoveCalls ==\n");
 
   // Insert the new retain and release calls.
-  for (Instruction *InsertPt : ReleasesToMove.ReverseInsertPts) {
+  for (SmallPtrSet<Instruction *, 2>::const_iterator
+       PI = ReleasesToMove.ReverseInsertPts.begin(),
+       PE = ReleasesToMove.ReverseInsertPts.end(); PI != PE; ++PI) {
+    Instruction *InsertPt = *PI;
     Value *MyArg = ArgTy == ParamTy ? Arg :
                    new BitCastInst(Arg, ParamTy, "", InsertPt);
     Constant *Decl = EP.get(ARCRuntimeEntryPoints::EPT_Retain);
@@ -2303,7 +2317,10 @@ void ObjCARCOpt::MoveCalls(Value *Arg,
     DEBUG(dbgs() << "Inserting new Retain: " << *Call << "\n"
                     "At insertion point: " << *InsertPt << "\n");
   }
-  for (Instruction *InsertPt : RetainsToMove.ReverseInsertPts) {
+  for (SmallPtrSet<Instruction *, 2>::const_iterator
+       PI = RetainsToMove.ReverseInsertPts.begin(),
+       PE = RetainsToMove.ReverseInsertPts.end(); PI != PE; ++PI) {
+    Instruction *InsertPt = *PI;
     Value *MyArg = ArgTy == ParamTy ? Arg :
                    new BitCastInst(Arg, ParamTy, "", InsertPt);
     Constant *Decl = EP.get(ARCRuntimeEntryPoints::EPT_Release);
@@ -2320,12 +2337,18 @@ void ObjCARCOpt::MoveCalls(Value *Arg,
   }
 
   // Delete the original retain and release calls.
-  for (Instruction *OrigRetain : RetainsToMove.Calls) {
+  for (SmallPtrSet<Instruction *, 2>::const_iterator
+       AI = RetainsToMove.Calls.begin(),
+       AE = RetainsToMove.Calls.end(); AI != AE; ++AI) {
+    Instruction *OrigRetain = *AI;
     Retains.blot(OrigRetain);
     DeadInsts.push_back(OrigRetain);
     DEBUG(dbgs() << "Deleting retain: " << *OrigRetain << "\n");
   }
-  for (Instruction *OrigRelease : ReleasesToMove.Calls) {
+  for (SmallPtrSet<Instruction *, 2>::const_iterator
+       AI = ReleasesToMove.Calls.begin(),
+       AE = ReleasesToMove.Calls.end(); AI != AE; ++AI) {
+    Instruction *OrigRelease = *AI;
     Releases.erase(OrigRelease);
     DeadInsts.push_back(OrigRelease);
     DEBUG(dbgs() << "Deleting release: " << *OrigRelease << "\n");
@@ -2373,7 +2396,10 @@ ObjCARCOpt::ConnectTDBUTraversals(DenseMap<const BasicBlock *, BBState>
       KnownSafeTD &= NewRetainRRI.KnownSafe;
       MultipleOwners =
         MultipleOwners || MultiOwnersSet.count(GetObjCArg(NewRetain));
-      for (Instruction *NewRetainRelease : NewRetainRRI.Calls) {
+      for (SmallPtrSet<Instruction *, 2>::const_iterator
+             LI = NewRetainRRI.Calls.begin(),
+             LE = NewRetainRRI.Calls.end(); LI != LE; ++LI) {
+        Instruction *NewRetainRelease = *LI;
         DenseMap<Value *, RRInfo>::const_iterator Jt =
           Releases.find(NewRetainRelease);
         if (Jt == Releases.end())
@@ -2388,7 +2414,7 @@ ObjCARCOpt::ConnectTDBUTraversals(DenseMap<const BasicBlock *, BBState>
         if (!NewRetainReleaseRRI.Calls.count(NewRetain))
           return false;
 
-        if (ReleasesToMove.Calls.insert(NewRetainRelease).second) {
+        if (ReleasesToMove.Calls.insert(NewRetainRelease)) {
 
           // If we overflow when we compute the path count, don't remove/move
           // anything.
@@ -2411,7 +2437,7 @@ ObjCARCOpt::ConnectTDBUTraversals(DenseMap<const BasicBlock *, BBState>
           } else {
             if (ReleasesToMove.ReleaseMetadata !=
                 NewRetainReleaseRRI.ReleaseMetadata)
-              ReleasesToMove.ReleaseMetadata = nullptr;
+              ReleasesToMove.ReleaseMetadata = 0;
             if (ReleasesToMove.IsTailCallRelease !=
                 NewRetainReleaseRRI.IsTailCallRelease)
               ReleasesToMove.IsTailCallRelease = false;
@@ -2419,8 +2445,12 @@ ObjCARCOpt::ConnectTDBUTraversals(DenseMap<const BasicBlock *, BBState>
 
           // Collect the optimal insertion points.
           if (!KnownSafe)
-            for (Instruction *RIP : NewRetainReleaseRRI.ReverseInsertPts) {
-              if (ReleasesToMove.ReverseInsertPts.insert(RIP).second) {
+            for (SmallPtrSet<Instruction *, 2>::const_iterator
+                   RI = NewRetainReleaseRRI.ReverseInsertPts.begin(),
+                   RE = NewRetainReleaseRRI.ReverseInsertPts.end();
+                 RI != RE; ++RI) {
+              Instruction *RIP = *RI;
+              if (ReleasesToMove.ReverseInsertPts.insert(RIP)) {
                 // If we overflow when we compute the path count, don't
                 // remove/move anything.
                 const BBState &RIPBBState = BBStates[RIP->getParent()];
@@ -2450,7 +2480,10 @@ ObjCARCOpt::ConnectTDBUTraversals(DenseMap<const BasicBlock *, BBState>
       const RRInfo &NewReleaseRRI = It->second;
       KnownSafeBU &= NewReleaseRRI.KnownSafe;
       CFGHazardAfflicted |= NewReleaseRRI.CFGHazardAfflicted;
-      for (Instruction *NewReleaseRetain : NewReleaseRRI.Calls) {
+      for (SmallPtrSet<Instruction *, 2>::const_iterator
+             LI = NewReleaseRRI.Calls.begin(),
+             LE = NewReleaseRRI.Calls.end(); LI != LE; ++LI) {
+        Instruction *NewReleaseRetain = *LI;
         MapVector<Value *, RRInfo>::const_iterator Jt =
           Retains.find(NewReleaseRetain);
         if (Jt == Retains.end())
@@ -2465,7 +2498,7 @@ ObjCARCOpt::ConnectTDBUTraversals(DenseMap<const BasicBlock *, BBState>
         if (!NewReleaseRetainRRI.Calls.count(NewRelease))
           return false;
 
-        if (RetainsToMove.Calls.insert(NewReleaseRetain).second) {
+        if (RetainsToMove.Calls.insert(NewReleaseRetain)) {
           // If we overflow when we compute the path count, don't remove/move
           // anything.
           const BBState &NRRBBState = BBStates[NewReleaseRetain->getParent()];
@@ -2480,8 +2513,12 @@ ObjCARCOpt::ConnectTDBUTraversals(DenseMap<const BasicBlock *, BBState>
 
           // Collect the optimal insertion points.
           if (!KnownSafe)
-            for (Instruction *RIP : NewReleaseRetainRRI.ReverseInsertPts) {
-              if (RetainsToMove.ReverseInsertPts.insert(RIP).second) {
+            for (SmallPtrSet<Instruction *, 2>::const_iterator
+                   RI = NewReleaseRetainRRI.ReverseInsertPts.begin(),
+                   RE = NewReleaseRetainRRI.ReverseInsertPts.end();
+                 RI != RE; ++RI) {
+              Instruction *RIP = *RI;
+              if (RetainsToMove.ReverseInsertPts.insert(RIP)) {
                 // If we overflow when we compute the path count, don't
                 // remove/move anything.
                 const BBState &RIPBBState = BBStates[RIP->getParent()];
@@ -2654,12 +2691,12 @@ void ObjCARCOpt::OptimizeWeakCalls(Function &F) {
     // within the same block. Theoretically, we could do memdep-style non-local
     // analysis too, but that would want caching. A better approach would be to
     // use the technique that EarlyCSE uses.
-    inst_iterator Current = std::prev(I);
+    inst_iterator Current = llvm::prior(I);
     BasicBlock *CurrentBB = Current.getBasicBlockIterator();
     for (BasicBlock::iterator B = CurrentBB->begin(),
                               J = Current.getInstructionIterator();
          J != B; --J) {
-      Instruction *EarlierInst = &*std::prev(J);
+      Instruction *EarlierInst = &*llvm::prior(J);
       InstructionClass EarlierClass = GetInstructionClass(EarlierInst);
       switch (EarlierClass) {
       case IC_LoadWeak:
@@ -2750,8 +2787,9 @@ void ObjCARCOpt::OptimizeWeakCalls(Function &F) {
     CallInst *Call = cast<CallInst>(Inst);
     Value *Arg = Call->getArgOperand(0);
     if (AllocaInst *Alloca = dyn_cast<AllocaInst>(Arg)) {
-      for (User *U : Alloca->users()) {
-        const Instruction *UserInst = cast<Instruction>(U);
+      for (Value::use_iterator UI = Alloca->use_begin(),
+           UE = Alloca->use_end(); UI != UE; ++UI) {
+        const Instruction *UserInst = cast<Instruction>(*UI);
         switch (GetBasicInstructionClass(UserInst)) {
         case IC_InitWeak:
         case IC_StoreWeak:
@@ -2762,7 +2800,8 @@ void ObjCARCOpt::OptimizeWeakCalls(Function &F) {
         }
       }
       Changed = true;
-      for (auto UI = Alloca->user_begin(), UE = Alloca->user_end(); UI != UE;) {
+      for (Value::use_iterator UI = Alloca->use_begin(),
+           UE = Alloca->use_end(); UI != UE; ) {
         CallInst *UserInst = cast<CallInst>(*UI++);
         switch (GetBasicInstructionClass(UserInst)) {
         case IC_InitWeak:
@@ -2817,8 +2856,8 @@ bool ObjCARCOpt::OptimizeSequences(Function &F) {
 /// shared pointer argument. Note that Retain need not be in BB.
 static bool
 HasSafePathToPredecessorCall(const Value *Arg, Instruction *Retain,
-                             SmallPtrSetImpl<Instruction *> &DepInsts,
-                             SmallPtrSetImpl<const BasicBlock *> &Visited,
+                             SmallPtrSet<Instruction *, 4> &DepInsts,
+                             SmallPtrSet<const BasicBlock *, 4> &Visited,
                              ProvenanceAnalysis &PA) {
   FindDependencies(CanChangeRetainCount, Arg, Retain->getParent(), Retain,
                    DepInsts, Visited, PA);
@@ -2846,13 +2885,13 @@ HasSafePathToPredecessorCall(const Value *Arg, Instruction *Retain,
 static CallInst *
 FindPredecessorRetainWithSafePath(const Value *Arg, BasicBlock *BB,
                                   Instruction *Autorelease,
-                                  SmallPtrSetImpl<Instruction *> &DepInsts,
-                                  SmallPtrSetImpl<const BasicBlock *> &Visited,
+                                  SmallPtrSet<Instruction *, 4> &DepInsts,
+                                  SmallPtrSet<const BasicBlock *, 4> &Visited,
                                   ProvenanceAnalysis &PA) {
   FindDependencies(CanChangeRetainCount, Arg,
                    BB, Autorelease, DepInsts, Visited, PA);
   if (DepInsts.size() != 1)
-    return nullptr;
+    return 0;
 
   CallInst *Retain =
     dyn_cast_or_null<CallInst>(*DepInsts.begin());
@@ -2861,7 +2900,7 @@ FindPredecessorRetainWithSafePath(const Value *Arg, BasicBlock *BB,
   if (!Retain ||
       !IsRetain(GetBasicInstructionClass(Retain)) ||
       GetObjCArg(Retain) != Arg) {
-    return nullptr;
+    return 0;
   }
 
   return Retain;
@@ -2873,23 +2912,23 @@ FindPredecessorRetainWithSafePath(const Value *Arg, BasicBlock *BB,
 static CallInst *
 FindPredecessorAutoreleaseWithSafePath(const Value *Arg, BasicBlock *BB,
                                        ReturnInst *Ret,
-                                       SmallPtrSetImpl<Instruction *> &DepInsts,
-                                       SmallPtrSetImpl<const BasicBlock *> &V,
+                                       SmallPtrSet<Instruction *, 4> &DepInsts,
+                                       SmallPtrSet<const BasicBlock *, 4> &V,
                                        ProvenanceAnalysis &PA) {
   FindDependencies(NeedsPositiveRetainCount, Arg,
                    BB, Ret, DepInsts, V, PA);
   if (DepInsts.size() != 1)
-    return nullptr;
+    return 0;
 
   CallInst *Autorelease =
     dyn_cast_or_null<CallInst>(*DepInsts.begin());
   if (!Autorelease)
-    return nullptr;
+    return 0;
   InstructionClass AutoreleaseClass = GetBasicInstructionClass(Autorelease);
   if (!IsAutorelease(AutoreleaseClass))
-    return nullptr;
+    return 0;
   if (GetObjCArg(Autorelease) != Arg)
-    return nullptr;
+    return 0;
 
   return Autorelease;
 }

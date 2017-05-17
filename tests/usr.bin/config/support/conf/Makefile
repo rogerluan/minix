@@ -1,4 +1,4 @@
-# $NetBSD: Makefile,v 1.2 2014/12/20 07:02:25 uebayasi Exp $
+# $NetBSD: Makefile,v 1.1 2012/03/17 16:33:12 jruoho Exp $
 
 .include <bsd.own.mk>
 
@@ -6,8 +6,7 @@ TESTSDIR=	${TESTSBASE}/usr.bin/config
 ATFFILE=	no
 
 FILESDIR=	${TESTSDIR}/support/conf
-FILES=		Makefile.kern.inc \
-		files
+FILES=		files
 
 .include <bsd.test.mk>
 .include <bsd.files.mk>

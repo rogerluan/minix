@@ -2,14 +2,15 @@
 #	from: @(#)Makefile.inc	8.1 (Berkeley) 6/2/93
 
 # Unsupported by Minix
-#	setrgid.c setruid.c
+#	gethostid.c \
+#	sethostid.c setpgrp.c \
+#	setrgid.c setruid.c sigcompat.c
 
 # compat-43 sources
 .PATH: ${ARCHDIR}/compat-43 ${.CURDIR}/compat-43
 
-SRCS+=	creat.c getdtablesize.c gethostid.c \
-	killpg.c sethostid.c setpgrp.c \
-	sigcompat.c
+SRCS+=	creat.c getdtablesize.c \
+	killpg.c setpgrp.c \
 
 .if !defined(AUDIT)
 SRCS+=	getwd.c

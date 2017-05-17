@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 < %s -emit-llvm | FileCheck %s
+// RUN: %clang_cc1 < %s -emit-llvm | grep internal | count 1
 
 // The two decls for 'a' should merge into one llvm GlobalVariable.
 
@@ -11,6 +11,3 @@ static struct s a =  {
     10
 };
 
-// CHECK-NOT: internal global
-// CHECK: @a = internal global %struct.s { i32 10 }
-// CHECK-NOT: internal-global

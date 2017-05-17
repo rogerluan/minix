@@ -63,6 +63,3 @@ z w(int loc, int len);
     options &= ~(1 | 2);
 }
 @end
-
-// rdar://18799145
-int Test18799145() { return ^(){return 0;}(); }

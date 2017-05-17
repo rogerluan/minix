@@ -1,8 +1,6 @@
 #include <sys/cdefs.h>
 #include "namespace.h"
-#include <lib.h>
 
-#include <string.h>
 #include <assert.h>
 #include <errno.h>
 #include <stdio.h>
@@ -28,25 +26,6 @@ static int _udp_setsockopt(int sock, int level, int option_name,
 static int _uds_setsockopt(int sock, int level, int option_name,
 	const void *option_value, socklen_t option_len);
 
-/*
- * Set socket options.
- */
-static int
-__setsockopt(int fd, int level, int option_name, const void * option_value,
-	socklen_t option_len)
-{
-	message m;
-
-	memset(&m, 0, sizeof(m));
-	m.m_lc_vfs_sockopt.fd = fd;
-	m.m_lc_vfs_sockopt.level = level;
-	m.m_lc_vfs_sockopt.name = option_name;
-	m.m_lc_vfs_sockopt.buf = (vir_bytes)option_value;
-	m.m_lc_vfs_sockopt.len = option_len;
-
-	return _syscall(VFS_PROC_NR, VFS_SETSOCKOPT, &m);
-}
-
 int setsockopt(int sock, int level, int option_name,
         const void *option_value, socklen_t option_len)
 {
@@ -54,10 +33,6 @@ int setsockopt(int sock, int level, int option_name,
 	nwio_tcpopt_t tcpopt;
 	nwio_udpopt_t udpopt;
 	struct sockaddr_un uds_addr;
-
-	r = __setsockopt(sock, level, option_name, option_value, option_len);
-	if (r != -1 || (errno != ENOTSOCK && errno != ENOSYS))
-		return r;
 
 	r= ioctl(sock, NWIOGTCPOPT, &tcpopt);
 	if (r != -1 || errno != ENOTTY)
@@ -95,7 +70,11 @@ int setsockopt(int sock, int level, int option_name,
 			option_value, option_len);
 	}
 
-	errno = ENOTSOCK;
+
+#if DEBUG
+	fprintf(stderr, "setsockopt: not implemented for fd %d\n", sock);
+#endif
+	errno= ENOTSOCK;
 	return -1;
 }
 
@@ -267,7 +246,6 @@ static int _uds_setsockopt(int sock, int level, int option_name,
 		return 0;
 	}
 
-#ifdef SO_PASSCRED
 	if (level == SOL_SOCKET && option_name == SO_PASSCRED)
 	{
 		if (option_len != sizeof(i))
@@ -284,7 +262,6 @@ static int _uds_setsockopt(int sock, int level, int option_name,
 		}
 		return 0;
 	}
-#endif
 
 #if DEBUG
 	fprintf(stderr, "_uds_setsocketopt: level %d, name %d\n",

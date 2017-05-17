@@ -1,4 +1,4 @@
-/*	$NetBSD: brk.S,v 1.24 2014/05/23 02:34:19 uebayasi Exp $	*/
+/*	$NetBSD: brk.S,v 1.23 2013/09/12 15:36:15 joerg Exp $	*/
 
 /*-
  * Copyright (c) 1990 The Regents of the University of California.
@@ -36,7 +36,7 @@
 
 #include <machine/asm.h>
 #if defined(SYSLIBC_SCCS) && !defined(lint)
-	RCSID("$NetBSD: brk.S,v 1.24 2014/05/23 02:34:19 uebayasi Exp $")
+	RCSID("$NetBSD: brk.S,v 1.23 2013/09/12 15:36:15 joerg Exp $")
 #endif /* SYSLIBC_SCCS and not lint */
 
 #include "SYS.h"
@@ -90,4 +90,3 @@ err:
 err:
 	jmp	CERROR
 #endif
-END(_brk)

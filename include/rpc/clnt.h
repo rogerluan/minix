@@ -1,4 +1,4 @@
-/*	$NetBSD: clnt.h,v 1.22 2014/06/06 14:31:24 christos Exp $	*/
+/*	$NetBSD: clnt.h,v 1.21 2011/08/30 17:06:20 plunky Exp $	*/
 
 /*
  * Sun RPC is a product of Sun Microsystems, Inc. and is provided for
@@ -451,10 +451,14 @@ struct rpc_createerr {
 	struct rpc_err cf_error; /* useful when cf_stat == RPC_PMAPFAILURE */
 };
 
+#ifdef _REENTRANT
 __BEGIN_DECLS
 extern struct rpc_createerr	*__rpc_createerr(void);
 __END_DECLS
 #define rpc_createerr		(*(__rpc_createerr()))
+#else
+extern struct rpc_createerr rpc_createerr;
+#endif /* _REENTRANT */
 
 /*
  * The simplified interface:

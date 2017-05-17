@@ -1,4 +1,4 @@
-/*	$NetBSD: sockaddr_snprintf.c,v 1.11 2013/12/31 12:58:02 mlelstv Exp $	*/
+/*	$NetBSD: sockaddr_snprintf.c,v 1.10 2013/06/07 17:23:26 christos Exp $	*/
 
 /*-
  * Copyright (c) 2004 The NetBSD Foundation, Inc.
@@ -30,7 +30,7 @@
  */
 #include <sys/cdefs.h>
 #if defined(LIBC_SCCS) && !defined(lint)
-__RCSID("$NetBSD: sockaddr_snprintf.c,v 1.11 2013/12/31 12:58:02 mlelstv Exp $");
+__RCSID("$NetBSD: sockaddr_snprintf.c,v 1.10 2013/06/07 17:23:26 christos Exp $");
 #endif /* LIBC_SCCS and not lint */
 
 #include <sys/types.h>
@@ -38,8 +38,10 @@ __RCSID("$NetBSD: sockaddr_snprintf.c,v 1.11 2013/12/31 12:58:02 mlelstv Exp $")
 #include <sys/un.h>
 
 #include <netinet/in.h>
+#if !defined(__minix)
 #include <netatalk/at.h>
 #include <net/if_dl.h>
+#endif
 
 #include <stdio.h>
 #include <string.h>
@@ -48,6 +50,7 @@ __RCSID("$NetBSD: sockaddr_snprintf.c,v 1.11 2013/12/31 12:58:02 mlelstv Exp $")
 #include <util.h>
 #include <netdb.h>
 
+#if !defined(__minix)
 static int
 debug_at(char *str, size_t len, const struct sockaddr_at *sat)
 {
@@ -108,22 +111,31 @@ debug_dl(char *str, size_t len, const struct sockaddr_dl *sdl)
 	    s[0x0], s[0x1], s[0x2], s[0x3], s[0x4], s[0x5],
 	    s[0x6], s[0x7], s[0x8], s[0x9], s[0xa], s[0xb]);
 }
+#endif /* !defined(__minix) */
 
 int
 sockaddr_snprintf(char * const sbuf, const size_t len, const char * const fmt,
     const struct sockaddr * const sa)
 {
 	const void *a = NULL;
+#if !defined(__minix)
 	char abuf[1024], nbuf[1024], *addr = NULL, *w = NULL;
+#else
+	char abuf[1024], nbuf[1024], *addr = NULL;
+#endif /* !defined(__minix) */
 	char Abuf[1024], pbuf[32], *name = NULL, *port = NULL;
 	char *ebuf = &sbuf[len - 1], *buf = sbuf;
 	const char *ptr, *s;
 	int p = -1;
+#if !defined(__minix)
 	const struct sockaddr_at *sat = NULL;
+#endif /* !defined(__minix) */
 	const struct sockaddr_in *sin4 = NULL;
+#if !defined(__minix)
 	const struct sockaddr_in6 *sin6 = NULL;
 	const struct sockaddr_un *sun = NULL;
 	const struct sockaddr_dl *sdl = NULL;
+#endif /* !defined(__minix) */
 	int na = 1;
 
 #define ADDC(c) do { if (buf < ebuf) *buf++ = c; else buf++; } \
@@ -136,6 +148,7 @@ sockaddr_snprintf(char * const sbuf, const size_t len, const char * const fmt,
 	switch (sa->sa_family) {
 	case AF_UNSPEC:
 		goto done;
+#if !defined(__minix)
 	case AF_APPLETALK:
 		sat = ((const struct sockaddr_at *)(const void *)sa);
 		p = ntohs(sat->sat_port);
@@ -145,13 +158,15 @@ sockaddr_snprintf(char * const sbuf, const size_t len, const char * const fmt,
 		break;
 	case AF_LOCAL:
 		sun = ((const struct sockaddr_un *)(const void *)sa);
-		(void)strlcpy(addr = abuf, sun->sun_path, sizeof(abuf));
+		(void)strlcpy(addr = abuf, sun->sun_path, SUN_LEN(sun));
 		break;
+#endif /* !defined(__minix) */
 	case AF_INET:
 		sin4 = ((const struct sockaddr_in *)(const void *)sa);
 		p = ntohs(sin4->sin_port);
 		a = &sin4->sin_addr;
 		break;
+#if !defined(__minix)
 	case AF_INET6:
 		sin6 = ((const struct sockaddr_in6 *)(const void *)sa);
 		p = ntohs(sin6->sin6_port);
@@ -165,6 +180,7 @@ sockaddr_snprintf(char * const sbuf, const size_t len, const char * const fmt,
 			addr = w;
 		}
 		break;
+#endif /* !defined(__minix) */
 	default:
 		errno = EAFNOSUPPORT;
 		return -1;
@@ -173,7 +189,11 @@ sockaddr_snprintf(char * const sbuf, const size_t len, const char * const fmt,
 	if (addr == abuf)
 		name = addr;
 
+#if !defined(__minix)
 	if (a && getnameinfo(sa, (socklen_t)sa->sa_len, addr = abuf,
+#else
+	if (a && getnameinfo(sa, (socklen_t)len, addr = abuf,
+#endif /* !defined(__minix) */
 	    (unsigned int)sizeof(abuf), NULL, 0,
 	    NI_NUMERICHOST|NI_NUMERICSERV) != 0)
 		return -1;
@@ -203,7 +223,11 @@ sockaddr_snprintf(char * const sbuf, const size_t len, const char * const fmt,
 			ADDS(nbuf);
 			break;
 		case 'l':
+#if !defined(__minix)
 			(void)snprintf(nbuf, sizeof(nbuf), "%d", sa->sa_len);
+#else
+			(void)snprintf(nbuf, sizeof(nbuf), "%d", len);
+#endif /* !defined(__minix) */
 			ADDS(nbuf);
 			break;
 		case 'A':
@@ -212,7 +236,11 @@ sockaddr_snprintf(char * const sbuf, const size_t len, const char * const fmt,
 			else if (!a)
 				ADDNA();
 			else {
+#if !defined(__minix)
 				getnameinfo(sa, (socklen_t)sa->sa_len,
+#else
+				getnameinfo(sa, (socklen_t)len,
+#endif /* !defined(__minix) */
 					name = Abuf,
 					(unsigned int)sizeof(nbuf), NULL, 0, 0);
 				ADDS(name);
@@ -224,12 +252,17 @@ sockaddr_snprintf(char * const sbuf, const size_t len, const char * const fmt,
 			else if (p == -1)
 				ADDNA();
 			else {
+#if !defined(__minix)
 				getnameinfo(sa, (socklen_t)sa->sa_len, NULL, 0,
+#else
+				getnameinfo(sa, (socklen_t)len, NULL, 0,
+#endif /* !defined(__minix) */
 					port = pbuf,
 					(unsigned int)sizeof(pbuf), 0);
 				ADDS(port);
 			}
 			break;
+#if !defined(__minix)
 		case 'I':
 			if (sdl && addr != abuf) {
 				ADDS(abuf);
@@ -291,6 +324,7 @@ sockaddr_snprintf(char * const sbuf, const size_t len, const char * const fmt,
 			}
 			ADDS(nbuf);
 			break;
+#endif /* !defined(__minix) */
 		default:
 			ADDC('%');
 			if (na == 0)

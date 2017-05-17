@@ -12,8 +12,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_CLANG_STATICANALYZER_CORE_PATHSENSITIVE_ANALYSISMANAGER_H
-#define LLVM_CLANG_STATICANALYZER_CORE_PATHSENSITIVE_ANALYSISMANAGER_H
+#ifndef LLVM_CLANG_GR_ANALYSISMANAGER_H
+#define LLVM_CLANG_GR_ANALYSISMANAGER_H
 
 #include "clang/Analysis/AnalysisContext.h"
 #include "clang/StaticAnalyzer/Core/AnalyzerOptions.h"
@@ -22,8 +22,6 @@
 #include "clang/StaticAnalyzer/Core/PathDiagnosticConsumers.h"
 
 namespace clang {
-
-class CodeInjector;
 
 namespace ento {
   class CheckerManager;
@@ -52,8 +50,7 @@ public:
                   StoreManagerCreator storemgr,
                   ConstraintManagerCreator constraintmgr, 
                   CheckerManager *checkerMgr,
-                  AnalyzerOptions &Options,
-                  CodeInjector* injector = nullptr);
+                  AnalyzerOptions &Options);
 
   ~AnalysisManager();
   
@@ -68,8 +65,8 @@ public:
   StoreManagerCreator getStoreManagerCreator() {
     return CreateStoreMgr;
   }
-
-  AnalyzerOptions& getAnalyzerOptions() override {
+  
+  AnalyzerOptions& getAnalyzerOptions() {
     return options;
   }
 
@@ -79,15 +76,15 @@ public:
 
   CheckerManager *getCheckerManager() const { return CheckerMgr; }
 
-  ASTContext &getASTContext() override {
+  virtual ASTContext &getASTContext() {
     return Ctx;
   }
 
-  SourceManager &getSourceManager() override {
+  virtual SourceManager &getSourceManager() {
     return getASTContext().getSourceManager();
   }
 
-  DiagnosticsEngine &getDiagnostic() override {
+  virtual DiagnosticsEngine &getDiagnostic() {
     return Diags;
   }
 
@@ -95,7 +92,7 @@ public:
     return LangOpts;
   }
 
-  ArrayRef<PathDiagnosticConsumer*> getPathDiagnosticConsumers() override {
+  ArrayRef<PathDiagnosticConsumer*> getPathDiagnosticConsumers()  {
     return PathConsumers;
   }
 

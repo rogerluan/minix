@@ -1,4 +1,4 @@
-/*	$NetBSD: ftpd.c,v 1.202 2015/08/10 07:32:49 shm Exp $	*/
+/*	$NetBSD: ftpd.c,v 1.200 2013/07/31 19:50:47 christos Exp $	*/
 
 /*
  * Copyright (c) 1997-2009 The NetBSD Foundation, Inc.
@@ -97,7 +97,7 @@ __COPYRIGHT("@(#) Copyright (c) 1985, 1988, 1990, 1992, 1993, 1994\
 #if 0
 static char sccsid[] = "@(#)ftpd.c	8.5 (Berkeley) 4/28/95";
 #else
-__RCSID("$NetBSD: ftpd.c,v 1.202 2015/08/10 07:32:49 shm Exp $");
+__RCSID("$NetBSD: ftpd.c,v 1.200 2013/07/31 19:50:47 christos Exp $");
 #endif
 #endif /* not lint */
 
@@ -164,8 +164,6 @@ __RCSID("$NetBSD: ftpd.c,v 1.202 2015/08/10 07:32:49 shm Exp $");
 #ifdef USE_PAM
 #include <security/pam_appl.h>
 #endif
-
-#include "pfilter.h"
 
 #define	GLOBAL
 #include "extern.h"
@@ -266,8 +264,8 @@ static enum send_status
 #if !defined(__minix)
 static enum send_status
 		 send_data_with_mmap(int, int, const struct stat *, int);
-#endif /* !defined(__minix) */
 static void	 logrusage(const struct rusage *, const struct rusage *);
+#endif /* !defined(__minix) */
 static void	 logout_utmp(void);
 
 int	main(int, char *[]);
@@ -475,8 +473,6 @@ main(int argc, char *argv[])
 	if (EMPTYSTR(confdir))
 		confdir = _DEFAULT_CONFDIR;
 
-	pfilter_open();
-
 	if (dowtmp) {
 #ifdef SUPPORT_UTMPX
 		ftpd_initwtmpx();
@@ -575,15 +571,6 @@ main(int argc, char *argv[])
 			syslog(LOG_ERR, "failed to write a pid file: %m");
 
 		for (;;) {
-#ifdef __minix
-			/*
-			 * MINIX 3 does not yet support SA_NOCLDWAIT.  Cleaning
-			 * up zombies this way is not perfect, but at least it
-			 * prevents accumulation of zombies over time.
-			 */
-			while (waitpid(-1, NULL, WNOHANG) > 0)
-				;
-#endif /* __minix */
 			if (poll(fds, n, INFTIM) == -1) {
 				if (errno == EINTR)
 					continue;
@@ -717,6 +704,7 @@ main(int argc, char *argv[])
 	sa.sa_handler = toolong;
 	(void) sigaction(SIGALRM, &sa, NULL);
 	sa.sa_handler = sigurg;
+#if !defined(__minix)
 	(void) sigaction(SIGURG, &sa, NULL);
 
 	/* Try to handle urgent data inline */
@@ -731,6 +719,7 @@ main(int argc, char *argv[])
 	    sizeof(int)) < 0)
 		syslog(LOG_WARNING, "setsockopt (SO_KEEPALIVE): %m");
 #endif
+#endif /* !defined(__minix) */
 
 #ifdef	F_SETOWN
 	if (fcntl(fileno(stdin), F_SETOWN, getpid()) == -1)
@@ -1420,7 +1409,6 @@ do_pass(int pass_checked, int pass_rval, const char *passwd)
 		if (rval) {
 			reply(530, "%s", rval == 2 ? "Password expired." :
 			    "Login incorrect.");
-			pfilter_notify(1, rval == 2 ? "exppass" : "badpass");
 			if (logging) {
 				syslog(LOG_NOTICE,
 				    "FTP LOGIN FAILED FROM %s", remoteloghost);
@@ -1464,7 +1452,6 @@ do_pass(int pass_checked, int pass_rval, const char *passwd)
 				*remote_ip = 0;
 		remote_ip[sizeof(remote_ip) - 1] = 0;
 		if (!auth_hostok(lc, remotehost, remote_ip)) {
-			pfilter_notify(1, "bannedhost");
 			syslog(LOG_INFO|LOG_AUTH,
 			    "FTP LOGIN FAILED (HOST) as %s: permission denied.",
 			    pw->pw_name);
@@ -1621,8 +1608,8 @@ do_pass(int pass_checked, int pass_rval, const char *passwd)
 	setsid();
 #if !defined(__minix)
 	setlogin(pw->pw_name);
-#endif /* !defined(__minix) */
 #endif
+#endif /* !defined(__minix) */
 	if (dropprivs ||
 	    (curclass.type != CLASS_REAL && 
 	    ntohs(ctrl_addr.su_port) > IPPORT_RESERVED + 1)) {
@@ -1707,7 +1694,9 @@ retrieve(const char *argv[], const char *name)
 	int (*closefunc)(FILE *) = NULL;
 	int dolog, sendrv, closerv, stderrfd, isconversion, isdata, isls;
 	struct timeval start, finish, td, *tdp;
+#if !defined(__minix)
 	struct rusage rusage_before, rusage_after;
+#endif /* !defined(__minix) */
 	const char *dispname;
 	const char *error;
 
@@ -1788,19 +1777,25 @@ retrieve(const char *argv[], const char *name)
 	if (dout == NULL)
 		goto done;
 
+#if !defined(__minix)
 	(void)getrusage(RUSAGE_SELF, &rusage_before);
+#endif /* !defined(__minix) */
 	(void)gettimeofday(&start, NULL);
 	sendrv = send_data(fin, dout, &st, isdata);
 	(void)gettimeofday(&finish, NULL);
+#if !defined(__minix)
 	(void)getrusage(RUSAGE_SELF, &rusage_after);
+#endif /* !defined(__minix) */
 	closedataconn(dout);		/* close now to affect timing stats */
 	timersub(&finish, &start, &td);
 	tdp = &td;
  done:
 	if (dolog) {
 		logxfer("get", byte_count, name, NULL, tdp, error);
+#if !defined(__minix)
 		if (tdp != NULL)
 			logrusage(&rusage_before, &rusage_after);
+#endif /* !defined(__minix) */
 	}
 	closerv = (*closefunc)(fin);
 	if (sendrv == 0) {
@@ -2019,6 +2014,7 @@ dataconn(const char *name, off_t size, const char *fmode)
 		}
 		(void) close(pdata);
 		pdata = s;
+#if !defined(__minix)
 		switch (from.su_family) {
 		case AF_INET:
 #ifdef IP_TOS
@@ -2030,6 +2026,7 @@ dataconn(const char *name, off_t size, const char *fmode)
 			break;
 #endif
 		}
+#endif /* !defined(__minix) */
 		/* Set keepalives on the socket to detect dropped conns. */
 #ifdef SO_KEEPALIVE
 		keepalive = 1;
@@ -2246,14 +2243,14 @@ send_data_with_mmap(int filefd, int netfd, const struct stat *st, int isdata)
 				goto try_read;
 			return (SS_FILE_ERROR);
 		}
-#if !defined(__minix)
+#ifndef __minix
 		(void) madvise(win, mapsize, MADV_SEQUENTIAL);
-#endif /* !defined(__minix) */
+#endif
 		error = write_data(netfd, win, mapsize, &bufrem, &then,
 		    isdata);
-#if !defined(__minix)
+#ifndef __minix
 		(void) madvise(win, mapsize, MADV_DONTNEED);
-#endif /* !defined(__minix) */
+#endif
 		munmap(win, mapsize);
 		if (urgflag && handleoobcmd())
 			return (SS_ABORTED);
@@ -3503,10 +3500,8 @@ send_file_list(const char *whichf)
 		while ((dir = readdir(dirp)) != NULL) {
 			char nbuf[MAXPATHLEN];
 
-			if (urgflag && handleoobcmd()) {
-				(void) closedir(dirp);
+			if (urgflag && handleoobcmd())
 				goto cleanup_send_file_list;
-			}
 
 			if (ISDOTDIR(dir->d_name) || ISDOTDOTDIR(dir->d_name))
 				continue;
@@ -3529,10 +3524,8 @@ send_file_list(const char *whichf)
 				if (dout == NULL) {
 					dout = dataconn("file list", (off_t)-1,
 						"w");
-					if (dout == NULL) {
-						(void) closedir(dirp);
+					if (dout == NULL)
 						goto cleanup_send_file_list;
-					}
 					transflag = 1;
 				}
 				p = nbuf;
@@ -3679,6 +3672,7 @@ logxfer(const char *command, off_t bytes, const char *file1, const char *file2,
 	}
 }
 
+#if !defined(__minix)
 /*
  * Log the resource usage.
  *
@@ -3703,6 +3697,7 @@ logrusage(const struct rusage *rusage_before,
 	    rusage_after->ru_majflt - rusage_before->ru_majflt,
 	    rusage_after->ru_nswap - rusage_before->ru_nswap);
 }
+#endif /* !defined(__minix) */
 
 /*
  * Determine if `password' is valid for user given in `pw'.

@@ -55,7 +55,7 @@ namespace {
 /// \brief Returns the alignment of the type source info data block.
 unsigned TypeLoc::getLocalAlignmentForType(QualType Ty) {
   if (Ty.isNull()) return 1;
-  return TypeAligner().Visit(TypeLoc(Ty, nullptr));
+  return TypeAligner().Visit(TypeLoc(Ty, 0));
 }
 
 namespace {
@@ -73,7 +73,7 @@ namespace {
 /// \brief Returns the size of the type source info data block.
 unsigned TypeLoc::getFullDataSizeForType(QualType Ty) {
   unsigned Total = 0;
-  TypeLoc TyLoc(Ty, nullptr);
+  TypeLoc TyLoc(Ty, 0);
   unsigned MaxAlign = 1;
   while (!TyLoc.isNull()) {
     unsigned Align = getLocalAlignmentForType(TyLoc.getType());
@@ -310,14 +310,6 @@ TypeLoc TypeLoc::IgnoreParensImpl(TypeLoc TL) {
   while (ParenTypeLoc PTL = TL.getAs<ParenTypeLoc>())
     TL = PTL.getInnerLoc();
   return TL;
-}
-
-void TypeOfTypeLoc::initializeLocal(ASTContext &Context,
-                                       SourceLocation Loc) {
-  TypeofLikeTypeLoc<TypeOfTypeLoc, TypeOfType, TypeOfTypeLocInfo>
-      ::initializeLocal(Context, Loc);
-  this->getLocalData()->UnderlyingTInfo = Context.getTrivialTypeSourceInfo(
-      getUnderlyingType(), Loc);
 }
 
 void ElaboratedTypeLoc::initializeLocal(ASTContext &Context, 

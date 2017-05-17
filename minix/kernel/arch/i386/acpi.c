@@ -1,6 +1,7 @@
 
 #include <string.h>
 
+#include "kernel/kernel.h"
 #include "acpi.h"
 #include "arch_proto.h"
 

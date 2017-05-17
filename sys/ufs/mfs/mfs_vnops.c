@@ -1,4 +1,4 @@
-/*	$NetBSD: mfs_vnops.c,v 1.56 2015/01/14 11:21:31 hannken Exp $	*/
+/*	$NetBSD: mfs_vnops.c,v 1.54 2010/06/24 13:03:19 hannken Exp $	*/
 
 /*
  * Copyright (c) 1989, 1993
@@ -32,7 +32,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: mfs_vnops.c,v 1.56 2015/01/14 11:21:31 hannken Exp $");
+__KERNEL_RCSID(0, "$NetBSD: mfs_vnops.c,v 1.54 2010/06/24 13:03:19 hannken Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -68,8 +68,6 @@ const struct vnodeopv_entry_desc mfs_vnodeop_entries[] = {
 	{ &vop_setattr_desc, mfs_setattr },		/* setattr */
 	{ &vop_read_desc, mfs_read },			/* read */
 	{ &vop_write_desc, mfs_write },			/* write */
-	{ &vop_fallocate_desc, genfs_eopnotsupp },	/* fallocate */
-	{ &vop_fdiscard_desc, genfs_eopnotsupp },	/* fdiscard */
 	{ &vop_ioctl_desc, mfs_ioctl },			/* ioctl */
 	{ &vop_poll_desc, mfs_poll },			/* poll */
 	{ &vop_revoke_desc, mfs_revoke },		/* revoke */
@@ -280,8 +278,8 @@ mfs_inactive(void *v)
 	if (bufq_peek(mfsp->mfs_buflist) != NULL)
 		panic("mfs_inactive: not inactive (mfs_buflist %p)",
 			bufq_peek(mfsp->mfs_buflist));
-
-	return VOCALL(spec_vnodeop_p,  VOFFSET(vop_inactive), ap);
+	VOP_UNLOCK(vp);
+	return (0);
 }
 
 /*
@@ -308,7 +306,7 @@ mfs_reclaim(void *v)
 		kmem_free(mfsp, sizeof(*mfsp));
 	}
 
-	return VOCALL(spec_vnodeop_p,  VOFFSET(vop_reclaim), ap);
+	return (0);
 }
 
 /*

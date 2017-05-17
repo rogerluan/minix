@@ -164,11 +164,6 @@
 /** Link Speed Setting. */
 #define E1000_REG_STATUS_SPEED	((1 << 6) | (1 << 7))
 
-#define E1000_REG_STATUS_SPEED_10	(0 << 6)	/* 10 Mb/s */
-#define E1000_REG_STATUS_SPEED_100	(1 << 6)	/* 100 Mb/s */
-#define E1000_REG_STATUS_SPEED_1000_A	(2 << 6)	/* 1000 Mb/s */
-#define E1000_REG_STATUS_SPEED_1000_B	(3 << 6)	/* 1000 Mb/s */
-
 /**
  * @}
  */
@@ -250,10 +245,7 @@
 /** Receive Enable. */
 #define E1000_REG_RCTL_EN	(1 << 1)
 
-/** Unicast Promiscuous Enable. */
-#define E1000_REG_RCTL_UPE	(1 << 3)
-
-/** Multicast Promiscuous Enable. */
+/** Multicast Promiscious Enable. */
 #define E1000_REG_RCTL_MPE	(1 << 4)
 
 /** Broadcast Accept Mode. */

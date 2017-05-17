@@ -20,6 +20,7 @@
 #include "clang/Lex/ModuleLoader.h"
 #include "clang/Lex/Preprocessor.h"
 #include "clang/Lex/PreprocessorOptions.h"
+#include "llvm/Config/config.h"
 #include "gtest/gtest.h"
 
 using namespace llvm;
@@ -38,7 +39,7 @@ protected:
       TargetOpts(new TargetOptions)
   {
     TargetOpts->Triple = "x86_64-apple-darwin11.1.0";
-    Target = TargetInfo::CreateTargetInfo(Diags, TargetOpts);
+    Target = TargetInfo::CreateTargetInfo(Diags, &*TargetOpts);
   }
 
   FileSystemOptions FileMgrOpts;
@@ -47,27 +48,22 @@ protected:
   DiagnosticsEngine Diags;
   SourceManager SourceMgr;
   LangOptions LangOpts;
-  std::shared_ptr<TargetOptions> TargetOpts;
+  IntrusiveRefCntPtr<TargetOptions> TargetOpts;
   IntrusiveRefCntPtr<TargetInfo> Target;
 };
 
 class VoidModuleLoader : public ModuleLoader {
-  ModuleLoadResult loadModule(SourceLocation ImportLoc, 
-                              ModuleIdPath Path,
-                              Module::NameVisibilityKind Visibility,
-                              bool IsInclusionDirective) override {
+  virtual ModuleLoadResult loadModule(SourceLocation ImportLoc, 
+                                      ModuleIdPath Path,
+                                      Module::NameVisibilityKind Visibility,
+                                      bool IsInclusionDirective) {
     return ModuleLoadResult();
   }
 
-  void makeModuleVisible(Module *Mod,
-                         Module::NameVisibilityKind Visibility,
-                         SourceLocation ImportLoc,
-                         bool Complain) override { }
-
-  GlobalModuleIndex *loadGlobalModuleIndex(SourceLocation TriggerLoc) override
-    { return nullptr; }
-  bool lookupMissingImports(StringRef Name, SourceLocation TriggerLoc) override
-    { return 0; };
+  virtual void makeModuleVisible(Module *Mod,
+                                 Module::NameVisibilityKind Visibility,
+                                 SourceLocation ImportLoc,
+                                 bool Complain) { }
 };
 
 TEST_F(PPConditionalDirectiveRecordTest, PPRecAPI) {
@@ -90,20 +86,20 @@ TEST_F(PPConditionalDirectiveRecordTest, PPRecAPI) {
       "#endif\n"
       "9\n";
 
-  std::unique_ptr<MemoryBuffer> Buf = MemoryBuffer::getMemBuffer(source);
-  SourceMgr.setMainFileID(SourceMgr.createFileID(std::move(Buf)));
+  MemoryBuffer *buf = MemoryBuffer::getMemBuffer(source);
+  SourceMgr.createMainFileIDForMemBuffer(buf);
 
   VoidModuleLoader ModLoader;
   HeaderSearch HeaderInfo(new HeaderSearchOptions, SourceMgr, Diags, LangOpts, 
-                          Target.get());
-  Preprocessor PP(new PreprocessorOptions(), Diags, LangOpts, SourceMgr,
-                  HeaderInfo, ModLoader,
-                  /*IILookup =*/nullptr,
-                  /*OwnsHeaderSearch =*/false);
-  PP.Initialize(*Target);
+                          Target.getPtr());
+  Preprocessor PP(new PreprocessorOptions(), Diags, LangOpts,Target.getPtr(),
+                  SourceMgr, HeaderInfo, ModLoader,
+                  /*IILookup =*/ 0,
+                  /*OwnsHeaderSearch =*/false,
+                  /*DelayInitialization =*/ false);
   PPConditionalDirectiveRecord *
     PPRec = new PPConditionalDirectiveRecord(SourceMgr);
-  PP.addPPCallbacks(std::unique_ptr<PPCallbacks>(PPRec));
+  PP.addPPCallbacks(PPRec);
   PP.EnterMainSourceFile();
 
   std::vector<Token> toks;

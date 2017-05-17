@@ -29,14 +29,14 @@ class LLVMContext;
 //                            TerminatorInst Class
 //===----------------------------------------------------------------------===//
 
-/// Subclasses of this class are all able to terminate a basic
-/// block. Thus, these are all the flow control type of operations.
+/// TerminatorInst - Subclasses of this class are all able to terminate a basic
+/// block.  Thus, these are all the flow control type of operations.
 ///
 class TerminatorInst : public Instruction {
 protected:
   TerminatorInst(Type *Ty, Instruction::TermOps iType,
                  Use *Ops, unsigned NumOps,
-                 Instruction *InsertBefore = nullptr)
+                 Instruction *InsertBefore = 0)
     : Instruction(Ty, iType, Ops, NumOps, InsertBefore) {}
 
   TerminatorInst(Type *Ty, Instruction::TermOps iType,
@@ -51,19 +51,23 @@ protected:
   virtual BasicBlock *getSuccessorV(unsigned idx) const = 0;
   virtual unsigned getNumSuccessorsV() const = 0;
   virtual void setSuccessorV(unsigned idx, BasicBlock *B) = 0;
+  virtual TerminatorInst *clone_impl() const = 0;
 public:
 
-  /// Return the number of successors that this terminator has.
+  /// getNumSuccessors - Return the number of successors that this terminator
+  /// has.
   unsigned getNumSuccessors() const {
     return getNumSuccessorsV();
   }
 
-  /// Return the specified successor.
+  /// getSuccessor - Return the specified successor.
+  ///
   BasicBlock *getSuccessor(unsigned idx) const {
     return getSuccessorV(idx);
   }
 
-  /// Update the specified successor to point at the provided block.
+  /// setSuccessor - Update the specified successor to point at the provided
+  /// block.
   void setSuccessor(unsigned idx, BasicBlock *B) {
     setSuccessorV(idx, B);
   }
@@ -87,7 +91,7 @@ class UnaryInstruction : public Instruction {
 
 protected:
   UnaryInstruction(Type *Ty, unsigned iType, Value *V,
-                   Instruction *IB = nullptr)
+                   Instruction *IB = 0)
     : Instruction(Ty, iType, &Op<0>(), 1, IB) {
     Op<0>() = V;
   }
@@ -139,7 +143,7 @@ protected:
                  const Twine &Name, Instruction *InsertBefore);
   BinaryOperator(BinaryOps iType, Value *S1, Value *S2, Type *Ty,
                  const Twine &Name, BasicBlock *InsertAtEnd);
-  BinaryOperator *clone_impl() const override;
+  virtual BinaryOperator *clone_impl() const LLVM_OVERRIDE;
 public:
   // allocate space for exactly two operands
   void *operator new(size_t s) {
@@ -149,23 +153,23 @@ public:
   /// Transparently provide more efficient getOperand methods.
   DECLARE_TRANSPARENT_OPERAND_ACCESSORS(Value);
 
-  /// Construct a binary instruction, given the opcode and the two
+  /// Create() - Construct a binary instruction, given the opcode and the two
   /// operands.  Optionally (if InstBefore is specified) insert the instruction
   /// into a BasicBlock right before the specified instruction.  The specified
   /// Instruction is allowed to be a dereferenced end iterator.
   ///
   static BinaryOperator *Create(BinaryOps Op, Value *S1, Value *S2,
                                 const Twine &Name = Twine(),
-                                Instruction *InsertBefore = nullptr);
+                                Instruction *InsertBefore = 0);
 
-  /// Construct a binary instruction, given the opcode and the two
+  /// Create() - Construct a binary instruction, given the opcode and the two
   /// operands.  Also automatically insert this instruction to the end of the
   /// BasicBlock specified.
   ///
   static BinaryOperator *Create(BinaryOps Op, Value *S1, Value *S2,
                                 const Twine &Name, BasicBlock *InsertAtEnd);
 
-  /// These methods just forward to Create, and are useful when you
+  /// Create* - These methods just forward to Create, and are useful when you
   /// statically know what type of instruction you're going to create.  These
   /// helpers just save some typing.
 #define HANDLE_BINARY_INST(N, OPC, CLASS) \
@@ -277,37 +281,40 @@ public:
   /// Helper functions to construct and inspect unary operations (NEG and NOT)
   /// via binary operators SUB and XOR:
   ///
-  /// Create the NEG and NOT instructions out of SUB and XOR instructions.
+  /// CreateNeg, CreateNot - Create the NEG and NOT
+  ///     instructions out of SUB and XOR instructions.
   ///
   static BinaryOperator *CreateNeg(Value *Op, const Twine &Name = "",
-                                   Instruction *InsertBefore = nullptr);
+                                   Instruction *InsertBefore = 0);
   static BinaryOperator *CreateNeg(Value *Op, const Twine &Name,
                                    BasicBlock *InsertAtEnd);
   static BinaryOperator *CreateNSWNeg(Value *Op, const Twine &Name = "",
-                                      Instruction *InsertBefore = nullptr);
+                                      Instruction *InsertBefore = 0);
   static BinaryOperator *CreateNSWNeg(Value *Op, const Twine &Name,
                                       BasicBlock *InsertAtEnd);
   static BinaryOperator *CreateNUWNeg(Value *Op, const Twine &Name = "",
-                                      Instruction *InsertBefore = nullptr);
+                                      Instruction *InsertBefore = 0);
   static BinaryOperator *CreateNUWNeg(Value *Op, const Twine &Name,
                                       BasicBlock *InsertAtEnd);
   static BinaryOperator *CreateFNeg(Value *Op, const Twine &Name = "",
-                                    Instruction *InsertBefore = nullptr);
+                                    Instruction *InsertBefore = 0);
   static BinaryOperator *CreateFNeg(Value *Op, const Twine &Name,
                                     BasicBlock *InsertAtEnd);
   static BinaryOperator *CreateNot(Value *Op, const Twine &Name = "",
-                                   Instruction *InsertBefore = nullptr);
+                                   Instruction *InsertBefore = 0);
   static BinaryOperator *CreateNot(Value *Op, const Twine &Name,
                                    BasicBlock *InsertAtEnd);
 
-  /// Check if the given Value is a NEG, FNeg, or NOT instruction.
+  /// isNeg, isFNeg, isNot - Check if the given Value is a
+  /// NEG, FNeg, or NOT instruction.
   ///
   static bool isNeg(const Value *V);
   static bool isFNeg(const Value *V, bool IgnoreZeroSign=false);
   static bool isNot(const Value *V);
 
-  /// Helper functions to extract the unary argument of a NEG, FNEG or NOT
-  /// operation implemented via Sub, FSub, or Xor.
+  /// getNegArgument, getNotArgument - Helper functions to extract the
+  ///     unary argument of a NEG, FNEG or NOT operation implemented via
+  ///     Sub, FSub, or Xor.
   ///
   static const Value *getNegArgument(const Value *BinOp);
   static       Value *getNegArgument(      Value *BinOp);
@@ -320,41 +327,36 @@ public:
     return static_cast<BinaryOps>(Instruction::getOpcode());
   }
 
-  /// Exchange the two operands to this instruction.
+  /// swapOperands - Exchange the two operands to this instruction.
   /// This instruction is safe to use on any binary instruction and
   /// does not modify the semantics of the instruction.  If the instruction
   /// cannot be reversed (ie, it's a Div), then return true.
   ///
   bool swapOperands();
 
-  /// Set or clear the nsw flag on this instruction, which must be an operator
-  /// which supports this flag. See LangRef.html for the meaning of this flag.
+  /// setHasNoUnsignedWrap - Set or clear the nsw flag on this instruction,
+  /// which must be an operator which supports this flag. See LangRef.html
+  /// for the meaning of this flag.
   void setHasNoUnsignedWrap(bool b = true);
 
-  /// Set or clear the nsw flag on this instruction, which must be an operator
-  /// which supports this flag. See LangRef.html for the meaning of this flag.
+  /// setHasNoSignedWrap - Set or clear the nsw flag on this instruction,
+  /// which must be an operator which supports this flag. See LangRef.html
+  /// for the meaning of this flag.
   void setHasNoSignedWrap(bool b = true);
 
-  /// Set or clear the exact flag on this instruction, which must be an operator
-  /// which supports this flag. See LangRef.html for the meaning of this flag.
+  /// setIsExact - Set or clear the exact flag on this instruction,
+  /// which must be an operator which supports this flag. See LangRef.html
+  /// for the meaning of this flag.
   void setIsExact(bool b = true);
 
-  /// Determine whether the no unsigned wrap flag is set.
+  /// hasNoUnsignedWrap - Determine whether the no unsigned wrap flag is set.
   bool hasNoUnsignedWrap() const;
 
-  /// Determine whether the no signed wrap flag is set.
+  /// hasNoSignedWrap - Determine whether the no signed wrap flag is set.
   bool hasNoSignedWrap() const;
 
-  /// Determine whether the exact flag is set.
+  /// isExact - Determine whether the exact flag is set.
   bool isExact() const;
-
-  /// Convenience method to copy supported wrapping, exact, and fast-math flags
-  /// from V to this instruction.
-  void copyIRFlags(const Value *V);
-  
-  /// Logical 'and' of any supported wrapping, exact, and fast-math flags of
-  /// V and this instruction.
-  void andIRFlags(const Value *V);
 
   // Methods for support type inquiry through isa, cast, and dyn_cast:
   static inline bool classof(const Instruction *I) {
@@ -376,18 +378,18 @@ DEFINE_TRANSPARENT_OPERAND_ACCESSORS(BinaryOperator, Value)
 //                               CastInst Class
 //===----------------------------------------------------------------------===//
 
-/// This is the base class for all instructions that perform data
+/// CastInst - This is the base class for all instructions that perform data
 /// casts. It is simply provided so that instruction category testing
 /// can be performed with code like:
 ///
 /// if (isa<CastInst>(Instr)) { ... }
 /// @brief Base class of casting instructions.
 class CastInst : public UnaryInstruction {
-  void anchor() override;
+  virtual void anchor() LLVM_OVERRIDE;
 protected:
   /// @brief Constructor with insert-before-instruction semantics for subclasses
   CastInst(Type *Ty, unsigned iType, Value *S,
-           const Twine &NameStr = "", Instruction *InsertBefore = nullptr)
+           const Twine &NameStr = "", Instruction *InsertBefore = 0)
     : UnaryInstruction(Ty, iType, S, InsertBefore) {
     setName(NameStr);
   }
@@ -409,7 +411,7 @@ public:
     Value *S,                ///< The value to be casted (operand 0)
     Type *Ty,          ///< The type to which cast should be made
     const Twine &Name = "", ///< Name for the instruction
-    Instruction *InsertBefore = nullptr ///< Place to insert the instruction
+    Instruction *InsertBefore = 0 ///< Place to insert the instruction
   );
   /// Provides a way to construct any of the CastInst subclasses using an
   /// opcode instead of the subclass's constructor. The opcode must be in the
@@ -430,7 +432,7 @@ public:
     Value *S,                ///< The value to be casted (operand 0)
     Type *Ty,          ///< The type to which cast should be made
     const Twine &Name = "", ///< Name for the instruction
-    Instruction *InsertBefore = nullptr ///< Place to insert the instruction
+    Instruction *InsertBefore = 0 ///< Place to insert the instruction
   );
 
   /// @brief Create a ZExt or BitCast cast instruction
@@ -446,7 +448,7 @@ public:
     Value *S,                ///< The value to be casted (operand 0)
     Type *Ty,          ///< The type to which cast should be made
     const Twine &Name = "", ///< Name for the instruction
-    Instruction *InsertBefore = nullptr ///< Place to insert the instruction
+    Instruction *InsertBefore = 0 ///< Place to insert the instruction
   );
 
   /// @brief Create a SExt or BitCast cast instruction
@@ -457,7 +459,7 @@ public:
     BasicBlock *InsertAtEnd  ///< The block to insert the instruction into
   );
 
-  /// @brief Create a BitCast AddrSpaceCast, or a PtrToInt cast instruction.
+  /// @brief Create a BitCast or a PtrToInt cast instruction
   static CastInst *CreatePointerCast(
     Value *S,                ///< The pointer value to be casted (operand 0)
     Type *Ty,          ///< The type to which operand is casted
@@ -465,37 +467,8 @@ public:
     BasicBlock *InsertAtEnd  ///< The block to insert the instruction into
   );
 
-  /// @brief Create a BitCast, AddrSpaceCast or a PtrToInt cast instruction.
+  /// @brief Create a BitCast or a PtrToInt cast instruction
   static CastInst *CreatePointerCast(
-    Value *S,                ///< The pointer value to be casted (operand 0)
-    Type *Ty,          ///< The type to which cast should be made
-    const Twine &Name = "", ///< Name for the instruction
-    Instruction *InsertBefore = nullptr ///< Place to insert the instruction
-  );
-
-  /// @brief Create a BitCast or an AddrSpaceCast cast instruction.
-  static CastInst *CreatePointerBitCastOrAddrSpaceCast(
-    Value *S,                ///< The pointer value to be casted (operand 0)
-    Type *Ty,          ///< The type to which operand is casted
-    const Twine &Name, ///< The name for the instruction
-    BasicBlock *InsertAtEnd  ///< The block to insert the instruction into
-  );
-
-  /// @brief Create a BitCast or an AddrSpaceCast cast instruction.
-  static CastInst *CreatePointerBitCastOrAddrSpaceCast(
-    Value *S,                ///< The pointer value to be casted (operand 0)
-    Type *Ty,          ///< The type to which cast should be made
-    const Twine &Name = "", ///< Name for the instruction
-    Instruction *InsertBefore = 0 ///< Place to insert the instruction
-  );
-
-  /// @brief Create a BitCast, a PtrToInt, or an IntToPTr cast instruction.
-  ///
-  /// If the value is a pointer type and the destination an integer type,
-  /// creates a PtrToInt cast. If the value is an integer type and the
-  /// destination a pointer type, creates an IntToPtr cast. Otherwise, creates
-  /// a bitcast.
-  static CastInst *CreateBitOrPointerCast(
     Value *S,                ///< The pointer value to be casted (operand 0)
     Type *Ty,          ///< The type to which cast should be made
     const Twine &Name = "", ///< Name for the instruction
@@ -508,7 +481,7 @@ public:
     Type *Ty,          ///< The type to which cast should be made
     bool isSigned,           ///< Whether to regard S as signed or not
     const Twine &Name = "", ///< Name for the instruction
-    Instruction *InsertBefore = nullptr ///< Place to insert the instruction
+    Instruction *InsertBefore = 0 ///< Place to insert the instruction
   );
 
   /// @brief Create a ZExt, BitCast, or Trunc for int -> int casts.
@@ -525,7 +498,7 @@ public:
     Value *S,                ///< The floating point value to be casted
     Type *Ty,          ///< The floating point type to cast to
     const Twine &Name = "", ///< Name for the instruction
-    Instruction *InsertBefore = nullptr ///< Place to insert the instruction
+    Instruction *InsertBefore = 0 ///< Place to insert the instruction
   );
 
   /// @brief Create an FPExt, BitCast, or FPTrunc for fp -> fp casts
@@ -541,7 +514,7 @@ public:
     Value *S,                ///< The value to be casted (operand 0)
     Type *Ty,          ///< The type to which cast should be made
     const Twine &Name = "", ///< Name for the instruction
-    Instruction *InsertBefore = nullptr ///< Place to insert the instruction
+    Instruction *InsertBefore = 0 ///< Place to insert the instruction
   );
 
   /// @brief Create a Trunc or BitCast cast instruction
@@ -562,17 +535,6 @@ public:
   static bool isBitCastable(
     Type *SrcTy, ///< The Type from which the value should be cast.
     Type *DestTy ///< The Type to which the value should be cast.
-  );
-
-  /// @brief Check whether a bitcast, inttoptr, or ptrtoint cast between these
-  /// types is valid and a no-op.
-  ///
-  /// This ensures that any pointer<->integer cast has enough bits in the
-  /// integer and any other cast is a bitcast.
-  static bool isBitOrNoopPointerCastable(
-    Type *SrcTy, ///< The Type from which the value should be cast.
-    Type *DestTy, ///< The Type to which the value should be cast.
-    const DataLayout *Layout = 0 ///< Optional DataLayout.
   );
 
   /// Returns the opcode necessary to cast Val into Ty using usual casting
@@ -618,11 +580,6 @@ public:
   /// @brief Determine if this cast is a no-op cast.
   bool isNoopCast(
     Type *IntPtrTy ///< Integer type corresponding to pointer
-  ) const;
-
-  /// @brief Determine if this cast is a no-op cast.
-  bool isNoopCast(
-    const DataLayout *DL ///< DataLayout to get the Int Ptr type from.
   ) const;
 
   /// Determine how a pair of casts can be eliminated, if they can be at all.
@@ -679,13 +636,13 @@ class CmpInst : public Instruction {
 protected:
   CmpInst(Type *ty, Instruction::OtherOps op, unsigned short pred,
           Value *LHS, Value *RHS, const Twine &Name = "",
-          Instruction *InsertBefore = nullptr);
+          Instruction *InsertBefore = 0);
 
   CmpInst(Type *ty, Instruction::OtherOps op, unsigned short pred,
           Value *LHS, Value *RHS, const Twine &Name,
           BasicBlock *InsertAtEnd);
 
-  void anchor() override; // Out of line virtual method.
+  virtual void anchor() LLVM_OVERRIDE; // Out of line virtual method.
 public:
   /// This enumeration lists the possible predicates for CmpInst subclasses.
   /// Values in the range 0-31 are reserved for FCmpInst, while values in the
@@ -739,7 +696,7 @@ public:
   static CmpInst *Create(OtherOps Op,
                          unsigned short predicate, Value *S1,
                          Value *S2, const Twine &Name = "",
-                         Instruction *InsertBefore = nullptr);
+                         Instruction *InsertBefore = 0);
 
   /// Construct a compare instruction, given the opcode, the predicate and the
   /// two operands.  Also automatically insert this instruction to the end of

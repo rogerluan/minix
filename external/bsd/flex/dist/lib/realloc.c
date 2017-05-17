@@ -1,3 +1,5 @@
+/*	$NetBSD: realloc.c,v 1.1.1.1 2013/04/06 14:05:53 christos Exp $	*/
+
 #include <config.h>
 
 #include <stdlib.h>

@@ -2,13 +2,11 @@
 PROG=	fxp
 SRCS=	fxp.c mii.c
 
-FILES=${PROG}.conf
-FILESNAME=${PROG}
+FILES=$(PROG).conf
+FILESNAME=$(PROG)
 FILESDIR= /etc/system.conf.d
 
-DPADD+=	${LIBNETDRIVER} ${LIBSYS}
-LDADD+=	-lnetdriver -lsys
-
-WARNS?= 5
+DPADD+=	${LIBNETDRIVER} ${LIBSYS} ${LIBTIMERS}
+LDADD+=	-lnetdriver -lsys -ltimers
 
 .include <minix.service.mk>

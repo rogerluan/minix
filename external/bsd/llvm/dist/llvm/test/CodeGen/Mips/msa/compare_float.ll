@@ -32,9 +32,12 @@ define void @false_v2f64(<2 x i64>* %c, <2 x double>* %a, <2 x double>* %b) noun
   store <2 x i64> %4, <2 x i64>* %c
   ret void
 
-  ; (setcc $a, $b, SETFALSE) is always folded
+  ; FIXME: This code is correct, but poor. Ideally it would be similar to
+  ;        the code in @false_v4f32
   ; CHECK-DAG: ldi.b [[R1:\$w[0-9]+]], 0
-  ; CHECK-DAG: st.w [[R1]], 0($4)
+  ; CHECK-DAG: slli.d [[R3:\$w[0-9]+]], [[R1]], 63
+  ; CHECK-DAG: srai.d [[R4:\$w[0-9]+]], [[R3]], 63
+  ; CHECK-DAG: st.d [[R4]], 0($4)
   ; CHECK: .size false_v2f64
 }
 
@@ -506,9 +509,12 @@ define void @true_v2f64(<2 x i64>* %c, <2 x double>* %a, <2 x double>* %b) nounw
   store <2 x i64> %4, <2 x i64>* %c
   ret void
 
-  ; (setcc $a, $b, SETTRUE) is always folded.
-  ; CHECK-DAG: ldi.b [[R1:\$w[0-9]+]], -1
-  ; CHECK-DAG: st.w [[R1]], 0($4)
+  ; FIXME: This code is correct, but poor. Ideally it would be similar to
+  ;        the code in @true_v4f32
+  ; CHECK-DAG: ldi.d [[R1:\$w[0-9]+]], 1
+  ; CHECK-DAG: slli.d [[R3:\$w[0-9]+]], [[R1]], 63
+  ; CHECK-DAG: srai.d [[R4:\$w[0-9]+]], [[R3]], 63
+  ; CHECK-DAG: st.d [[R4]], 0($4)
   ; CHECK: .size true_v2f64
 }
 
@@ -525,8 +531,7 @@ define void @bsel_v4f32(<4 x float>* %d, <4 x float>* %a, <4 x float>* %b,
   %4 = fcmp ogt <4 x float> %1, %2
   ; CHECK-DAG: fclt.w [[R4:\$w[0-9]+]], [[R2]], [[R1]]
   %5 = select <4 x i1> %4, <4 x float> %1, <4 x float> %3
-  ; Note that IfSet and IfClr are swapped since the condition is inverted
-  ; CHECK-DAG: bsel.v [[R4]], [[R3]], [[R1]]
+  ; CHECK-DAG: bsel.v [[R4]], [[R1]], [[R3]]
   store <4 x float> %5, <4 x float>* %d
   ; CHECK-DAG: st.w [[R4]], 0($4)
 
@@ -547,8 +552,7 @@ define void @bsel_v2f64(<2 x double>* %d, <2 x double>* %a, <2 x double>* %b,
   %4 = fcmp ogt <2 x double> %1, %2
   ; CHECK-DAG: fclt.d [[R4:\$w[0-9]+]], [[R2]], [[R1]]
   %5 = select <2 x i1> %4, <2 x double> %1, <2 x double> %3
-  ; Note that IfSet and IfClr are swapped since the condition is inverted
-  ; CHECK-DAG: bsel.v [[R4]], [[R3]], [[R1]]
+  ; CHECK-DAG: bsel.v [[R4]], [[R1]], [[R3]]
   store <2 x double> %5, <2 x double>* %d
   ; CHECK-DAG: st.d [[R4]], 0($4)
 
@@ -567,8 +571,7 @@ define void @bseli_v4f32(<4 x float>* %d, <4 x float>* %a, <4 x float>* %b,
   %3 = fcmp ogt <4 x float> %1, %2
   ; CHECK-DAG: fclt.w [[R4:\$w[0-9]+]], [[R2]], [[R1]]
   %4 = select <4 x i1> %3, <4 x float> %1, <4 x float> zeroinitializer
-  ; Note that IfSet and IfClr are swapped since the condition is inverted
-  ; CHECK-DAG: bsel.v [[R4]], [[R3:\$w[0-9]+]], [[R1]]
+  ; CHECK-DAG: bsel.v [[R4]], [[R1]], [[R3:\$w[0-9]+]]
   store <4 x float> %4, <4 x float>* %d
   ; CHECK-DAG: st.w [[R4]], 0($4)
 
@@ -587,8 +590,7 @@ define void @bseli_v2f64(<2 x double>* %d, <2 x double>* %a, <2 x double>* %b,
   %3 = fcmp ogt <2 x double> %1, %2
   ; CHECK-DAG: fclt.d [[R4:\$w[0-9]+]], [[R2]], [[R1]]
   %4 = select <2 x i1> %3, <2 x double> %1, <2 x double> zeroinitializer
-  ; Note that IfSet and IfClr are swapped since the condition is inverted
-  ; CHECK-DAG: bsel.v [[R4]], [[R3:\$w[0-9]+]], [[R1]]
+  ; CHECK-DAG: bsel.v [[R4]], [[R1]], [[R3:\$w[0-9]+]]
   store <2 x double> %4, <2 x double>* %d
   ; CHECK-DAG: st.d [[R4]], 0($4)
 

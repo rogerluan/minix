@@ -1,6 +1,4 @@
-; RUN: llc -mcpu=g5 < %s | FileCheck %s
-target datalayout = "E-m:e-i64:64-n32:64"
-target triple = "powerpc64-unknown-linux-gnu"
+; RUN: llc < %s -march=ppc64 -mcpu=g5 | grep cntlzd
 
 define i32 @_ZNK4llvm5APInt17countLeadingZerosEv(i64 *%t) nounwind {
         %tmp19 = load i64* %t
@@ -9,12 +7,6 @@ define i32 @_ZNK4llvm5APInt17countLeadingZerosEv(i64 *%t) nounwind {
         %tmp89 = add i32 %tmp23, -64          ; <i32> [#uses=1]
         %tmp90 = add i32 %tmp89, 0            ; <i32> [#uses=1]
         ret i32 %tmp90
-
-; CHECK-LABEL: @_ZNK4llvm5APInt17countLeadingZerosEv
-; CHECK: ld [[REG1:[0-9]+]], 0(3)
-; CHECK-NEXT: cntlzd [[REG2:[0-9]+]], [[REG1]]
-; CHECK-NEXT: addi 3, [[REG2]], -64
-; CHECK-NEXT: blr
 }
 
 declare i64 @llvm.ctlz.i64(i64, i1)

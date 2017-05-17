@@ -1,4 +1,4 @@
-/*	$NetBSD: syslog.c,v 1.54 2014/09/18 13:58:20 christos Exp $	*/
+/*	$NetBSD: syslog.c,v 1.53 2012/10/11 17:09:55 christos Exp $	*/
 
 /*
  * Copyright (c) 1983, 1988, 1993
@@ -34,7 +34,7 @@
 #if 0
 static char sccsid[] = "@(#)syslog.c	8.5 (Berkeley) 4/29/95";
 #else
-__RCSID("$NetBSD: syslog.c,v 1.54 2014/09/18 13:58:20 christos Exp $");
+__RCSID("$NetBSD: syslog.c,v 1.53 2012/10/11 17:09:55 christos Exp $");
 #endif
 #endif /* LIBC_SCCS and not lint */
 
@@ -58,6 +58,10 @@ __RCSID("$NetBSD: syslog.c,v 1.54 2014/09/18 13:58:20 christos Exp $");
 #include <unistd.h>
 #include "reentrant.h"
 #include "extern.h"
+
+#if defined(__minix)
+#include <sys/ioctl.h>
+#endif /* defined(__minix) */
 
 #ifdef __weak_alias
 __weak_alias(closelog,_closelog)
@@ -448,7 +452,11 @@ vsyslogp_r(int pri, struct syslog_data *data, const char *msgid,
 	 * to give syslogd a chance to empty its socket buffer.
 	 */
 	for (tries = 0; tries < MAXTRIES; tries++) {
+#if defined(__minix)
+		if (write(data->log_file, tbuf, cnt) != -1)
+#else
 		if (send(data->log_file, tbuf, cnt, 0) != -1)
+#endif /* defined(__minix) */
 			break;
 		if (errno != ENOBUFS) {
 			disconnectlog_r(data);
@@ -463,8 +471,7 @@ vsyslogp_r(int pri, struct syslog_data *data, const char *msgid,
 	 * Make sure the error reported is the one from the syslogd failure.
 	 */
 	if (tries == MAXTRIES && (data->log_stat & LOG_CONS) &&
-	    (fd = open(_PATH_CONSOLE,
-		O_WRONLY | O_NONBLOCK | O_CLOEXEC, 0)) >= 0) {
+	    (fd = open(_PATH_CONSOLE, O_WRONLY|O_NONBLOCK, 0)) >= 0) {
 		iov[iovcnt].iov_base = __UNCONST(CRLF);
 		iov[iovcnt].iov_len = 2;
 		(void)writev(fd, iov, iovcnt + 1);
@@ -505,7 +512,9 @@ connectlog_r(struct syslog_data *data)
 	/* AF_UNIX address of local logger */
 	static const struct sockaddr_un sun = {
 		.sun_family = AF_LOCAL,
+#if !defined(__minix)
 		.sun_len = sizeof(sun),
+#endif /* !defined(__minix) */
 		.sun_path = _PATH_LOG,
 	};
 
@@ -516,9 +525,14 @@ connectlog_r(struct syslog_data *data)
 		data->log_connected = 0;
 	}
 	if (!data->log_connected) {
+#if defined(__minix)
+		if(ioctl(data->log_file, NWIOSUDSTADDR, (void *) &sun) < 0)
+
+#else
 		if (connect(data->log_file,
 		    (const struct sockaddr *)(const void *)&sun,
 		    (socklen_t)sizeof(sun)) == -1)
+#endif /* defined(__minix) */
 		{
 			(void)close(data->log_file);
 			data->log_file = -1;

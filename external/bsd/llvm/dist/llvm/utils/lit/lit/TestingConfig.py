@@ -1,7 +1,7 @@
 import os
 import sys
 
-OldPy = sys.version_info[0] == 2 and sys.version_info[1] < 7
+PY2 = sys.version_info[0] < 3
 
 class TestingConfig:
     """"
@@ -17,20 +17,14 @@ class TestingConfig:
         """
         # Set the environment based on the command line arguments.
         environment = {
+            'LIBRARY_PATH' : os.environ.get('LIBRARY_PATH',''),
+            'LD_LIBRARY_PATH' : os.environ.get('LD_LIBRARY_PATH',''),
             'PATH' : os.pathsep.join(litConfig.path +
                                      [os.environ.get('PATH','')]),
+            'SYSTEMROOT' : os.environ.get('SYSTEMROOT',''),
+            'TERM' : os.environ.get('TERM',''),
             'LLVM_DISABLE_CRASH_REPORT' : '1',
             }
-
-        pass_vars = ['LIBRARY_PATH', 'LD_LIBRARY_PATH', 'SYSTEMROOT', 'TERM',
-                     'LD_PRELOAD', 'ASAN_OPTIONS', 'UBSAN_OPTIONS',
-                     'LSAN_OPTIONS']
-        for var in pass_vars:
-            val = os.environ.get(var, '')
-            # Check for empty string as some variables such as LD_PRELOAD cannot be empty
-            # ('') for OS's such as OpenBSD.
-            if val:
-                environment[var] = val
 
         if sys.platform == 'win32':
             environment.update({
@@ -44,7 +38,7 @@ class TestingConfig:
         # The option to preserve TEMP, TMP, and TMPDIR.
         # This is intended to check how many temporary files would be generated
         # (and be not cleaned up) in automated builders.
-        if 'LIT_PRESERVES_TMP' in os.environ:
+        if os.environ.has_key('LIT_PRESERVES_TMP'):
             environment.update({
                     'TEMP' : os.environ.get('TEMP',''),
                     'TMP' : os.environ.get('TMP',''),
@@ -80,14 +74,12 @@ class TestingConfig:
         """
 
         # Load the config script data.
-        data = None
-        if not OldPy:
-            f = open(path)
-            try:
-                data = f.read()
-            except:
-                litConfig.fatal('unable to load config file: %r' % (path,))
-            f.close()
+        f = open(path)
+        try:
+            data = f.read()
+        except:
+            litConfig.fatal('unable to load config file: %r' % (path,))
+        f.close()
 
         # Execute the config script to initialize the object.
         cfg_globals = dict(globals())
@@ -95,10 +87,10 @@ class TestingConfig:
         cfg_globals['lit_config'] = litConfig
         cfg_globals['__file__'] = path
         try:
-            if OldPy:
-                execfile(path, cfg_globals)
+            if PY2:
+                exec("exec data in cfg_globals")
             else:
-                exec(compile(data, path, 'exec'), cfg_globals, None)
+                exec(data, cfg_globals)
             if litConfig.debug:
                 litConfig.note('... loaded config %r' % path)
         except SystemExit:

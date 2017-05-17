@@ -32,11 +32,7 @@
 /* Emulate lchflags(2), checking path with lstat(2) first to ensure that
  * it's not a symlink, and then call chflags(2) */
 
-#if !defined(__minix) && !defined(_LIBC)
 #include "nbtool_config.h"
-#else
-#define HAVE_STRUCT_STAT_ST_FLAGS 1
-#endif /* !defined(__minix) && !defined(_LIBC) */
 
 #if !HAVE_LCHFLAGS && HAVE_STRUCT_STAT_ST_FLAGS
 #include <sys/stat.h>
@@ -53,10 +49,10 @@ lchflags(const char *path, u_long flags)
 	if (S_ISLNK(psb.st_mode)) {
 		return 0;
 	}
-#if defined(__minix)
+#ifdef __minix
 	return 0;
 #else
 	return (chflags(path, flags));
-#endif /* defined(__minix) */
+#endif
 }
 #endif

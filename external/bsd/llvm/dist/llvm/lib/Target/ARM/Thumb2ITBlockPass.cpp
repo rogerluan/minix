@@ -7,6 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#define DEBUG_TYPE "thumb2-it"
 #include "ARM.h"
 #include "ARMMachineFunctionInfo.h"
 #include "Thumb2InstrInfo.h"
@@ -17,8 +18,6 @@
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineInstrBundle.h"
 using namespace llvm;
-
-#define DEBUG_TYPE "thumb2-it"
 
 STATISTIC(NumITs,        "Number of IT blocks inserted");
 STATISTIC(NumMovedInsts, "Number of predicated instructions moved");
@@ -34,9 +33,9 @@ namespace {
     const TargetRegisterInfo *TRI;
     ARMFunctionInfo *AFI;
 
-    bool runOnMachineFunction(MachineFunction &Fn) override;
+    virtual bool runOnMachineFunction(MachineFunction &Fn);
 
-    const char *getPassName() const override {
+    virtual const char *getPassName() const {
       return "Thumb IT blocks insertion pass";
     }
 
@@ -188,7 +187,7 @@ bool Thumb2ITBlockPass::InsertITInstructions(MachineBasicBlock &MBB) {
                                              true/*isImp*/, false/*isKill*/));
 
     MachineInstr *LastITMI = MI;
-    MachineBasicBlock::iterator InsertPos = MIB.getInstr();
+    MachineBasicBlock::iterator InsertPos = MIB;
     ++MBBI;
 
     // Form IT block.
@@ -243,7 +242,7 @@ bool Thumb2ITBlockPass::InsertITInstructions(MachineBasicBlock &MBB) {
 
     // Finalize the bundle.
     MachineBasicBlock::instr_iterator LI = LastITMI;
-    finalizeBundle(MBB, InsertPos.getInstrIterator(), std::next(LI));
+    finalizeBundle(MBB, InsertPos.getInstrIterator(), llvm::next(LI));
 
     Modified = true;
     ++NumITs;
@@ -255,9 +254,8 @@ bool Thumb2ITBlockPass::InsertITInstructions(MachineBasicBlock &MBB) {
 bool Thumb2ITBlockPass::runOnMachineFunction(MachineFunction &Fn) {
   const TargetMachine &TM = Fn.getTarget();
   AFI = Fn.getInfo<ARMFunctionInfo>();
-  TII = static_cast<const Thumb2InstrInfo *>(
-      TM.getSubtargetImpl()->getInstrInfo());
-  TRI = TM.getSubtargetImpl()->getRegisterInfo();
+  TII = static_cast<const Thumb2InstrInfo*>(TM.getInstrInfo());
+  TRI = TM.getRegisterInfo();
   restrictIT = TM.getSubtarget<ARMSubtarget>().restrictIT();
 
   if (!AFI->isThumbFunction())

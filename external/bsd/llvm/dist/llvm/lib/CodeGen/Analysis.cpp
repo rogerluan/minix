@@ -7,14 +7,13 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file defines several CodeGen-specific LLVM IR analysis utilities.
+// This file defines several CodeGen-specific LLVM IR analysis utilties.
 //
 //===----------------------------------------------------------------------===//
 
 #include "llvm/CodeGen/Analysis.h"
 #include "llvm/Analysis/ValueTracking.h"
 #include "llvm/CodeGen/MachineFunction.h"
-#include "llvm/CodeGen/SelectionDAG.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Function.h"
@@ -25,14 +24,12 @@
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Target/TargetLowering.h"
-#include "llvm/Target/TargetSubtargetInfo.h"
-#include "llvm/Transforms/Utils/GlobalStatus.h"
-
 using namespace llvm;
 
-/// Compute the linearized index of a member in a nested aggregate/struct/array
-/// by recursing and accumulating CurIndex as long as there are indices in the
-/// index list.
+/// ComputeLinearIndex - Given an LLVM IR aggregate type and a sequence
+/// of insertvalue or extractvalue indices that identify a member, return
+/// the linearized index of the start of the member.
+///
 unsigned llvm::ComputeLinearIndex(Type *Ty,
                                   const unsigned *Indices,
                                   const unsigned *IndicesEnd,
@@ -49,25 +46,18 @@ unsigned llvm::ComputeLinearIndex(Type *Ty,
         EI != EE; ++EI) {
       if (Indices && *Indices == unsigned(EI - EB))
         return ComputeLinearIndex(*EI, Indices+1, IndicesEnd, CurIndex);
-      CurIndex = ComputeLinearIndex(*EI, nullptr, nullptr, CurIndex);
+      CurIndex = ComputeLinearIndex(*EI, 0, 0, CurIndex);
     }
-    assert(!Indices && "Unexpected out of bound");
     return CurIndex;
   }
   // Given an array type, recursively traverse the elements.
   else if (ArrayType *ATy = dyn_cast<ArrayType>(Ty)) {
     Type *EltTy = ATy->getElementType();
-    unsigned NumElts = ATy->getNumElements();
-    // Compute the Linear offset when jumping one element of the array
-    unsigned EltLinearOffset = ComputeLinearIndex(EltTy, nullptr, nullptr, 0);
-    if (Indices) {
-      assert(*Indices < NumElts && "Unexpected out of bound");
-      // If the indice is inside the array, compute the index to the requested
-      // elt and recurse inside the element with the end of the indices list
-      CurIndex += EltLinearOffset* *Indices;
-      return ComputeLinearIndex(EltTy, Indices+1, IndicesEnd, CurIndex);
+    for (unsigned i = 0, e = ATy->getNumElements(); i != e; ++i) {
+      if (Indices && *Indices == i)
+        return ComputeLinearIndex(EltTy, Indices+1, IndicesEnd, CurIndex);
+      CurIndex = ComputeLinearIndex(EltTy, 0, 0, CurIndex);
     }
-    CurIndex += EltLinearOffset*NumElts;
     return CurIndex;
   }
   // We haven't found the type we're looking for, so keep searching.
@@ -115,16 +105,15 @@ void llvm::ComputeValueVTs(const TargetLowering &TLI, Type *Ty,
 }
 
 /// ExtractTypeInfo - Returns the type info, possibly bitcast, encoded in V.
-GlobalValue *llvm::ExtractTypeInfo(Value *V) {
+GlobalVariable *llvm::ExtractTypeInfo(Value *V) {
   V = V->stripPointerCasts();
-  GlobalValue *GV = dyn_cast<GlobalValue>(V);
-  GlobalVariable *Var = dyn_cast<GlobalVariable>(V);
+  GlobalVariable *GV = dyn_cast<GlobalVariable>(V);
 
-  if (Var && Var->getName() == "llvm.eh.catch.all.value") {
-    assert(Var->hasInitializer() &&
+  if (GV && GV->getName() == "llvm.eh.catch.all.value") {
+    assert(GV->hasInitializer() &&
            "The EH catch-all value must have an initializer");
-    Value *Init = Var->getInitializer();
-    GV = dyn_cast<GlobalValue>(Init);
+    Value *Init = GV->getInitializer();
+    GV = dyn_cast<GlobalVariable>(Init);
     if (!GV) V = cast<ConstantPointerNull>(Init);
   }
 
@@ -239,7 +228,7 @@ static const Value *getNoopInput(const Value *V,
     // through.
     const Instruction *I = dyn_cast<Instruction>(V);
     if (!I || I->getNumOperands() == 0) return V;
-    const Value *NoopInput = nullptr;
+    const Value *NoopInput = 0;
 
     Value *Op = I->getOperand(0);
     if (isa<BitCastInst>(I)) {
@@ -485,7 +474,8 @@ static bool nextRealType(SmallVectorImpl<CompositeType *> &SubTypes,
 /// between it and the return.
 ///
 /// This function only tests target-independent requirements.
-bool llvm::isInTailCallPosition(ImmutableCallSite CS, const TargetMachine &TM) {
+bool llvm::isInTailCallPosition(ImmutableCallSite CS,
+                                const TargetLowering &TLI) {
   const Instruction *I = CS.getInstruction();
   const BasicBlock *ExitBB = I->getParent();
   const TerminatorInst *Term = ExitBB->getTerminator();
@@ -500,14 +490,16 @@ bool llvm::isInTailCallPosition(ImmutableCallSite CS, const TargetMachine &TM) {
   // longjmp on x86), it can end up causing miscompilation that has not
   // been fully understood.
   if (!Ret &&
-      (!TM.Options.GuaranteedTailCallOpt || !isa<UnreachableInst>(Term)))
+      (!TLI.getTargetMachine().Options.GuaranteedTailCallOpt ||
+       !isa<UnreachableInst>(Term)))
     return false;
 
   // If I will have a chain, make sure no other instruction that will have a
   // chain interposes between I and the return.
   if (I->mayHaveSideEffects() || I->mayReadFromMemory() ||
       !isSafeToSpeculativelyExecute(I))
-    for (BasicBlock::const_iterator BBI = std::prev(ExitBB->end(), 2);; --BBI) {
+    for (BasicBlock::const_iterator BBI = prior(prior(ExitBB->end())); ;
+         --BBI) {
       if (&*BBI == I)
         break;
       // Debug info intrinsics do not get in the way of tail call optimization.
@@ -518,8 +510,7 @@ bool llvm::isInTailCallPosition(ImmutableCallSite CS, const TargetMachine &TM) {
         return false;
     }
 
-  return returnTypeIsEligibleForTailCall(
-      ExitBB->getParent(), I, Ret, *TM.getSubtargetImpl()->getTargetLowering());
+  return returnTypeIsEligibleForTailCall(ExitBB->getParent(), I, Ret, TLI);
 }
 
 bool llvm::returnTypeIsEligibleForTailCall(const Function *F,
@@ -615,30 +606,4 @@ bool llvm::returnTypeIsEligibleForTailCall(const Function *F,
   } while(nextRealType(RetSubTypes, RetPath));
 
   return true;
-}
-
-bool llvm::canBeOmittedFromSymbolTable(const GlobalValue *GV) {
-  if (!GV->hasLinkOnceODRLinkage())
-    return false;
-
-  if (GV->hasUnnamedAddr())
-    return true;
-
-  // If it is a non constant variable, it needs to be uniqued across shared
-  // objects.
-  if (const GlobalVariable *Var = dyn_cast<GlobalVariable>(GV)) {
-    if (!Var->isConstant())
-      return false;
-  }
-
-  // An alias can point to a variable. We could try to resolve the alias to
-  // decide, but for now just don't hide them.
-  if (isa<GlobalAlias>(GV))
-    return false;
-
-  GlobalStatus GS;
-  if (GlobalStatus::analyzeGlobal(GV, GS))
-    return false;
-
-  return !GS.IsCompared;
 }

@@ -26,8 +26,6 @@
 #include <vector>
 using namespace llvm;
 
-#define DEBUG_TYPE "mc"
-
 void MachObjectWriter::reset() {
   Relocations.clear();
   IndirectSymBase.clear();
@@ -41,7 +39,7 @@ void MachObjectWriter::reset() {
 bool MachObjectWriter::
 doesSymbolRequireExternRelocation(const MCSymbolData *SD) {
   // Undefined symbols are always extern.
-  if (SD->getSymbol().isUndefined())
+  if (SD->Symbol->isUndefined())
     return true;
 
   // References to weak definitions require external relocation entries; the
@@ -84,7 +82,7 @@ uint64_t MachObjectWriter::getSymbolAddress(const MCSymbolData* SD,
 
 
     MCValue Target;
-    if (!S.getVariableValue()->EvaluateAsRelocatable(Target, &Layout, nullptr))
+    if (!S.getVariableValue()->EvaluateAsRelocatable(Target, Layout))
       report_fatal_error("unable to evaluate offset for variable '" +
                          S.getName() + "'");
 
@@ -231,7 +229,7 @@ void MachObjectWriter::WriteSection(const MCAssembler &Asm,
 
   unsigned Flags = Section.getTypeAndAttributes();
   if (SD.hasInstructions())
-    Flags |= MachO::S_ATTR_SOME_INSTRUCTIONS;
+    Flags |= MCSectionMachO::S_ATTR_SOME_INSTRUCTIONS;
 
   assert(isPowerOf2_32(SD.getAlignment()) && "Invalid alignment!");
   Write32(Log2_32(SD.getAlignment()));
@@ -303,50 +301,20 @@ void MachObjectWriter::WriteDysymtabLoadCommand(uint32_t FirstLocalSymbol,
   assert(OS.tell() - Start == sizeof(MachO::dysymtab_command));
 }
 
-MachObjectWriter::MachSymbolData *
-MachObjectWriter::findSymbolData(const MCSymbol &Sym) {
-  for (auto &Entry : LocalSymbolData)
-    if (&Entry.SymbolData->getSymbol() == &Sym)
-      return &Entry;
-
-  for (auto &Entry : ExternalSymbolData)
-    if (&Entry.SymbolData->getSymbol() == &Sym)
-      return &Entry;
-
-  for (auto &Entry : UndefinedSymbolData)
-    if (&Entry.SymbolData->getSymbol() == &Sym)
-      return &Entry;
-
-  return nullptr;
-}
-
 void MachObjectWriter::WriteNlist(MachSymbolData &MSD,
                                   const MCAsmLayout &Layout) {
   MCSymbolData &Data = *MSD.SymbolData;
-  const MCSymbol *Symbol = &Data.getSymbol();
-  const MCSymbol *AliasedSymbol = &Symbol->AliasedSymbol();
-  uint8_t SectionIndex = MSD.SectionIndex;
+  const MCSymbol &Symbol = Data.getSymbol();
   uint8_t Type = 0;
   uint16_t Flags = Data.getFlags();
   uint64_t Address = 0;
-  bool IsAlias = Symbol != AliasedSymbol;
-
-  MachSymbolData *AliaseeInfo;
-  if (IsAlias) {
-    AliaseeInfo = findSymbolData(*AliasedSymbol);
-    if (AliaseeInfo)
-      SectionIndex = AliaseeInfo->SectionIndex;
-    Symbol = AliasedSymbol;
-  }
 
   // Set the N_TYPE bits. See <mach-o/nlist.h>.
   //
   // FIXME: Are the prebound or indirect fields possible here?
-  if (IsAlias && Symbol->isUndefined())
-    Type = MachO::N_INDR;
-  else if (Symbol->isUndefined())
+  if (Symbol.isUndefined())
     Type = MachO::N_UNDF;
-  else if (Symbol->isAbsolute())
+  else if (Symbol.isAbsolute())
     Type = MachO::N_ABS;
   else
     Type = MachO::N_SECT;
@@ -357,15 +325,13 @@ void MachObjectWriter::WriteNlist(MachSymbolData &MSD,
     Type |= MachO::N_PEXT;
 
   // Set external bit.
-  if (Data.isExternal() || (!IsAlias && Symbol->isUndefined()))
+  if (Data.isExternal() || Symbol.isUndefined())
     Type |= MachO::N_EXT;
 
   // Compute the symbol address.
-  if (IsAlias && Symbol->isUndefined())
-    Address = AliaseeInfo->StringIndex;
-  else if (Symbol->isDefined())
+  if (Symbol.isDefined()) {
     Address = getSymbolAddress(&Data, Layout);
-  else if (Data.isCommon()) {
+  } else if (Data.isCommon()) {
     // Common symbols are encoded with the size in the address
     // field, and their alignment in the flags.
     Address = Data.getCommonSize();
@@ -376,21 +342,18 @@ void MachObjectWriter::WriteNlist(MachSymbolData &MSD,
       assert((1U << Log2Size) == Align && "Invalid 'common' alignment!");
       if (Log2Size > 15)
         report_fatal_error("invalid 'common' alignment '" +
-                           Twine(Align) + "' for '" + Symbol->getName() + "'",
+                           Twine(Align) + "' for '" + Symbol.getName() + "'",
                            false);
       // FIXME: Keep this mask with the SymbolFlags enumeration.
       Flags = (Flags & 0xF0FF) | (Log2Size << 8);
     }
   }
 
-  if (Layout.getAssembler().isThumbFunc(Symbol))
-    Flags |= SF_ThumbFunc;
-
   // struct nlist (12 bytes)
 
   Write32(MSD.StringIndex);
   Write8(Type);
-  Write8(SectionIndex);
+  Write8(MSD.SectionIndex);
 
   // The Mach-O streamer uses the lowest 16-bits of the flags for the 'desc'
   // value.
@@ -418,7 +381,7 @@ void MachObjectWriter::WriteLinkeditLoadCommand(uint32_t Type,
 static unsigned ComputeLinkerOptionsLoadCommandSize(
   const std::vector<std::string> &Options, bool is64Bit)
 {
-  unsigned Size = sizeof(MachO::linker_option_command);
+  unsigned Size = sizeof(MachO::linker_options_command);
   for (unsigned i = 0, e = Options.size(); i != e; ++i)
     Size += Options[i].size() + 1;
   return RoundUpToAlignment(Size, is64Bit ? 8 : 4);
@@ -431,10 +394,10 @@ void MachObjectWriter::WriteLinkerOptionsLoadCommand(
   uint64_t Start = OS.tell();
   (void) Start;
 
-  Write32(MachO::LC_LINKER_OPTION);
+  Write32(MachO::LC_LINKER_OPTIONS);
   Write32(Size);
   Write32(Options.size());
-  uint64_t BytesWritten = sizeof(MachO::linker_option_command);
+  uint64_t BytesWritten = sizeof(MachO::linker_options_command);
   for (unsigned i = 0, e = Options.size(); i != e; ++i) {
     // Write each string, including the null byte.
     const std::string &Option = Options[i];
@@ -454,7 +417,6 @@ void MachObjectWriter::RecordRelocation(const MCAssembler &Asm,
                                         const MCFragment *Fragment,
                                         const MCFixup &Fixup,
                                         MCValue Target,
-                                        bool &IsPCRel,
                                         uint64_t &FixedValue) {
   TargetObjectWriter->RecordRelocation(this, Asm, Layout, Fragment, Fixup,
                                        Target, FixedValue);
@@ -475,23 +437,23 @@ void MachObjectWriter::BindIndirectSymbols(MCAssembler &Asm) {
     const MCSectionMachO &Section =
       cast<MCSectionMachO>(it->SectionData->getSection());
 
-    if (Section.getType() != MachO::S_NON_LAZY_SYMBOL_POINTERS &&
-        Section.getType() != MachO::S_LAZY_SYMBOL_POINTERS &&
-        Section.getType() != MachO::S_SYMBOL_STUBS) {
+    if (Section.getType() != MCSectionMachO::S_NON_LAZY_SYMBOL_POINTERS &&
+        Section.getType() != MCSectionMachO::S_LAZY_SYMBOL_POINTERS &&
+        Section.getType() != MCSectionMachO::S_SYMBOL_STUBS) {
 	MCSymbol &Symbol = *it->Symbol;
 	report_fatal_error("indirect symbol '" + Symbol.getName() +
                            "' not in a symbol pointer or stub section");
     }
   }
 
-  // Bind non-lazy symbol pointers first.
+  // Bind non lazy symbol pointers first.
   unsigned IndirectIndex = 0;
   for (MCAssembler::indirect_symbol_iterator it = Asm.indirect_symbol_begin(),
          ie = Asm.indirect_symbol_end(); it != ie; ++it, ++IndirectIndex) {
     const MCSectionMachO &Section =
       cast<MCSectionMachO>(it->SectionData->getSection());
 
-    if (Section.getType() != MachO::S_NON_LAZY_SYMBOL_POINTERS)
+    if (Section.getType() != MCSectionMachO::S_NON_LAZY_SYMBOL_POINTERS)
       continue;
 
     // Initialize the section indirect symbol base, if necessary.
@@ -507,8 +469,8 @@ void MachObjectWriter::BindIndirectSymbols(MCAssembler &Asm) {
     const MCSectionMachO &Section =
       cast<MCSectionMachO>(it->SectionData->getSection());
 
-    if (Section.getType() != MachO::S_LAZY_SYMBOL_POINTERS &&
-        Section.getType() != MachO::S_SYMBOL_STUBS)
+    if (Section.getType() != MCSectionMachO::S_LAZY_SYMBOL_POINTERS &&
+        Section.getType() != MCSectionMachO::S_SYMBOL_STUBS)
       continue;
 
     // Initialize the section indirect symbol base, if necessary.
@@ -525,10 +487,15 @@ void MachObjectWriter::BindIndirectSymbols(MCAssembler &Asm) {
 }
 
 /// ComputeSymbolTable - Compute the symbol table data
-void MachObjectWriter::ComputeSymbolTable(
-    MCAssembler &Asm, std::vector<MachSymbolData> &LocalSymbolData,
-    std::vector<MachSymbolData> &ExternalSymbolData,
-    std::vector<MachSymbolData> &UndefinedSymbolData) {
+///
+/// \param StringTable [out] - The string table data.
+/// \param StringIndexMap [out] - Map from symbol names to offsets in the
+/// string table.
+void MachObjectWriter::
+ComputeSymbolTable(MCAssembler &Asm, SmallString<256> &StringTable,
+                   std::vector<MachSymbolData> &LocalSymbolData,
+                   std::vector<MachSymbolData> &ExternalSymbolData,
+                   std::vector<MachSymbolData> &UndefinedSymbolData) {
   // Build section lookup table.
   DenseMap<const MCSection*, uint8_t> SectionIndexMap;
   unsigned Index = 1;
@@ -537,34 +504,38 @@ void MachObjectWriter::ComputeSymbolTable(
     SectionIndexMap[&it->getSection()] = Index;
   assert(Index <= 256 && "Too many sections!");
 
-  // Build the string table.
-  for (MCSymbolData &SD : Asm.symbols()) {
-    const MCSymbol &Symbol = SD.getSymbol();
-    if (!Asm.isSymbolLinkerVisible(Symbol))
-      continue;
+  // Index 0 is always the empty string.
+  StringMap<uint64_t> StringIndexMap;
+  StringTable += '\x00';
 
-    StringTable.add(Symbol.getName());
-  }
-  StringTable.finalize(StringTableBuilder::MachO);
-
-  // Build the symbol arrays but only for non-local symbols.
+  // Build the symbol arrays and the string table, but only for non-local
+  // symbols.
   //
-  // The particular order that we collect and then sort the symbols is chosen to
-  // match 'as'. Even though it doesn't matter for correctness, this is
-  // important for letting us diff .o files.
-  for (MCSymbolData &SD : Asm.symbols()) {
-    const MCSymbol &Symbol = SD.getSymbol();
+  // The particular order that we collect the symbols and create the string
+  // table, then sort the symbols is chosen to match 'as'. Even though it
+  // doesn't matter for correctness, this is important for letting us diff .o
+  // files.
+  for (MCAssembler::symbol_iterator it = Asm.symbol_begin(),
+         ie = Asm.symbol_end(); it != ie; ++it) {
+    const MCSymbol &Symbol = it->getSymbol();
 
     // Ignore non-linker visible symbols.
-    if (!Asm.isSymbolLinkerVisible(Symbol))
+    if (!Asm.isSymbolLinkerVisible(it->getSymbol()))
       continue;
 
-    if (!SD.isExternal() && !Symbol.isUndefined())
+    if (!it->isExternal() && !Symbol.isUndefined())
       continue;
+
+    uint64_t &Entry = StringIndexMap[Symbol.getName()];
+    if (!Entry) {
+      Entry = StringTable.size();
+      StringTable += Symbol.getName();
+      StringTable += '\x00';
+    }
 
     MachSymbolData MSD;
-    MSD.SymbolData = &SD;
-    MSD.StringIndex = StringTable.getOffset(Symbol.getName());
+    MSD.SymbolData = it;
+    MSD.StringIndex = Entry;
 
     if (Symbol.isUndefined()) {
       MSD.SectionIndex = 0;
@@ -580,19 +551,27 @@ void MachObjectWriter::ComputeSymbolTable(
   }
 
   // Now add the data for local symbols.
-  for (MCSymbolData &SD : Asm.symbols()) {
-    const MCSymbol &Symbol = SD.getSymbol();
+  for (MCAssembler::symbol_iterator it = Asm.symbol_begin(),
+         ie = Asm.symbol_end(); it != ie; ++it) {
+    const MCSymbol &Symbol = it->getSymbol();
 
     // Ignore non-linker visible symbols.
-    if (!Asm.isSymbolLinkerVisible(Symbol))
+    if (!Asm.isSymbolLinkerVisible(it->getSymbol()))
       continue;
 
-    if (SD.isExternal() || Symbol.isUndefined())
+    if (it->isExternal() || Symbol.isUndefined())
       continue;
+
+    uint64_t &Entry = StringIndexMap[Symbol.getName()];
+    if (!Entry) {
+      Entry = StringTable.size();
+      StringTable += Symbol.getName();
+      StringTable += '\x00';
+    }
 
     MachSymbolData MSD;
-    MSD.SymbolData = &SD;
-    MSD.StringIndex = StringTable.getOffset(Symbol.getName());
+    MSD.SymbolData = it;
+    MSD.StringIndex = Entry;
 
     if (Symbol.isAbsolute()) {
       MSD.SectionIndex = 0;
@@ -616,6 +595,10 @@ void MachObjectWriter::ComputeSymbolTable(
     ExternalSymbolData[i].SymbolData->setIndex(Index++);
   for (unsigned i = 0, e = UndefinedSymbolData.size(); i != e; ++i)
     UndefinedSymbolData[i].SymbolData->setIndex(Index++);
+
+  // The string table is padded to a multiple of 4.
+  while (StringTable.size() % 4)
+    StringTable += '\x00';
 }
 
 void MachObjectWriter::computeSectionAddresses(const MCAssembler &Asm,
@@ -637,7 +620,10 @@ void MachObjectWriter::computeSectionAddresses(const MCAssembler &Asm,
 
 void MachObjectWriter::markAbsoluteVariableSymbols(MCAssembler &Asm,
                                                    const MCAsmLayout &Layout) {
-  for (MCSymbolData &SD : Asm.symbols()) {
+  for (MCAssembler::symbol_iterator i = Asm.symbol_begin(),
+                                    e = Asm.symbol_end();
+      i != e; ++i) {
+    MCSymbolData &SD = *i;
     if (!SD.getSymbol().isVariable())
       continue;
 
@@ -645,7 +631,7 @@ void MachObjectWriter::markAbsoluteVariableSymbols(MCAssembler &Asm,
     // and neither symbol is external, mark the variable as absolute.
     const MCExpr *Expr = SD.getSymbol().getVariableValue();
     MCValue Value;
-    if (Expr->EvaluateAsRelocatable(Value, &Layout, nullptr)) {
+    if (Expr->EvaluateAsRelocatable(Value, Layout)) {
       if (Value.getSymA() && Value.getSymB())
         const_cast<MCSymbol*>(&SD.getSymbol())->setAbsolute();
     }
@@ -664,7 +650,7 @@ void MachObjectWriter::ExecutePostLayoutBinding(MCAssembler &Asm,
   markAbsoluteVariableSymbols(Asm, Layout);
 
   // Compute symbol table information and bind symbol indices.
-  ComputeSymbolTable(Asm, LocalSymbolData, ExternalSymbolData,
+  ComputeSymbolTable(Asm, StringTable, LocalSymbolData, ExternalSymbolData,
                      UndefinedSymbolData);
 }
 
@@ -682,7 +668,7 @@ IsSymbolRefDifferenceFullyResolvedImpl(const MCAssembler &Asm,
   //   - addr(atom(B)) - offset(B)
   // and the offsets are not relocatable, so the fixup is fully resolved when
   //  addr(atom(A)) - addr(atom(B)) == 0.
-  const MCSymbolData *A_Base = nullptr, *B_Base = nullptr;
+  const MCSymbolData *A_Base = 0, *B_Base = 0;
 
   const MCSymbol &SA = DataA.getSymbol().AliasedSymbol();
   const MCSection &SecA = SA.getSection();
@@ -702,8 +688,7 @@ IsSymbolRefDifferenceFullyResolvedImpl(const MCAssembler &Asm,
     // same assumptions about any symbol that we normally make about
     // assembler locals.
 
-    bool hasReliableSymbolDifference = isX86_64();
-    if (!hasReliableSymbolDifference) {
+    if (!Asm.getBackend().hasReliableSymbolDifference()) {
       if (!SA.isInSection() || &SecA != &SecB ||
           (!SA.isTemporary() &&
            FB.getAtom() != Asm.getSymbolData(SA).getFragment()->getAtom() &&
@@ -726,10 +711,6 @@ IsSymbolRefDifferenceFullyResolvedImpl(const MCAssembler &Asm,
       return false;
   }
 
-  // If they are not in the same section, we can't compute the diff.
-  if (&SecA != &SecB)
-    return false;
-
   const MCFragment *FA = Asm.getSymbolData(SA).getFragment();
 
   // Bail if the symbol has no fragment.
@@ -737,7 +718,12 @@ IsSymbolRefDifferenceFullyResolvedImpl(const MCAssembler &Asm,
     return false;
 
   A_Base = FA->getAtom();
+  if (!A_Base)
+    return false;
+
   B_Base = FB.getAtom();
+  if (!B_Base)
+    return false;
 
   // If the atoms are the same, they are guaranteed to have the same address.
   if (A_Base == B_Base)
@@ -750,8 +736,6 @@ IsSymbolRefDifferenceFullyResolvedImpl(const MCAssembler &Asm,
 void MachObjectWriter::WriteObject(MCAssembler &Asm,
                                    const MCAsmLayout &Layout) {
   unsigned NumSections = Asm.size();
-  const MCAssembler::VersionMinInfoType &VersionInfo =
-    Layout.getAssembler().getVersionMinInfo();
 
   // The section data starts after the header, the segment load command (and
   // section headers) and the symbol table.
@@ -760,23 +744,9 @@ void MachObjectWriter::WriteObject(MCAssembler &Asm,
     sizeof(MachO::segment_command_64) + NumSections * sizeof(MachO::section_64):
     sizeof(MachO::segment_command) + NumSections * sizeof(MachO::section);
 
-  // Add the deployment target version info load command size, if used.
-  if (VersionInfo.Major != 0) {
-    ++NumLoadCommands;
-    LoadCommandsSize += sizeof(MachO::version_min_command);
-  }
-
   // Add the data-in-code load command size, if used.
   unsigned NumDataRegions = Asm.getDataRegions().size();
   if (NumDataRegions) {
-    ++NumLoadCommands;
-    LoadCommandsSize += sizeof(MachO::linkedit_data_command);
-  }
-
-  // Add the loh load command size, if used.
-  uint64_t LOHRawSize = Asm.getLOHContainer().getEmitSize(*this, Layout);
-  uint64_t LOHSize = RoundUpToAlignment(LOHRawSize, is64Bit() ? 8 : 4);
-  if (LOHSize) {
     ++NumLoadCommands;
     LoadCommandsSize += sizeof(MachO::linkedit_data_command);
   }
@@ -846,20 +816,6 @@ void MachObjectWriter::WriteObject(MCAssembler &Asm,
     RelocTableEnd += NumRelocs * sizeof(MachO::any_relocation_info);
   }
 
-  // Write out the deployment target information, if it's available.
-  if (VersionInfo.Major != 0) {
-    assert(VersionInfo.Update < 256 && "unencodable update target version");
-    assert(VersionInfo.Minor < 256 && "unencodable minor target version");
-    assert(VersionInfo.Major < 65536 && "unencodable major target version");
-    uint32_t EncodedVersion = VersionInfo.Update | (VersionInfo.Minor << 8) |
-      (VersionInfo.Major << 16);
-    Write32(VersionInfo.Kind == MCVM_OSXVersionMin ? MachO::LC_VERSION_MIN_MACOSX :
-            MachO::LC_VERSION_MIN_IPHONEOS);
-    Write32(sizeof(MachO::version_min_command));
-    Write32(EncodedVersion);
-    Write32(0);         // reserved.
-  }
-
   // Write the data-in-code load command, if used.
   uint64_t DataInCodeTableEnd = RelocTableEnd + NumDataRegions * 8;
   if (NumDataRegions) {
@@ -868,12 +824,6 @@ void MachObjectWriter::WriteObject(MCAssembler &Asm,
     WriteLinkeditLoadCommand(MachO::LC_DATA_IN_CODE, DataRegionsOffset,
                              DataRegionsSize);
   }
-
-  // Write the loh load command, if used.
-  uint64_t LOHTableEnd = DataInCodeTableEnd + LOHSize;
-  if (LOHSize)
-    WriteLinkeditLoadCommand(MachO::LC_LINKER_OPTIMIZATION_HINT,
-                             DataInCodeTableEnd, LOHSize);
 
   // Write the symbol table load command, if used.
   if (NumSymbols) {
@@ -891,10 +841,10 @@ void MachObjectWriter::WriteObject(MCAssembler &Asm,
 
     // If used, the indirect symbols are written after the section data.
     if (NumIndirectSymbols)
-      IndirectSymbolOffset = LOHTableEnd;
+      IndirectSymbolOffset = DataInCodeTableEnd;
 
     // The symbol table is written after the indirect symbol data.
-    uint64_t SymbolTableOffset = LOHTableEnd + IndirectSymbolSize;
+    uint64_t SymbolTableOffset = DataInCodeTableEnd + IndirectSymbolSize;
 
     // The string table is written after symbol table.
     uint64_t StringTableOffset =
@@ -902,7 +852,7 @@ void MachObjectWriter::WriteObject(MCAssembler &Asm,
                                               sizeof(MachO::nlist_64) :
                                               sizeof(MachO::nlist));
     WriteSymtabLoadCommand(SymbolTableOffset, NumSymTabSymbols,
-                           StringTableOffset, StringTable.data().size());
+                           StringTableOffset, StringTable.size());
 
     WriteDysymtabLoadCommand(FirstLocalSymbol, NumLocalSymbols,
                              FirstExternalSymbol, NumExternalSymbols,
@@ -961,28 +911,17 @@ void MachObjectWriter::WriteObject(MCAssembler &Asm,
     Write16(Data->Kind);
   }
 
-  // Write out the loh commands, if there is one.
-  if (LOHSize) {
-#ifndef NDEBUG
-    unsigned Start = OS.tell();
-#endif
-    Asm.getLOHContainer().Emit(*this, Layout);
-    // Pad to a multiple of the pointer size.
-    WriteBytes("", OffsetToAlignment(LOHRawSize, is64Bit() ? 8 : 4));
-    assert(OS.tell() - Start == LOHSize);
-  }
-
   // Write the symbol table data, if used.
   if (NumSymbols) {
     // Write the indirect symbol entries.
     for (MCAssembler::const_indirect_symbol_iterator
            it = Asm.indirect_symbol_begin(),
            ie = Asm.indirect_symbol_end(); it != ie; ++it) {
-      // Indirect symbols in the non-lazy symbol pointer section have some
+      // Indirect symbols in the non lazy symbol pointer section have some
       // special handling.
       const MCSectionMachO &Section =
         static_cast<const MCSectionMachO&>(it->SectionData->getSection());
-      if (Section.getType() == MachO::S_NON_LAZY_SYMBOL_POINTERS) {
+      if (Section.getType() == MCSectionMachO::S_NON_LAZY_SYMBOL_POINTERS) {
         // If this symbol is defined and internal, mark it as such.
         if (it->Symbol->isDefined() &&
             !Asm.getSymbolData(*it->Symbol).isExternal()) {
@@ -1008,7 +947,7 @@ void MachObjectWriter::WriteObject(MCAssembler &Asm,
       WriteNlist(UndefinedSymbolData[i], Layout);
 
     // Write the string table.
-    OS << StringTable.data();
+    OS << StringTable.str();
   }
 }
 

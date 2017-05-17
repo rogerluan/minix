@@ -11,10 +11,11 @@
 //
 //===----------------------------------------------------------------------===//
 
+#define DEBUG_TYPE "loop-reroll"
 #include "llvm/Transforms/Scalar.h"
-#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallSet.h"
 #include "llvm/ADT/Statistic.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Analysis/AliasSetTracker.h"
 #include "llvm/Analysis/LoopPass.h"
@@ -23,7 +24,6 @@
 #include "llvm/Analysis/ScalarEvolutionExpressions.h"
 #include "llvm/Analysis/ValueTracking.h"
 #include "llvm/IR/DataLayout.h"
-#include "llvm/IR/Dominators.h"
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
@@ -34,8 +34,6 @@
 #include "llvm/Transforms/Utils/LoopUtils.h"
 
 using namespace llvm;
-
-#define DEBUG_TYPE "loop-reroll"
 
 STATISTIC(NumRerolledLoops, "Number of rerolled loops");
 
@@ -126,14 +124,14 @@ namespace {
       initializeLoopRerollPass(*PassRegistry::getPassRegistry());
     }
 
-    bool runOnLoop(Loop *L, LPPassManager &LPM) override;
+    bool runOnLoop(Loop *L, LPPassManager &LPM);
 
-    void getAnalysisUsage(AnalysisUsage &AU) const override {
+    virtual void getAnalysisUsage(AnalysisUsage &AU) const {
       AU.addRequired<AliasAnalysis>();
       AU.addRequired<LoopInfo>();
       AU.addPreserved<LoopInfo>();
-      AU.addRequired<DominatorTreeWrapperPass>();
-      AU.addPreserved<DominatorTreeWrapperPass>();
+      AU.addRequired<DominatorTree>();
+      AU.addPreserved<DominatorTree>();
       AU.addRequired<ScalarEvolution>();
       AU.addRequired<TargetLibraryInfo>();
     }
@@ -142,7 +140,7 @@ protected:
     AliasAnalysis *AA;
     LoopInfo *LI;
     ScalarEvolution *SE;
-    const DataLayout *DL;
+    DataLayout *DL;
     TargetLibraryInfo *TLI;
     DominatorTree *DT;
 
@@ -191,12 +189,12 @@ protected:
 
       iterator begin() {
         assert(Valid && "Using invalid reduction");
-        return std::next(Instructions.begin());
+        return llvm::next(Instructions.begin());
       }
 
       const_iterator begin() const {
         assert(Valid && "Using invalid reduction");
-        return std::next(Instructions.begin());
+        return llvm::next(Instructions.begin());
       }
 
       iterator end() { return Instructions.end(); }
@@ -215,7 +213,9 @@ protected:
       typedef SmallVector<SimpleLoopReduction, 16> SmallReductionVector;
 
       // Add a new possible reduction.
-      void addSLR(SimpleLoopReduction &SLR) { PossibleReds.push_back(SLR); }
+      void addSLR(SimpleLoopReduction &SLR) {
+        PossibleReds.push_back(SLR);
+      }
 
       // Setup to track possible reductions corresponding to the provided
       // rerolling scale. Only reductions with a number of non-PHI instructions
@@ -223,8 +223,7 @@ protected:
       // are filled in:
       //   - A set of all possible instructions in eligible reductions.
       //   - A set of all PHIs in eligible reductions
-      //   - A set of all reduced values (last instructions) in eligible
-      //     reductions.
+      //   - A set of all reduced values (last instructions) in eligible reductions.
       void restrictToScale(uint64_t Scale,
                            SmallInstructionSet &PossibleRedSet,
                            SmallInstructionSet &PossibleRedPHISet,
@@ -237,12 +236,13 @@ protected:
           if (PossibleReds[i].size() % Scale == 0) {
             PossibleRedLastSet.insert(PossibleReds[i].getReducedValue());
             PossibleRedPHISet.insert(PossibleReds[i].getPHI());
-
+      
             PossibleRedSet.insert(PossibleReds[i].getPHI());
             PossibleRedIdx[PossibleReds[i].getPHI()] = i;
-            for (Instruction *J : PossibleReds[i]) {
-              PossibleRedSet.insert(J);
-              PossibleRedIdx[J] = i;
+            for (SimpleLoopReduction::iterator J = PossibleReds[i].begin(),
+                 JE = PossibleReds[i].end(); J != JE; ++J) {
+              PossibleRedSet.insert(*J);
+              PossibleRedIdx[*J] = i;
             }
           }
       }
@@ -340,7 +340,7 @@ char LoopReroll::ID = 0;
 INITIALIZE_PASS_BEGIN(LoopReroll, "loop-reroll", "Reroll loops", false, false)
 INITIALIZE_AG_DEPENDENCY(AliasAnalysis)
 INITIALIZE_PASS_DEPENDENCY(LoopInfo)
-INITIALIZE_PASS_DEPENDENCY(DominatorTreeWrapperPass)
+INITIALIZE_PASS_DEPENDENCY(DominatorTree)
 INITIALIZE_PASS_DEPENDENCY(ScalarEvolution)
 INITIALIZE_PASS_DEPENDENCY(TargetLibraryInfo)
 INITIALIZE_PASS_END(LoopReroll, "loop-reroll", "Reroll loops", false, false)
@@ -353,9 +353,12 @@ Pass *llvm::createLoopRerollPass() {
 // This operates like Instruction::isUsedOutsideOfBlock, but considers PHIs in
 // non-loop blocks to be outside the loop.
 static bool hasUsesOutsideLoop(Instruction *I, Loop *L) {
-  for (User *U : I->users())
-    if (!L->contains(cast<Instruction>(U)))
+  for (Value::use_iterator UI = I->use_begin(),
+       UIE = I->use_end(); UI != UIE; ++UI) {
+    Instruction *User = cast<Instruction>(*UI);
+    if (!L->contains(User))
       return true;
+  }
 
   return false;
 }
@@ -405,7 +408,7 @@ void LoopReroll::SimpleLoopReduction::add(Loop *L) {
   Instruction *C = Instructions.front();
 
   do {
-    C = cast<Instruction>(*C->user_begin());
+    C = cast<Instruction>(*C->use_begin());
     if (C->hasOneUse()) {
       if (!C->isBinaryOp())
         return;
@@ -420,15 +423,17 @@ void LoopReroll::SimpleLoopReduction::add(Loop *L) {
 
   if (Instructions.size() < 2 ||
       !C->isSameOperationAs(Instructions.back()) ||
-      C->use_empty())
+      C->use_begin() == C->use_end())
     return;
 
   // C is now the (potential) last instruction in the reduction chain.
-  for (User *U : C->users())
+  for (Value::use_iterator UI = C->use_begin(), UIE = C->use_end();
+       UI != UIE; ++UI) {
     // The only in-loop user can be the initial PHI.
-    if (L->contains(cast<Instruction>(U)))
-      if (cast<Instruction>(U) != Instructions.front())
+    if (L->contains(cast<Instruction>(*UI)))
+      if (cast<Instruction>(*UI ) != Instructions.front())
         return;
+  }
 
   Instructions.push_back(C);
   Valid = true;
@@ -478,14 +483,15 @@ void LoopReroll::collectInLoopUserSet(Loop *L,
       continue;
 
     if (!Final.count(I))
-      for (Use &U : I->uses()) {
-        Instruction *User = cast<Instruction>(U.getUser());
+      for (Value::use_iterator UI = I->use_begin(),
+           UIE = I->use_end(); UI != UIE; ++UI) {
+        Instruction *User = cast<Instruction>(*UI);
         if (PHINode *PN = dyn_cast<PHINode>(User)) {
           // Ignore "wrap-around" uses to PHIs of this loop's header.
-          if (PN->getIncomingBlock(U) == L->getHeader())
+          if (PN->getIncomingBlock(UI) == L->getHeader())
             continue;
         }
-
+  
         if (L->contains(User) && !Exclude.count(User)) {
           Queue.push_back(User);
         }
@@ -553,8 +559,8 @@ bool LoopReroll::findScaleFromMul(Instruction *RealIV, uint64_t &Scale,
   if (RealIV->getNumUses() != 2)
     return false;
   const SCEVAddRecExpr *RealIVSCEV = cast<SCEVAddRecExpr>(SE->getSCEV(RealIV));
-  Instruction *User1 = cast<Instruction>(*RealIV->user_begin()),
-              *User2 = cast<Instruction>(*std::next(RealIV->user_begin()));
+  Instruction *User1 = cast<Instruction>(*RealIV->use_begin()),
+              *User2 = cast<Instruction>(*llvm::next(RealIV->use_begin()));
   if (!SE->isSCEVable(User1->getType()) || !SE->isSCEVable(User2->getType()))
     return false;
   const SCEVAddRecExpr *User1SCEV =
@@ -610,25 +616,26 @@ bool LoopReroll::collectAllRoots(Loop *L, uint64_t Inc, uint64_t Scale,
                                  SmallVector<SmallInstructionVector, 32> &Roots,
                                  SmallInstructionSet &AllRoots,
                                  SmallInstructionVector &LoopIncs) {
-  for (User *U : IV->users()) {
-    Instruction *UI = cast<Instruction>(U);
-    if (!SE->isSCEVable(UI->getType()))
+  for (Value::use_iterator UI = IV->use_begin(),
+       UIE = IV->use_end(); UI != UIE; ++UI) {
+    Instruction *User = cast<Instruction>(*UI);
+    if (!SE->isSCEVable(User->getType()))
       continue;
-    if (UI->getType() != IV->getType())
+    if (User->getType() != IV->getType())
       continue;
-    if (!L->contains(UI))
+    if (!L->contains(User))
       continue;
-    if (hasUsesOutsideLoop(UI, L))
+    if (hasUsesOutsideLoop(User, L))
       continue;
 
     if (const SCEVConstant *Diff = dyn_cast<SCEVConstant>(SE->getMinusSCEV(
-          SE->getSCEV(UI), SE->getSCEV(IV)))) {
+          SE->getSCEV(User), SE->getSCEV(IV)))) {
       uint64_t Idx = Diff->getValue()->getValue().getZExtValue();
       if (Idx > 0 && Idx < Scale) {
-        Roots[Idx-1].push_back(UI);
-        AllRoots.insert(UI);
+        Roots[Idx-1].push_back(User);
+        AllRoots.insert(User);
       } else if (Idx == Scale && Inc > 1) {
-        LoopIncs.push_back(UI);
+        LoopIncs.push_back(User);
       }
     }
   }
@@ -657,15 +664,16 @@ bool LoopReroll::ReductionTracker::validateSelected() {
        RI != RIE; ++RI) {
     int i = *RI;
     int PrevIter = 0, BaseCount = 0, Count = 0;
-    for (Instruction *J : PossibleReds[i]) {
-      // Note that all instructions in the chain must have been found because
-      // all instructions in the function must have been assigned to some
-      // iteration.
-      int Iter = PossibleRedIter[J];
+    for (SimpleLoopReduction::iterator J = PossibleReds[i].begin(),
+         JE = PossibleReds[i].end(); J != JE; ++J) {
+	// Note that all instructions in the chain must have been found because
+	// all instructions in the function must have been assigned to some
+	// iteration.
+      int Iter = PossibleRedIter[*J];
       if (Iter != PrevIter && Iter != PrevIter + 1 &&
           !PossibleReds[i].getReducedValue()->isAssociative()) {
         DEBUG(dbgs() << "LRR: Out-of-order non-associative reduction: " <<
-                        J << "\n");
+                        *J << "\n");
         return false;
       }
 
@@ -711,8 +719,10 @@ void LoopReroll::ReductionTracker::replaceSelected() {
 
     // Replace users with the new end-of-chain value.
     SmallInstructionVector Users;
-    for (User *U : PossibleReds[i].getReducedValue()->users())
-      Users.push_back(cast<Instruction>(U));
+    for (Value::use_iterator UI =
+           PossibleReds[i].getReducedValue()->use_begin(),
+         UIE = PossibleReds[i].getReducedValue()->use_end(); UI != UIE; ++UI)
+      Users.push_back(cast<Instruction>(*UI));
 
     for (SmallInstructionVector::iterator J = Users.begin(),
          JE = Users.end(); J != JE; ++J)
@@ -878,7 +888,7 @@ bool LoopReroll::reroll(Instruction *IV, Loop *L, BasicBlock *Header,
           // needed because otherwise isSafeToSpeculativelyExecute returns
           // false on PHI nodes.
           if (!isSimpleLoadStore(J2) && !isSafeToSpeculativelyExecute(J2, DL))
-            FutureSideEffects = true;
+            FutureSideEffects = true; 
         }
 
         ++J2;
@@ -921,10 +931,8 @@ bool LoopReroll::reroll(Instruction *IV, Loop *L, BasicBlock *Header,
       // them, and this matching fails. As an exception, we allow the alias
       // set tracker to handle regular (simple) load/store dependencies.
       if (FutureSideEffects &&
-            ((!isSimpleLoadStore(J1) &&
-              !isSafeToSpeculativelyExecute(J1, DL)) ||
-             (!isSimpleLoadStore(J2) &&
-              !isSafeToSpeculativelyExecute(J2, DL)))) {
+            ((!isSimpleLoadStore(J1) && !isSafeToSpeculativelyExecute(J1)) ||
+             (!isSimpleLoadStore(J2) && !isSafeToSpeculativelyExecute(J2)))) {
         DEBUG(dbgs() << "LRR: iteration root match failed at " << *J1 <<
                         " vs. " << *J2 <<
                         " (side effects prevent reordering)\n");
@@ -945,13 +953,13 @@ bool LoopReroll::reroll(Instruction *IV, Loop *L, BasicBlock *Header,
       bool InReduction = Reductions.isPairInSame(J1, J2);
 
       if (!(InReduction && J1->isAssociative())) {
-        bool Swapped = false, SomeOpMatched = false;
+        bool Swapped = false, SomeOpMatched = false;;
         for (unsigned j = 0; j < J1->getNumOperands() && !MatchFailed; ++j) {
           Value *Op2 = J2->getOperand(j);
 
-          // If this is part of a reduction (and the operation is not
-          // associatve), then we match all operands, but not those that are
-          // part of the reduction.
+	  // If this is part of a reduction (and the operation is not
+	  // associatve), then we match all operands, but not those that are
+	  // part of the reduction.
           if (InReduction)
             if (Instruction *Op2I = dyn_cast<Instruction>(Op2))
               if (Reductions.isPairInSame(J2, Op2I))
@@ -965,11 +973,11 @@ bool LoopReroll::reroll(Instruction *IV, Loop *L, BasicBlock *Header,
             Op2 = IV;
 
           if (J1->getOperand(Swapped ? unsigned(!j) : j) != Op2) {
-            // If we've not already decided to swap the matched operands, and
-            // we've not already matched our first operand (note that we could
-            // have skipped matching the first operand because it is part of a
-            // reduction above), and the instruction is commutative, then try
-            // the swapped match.
+	    // If we've not already decided to swap the matched operands, and
+	    // we've not already matched our first operand (note that we could
+	    // have skipped matching the first operand because it is part of a
+	    // reduction above), and the instruction is commutative, then try
+	    // the swapped match.
             if (!Swapped && J1->isCommutative() && !SomeOpMatched &&
                 J1->getOperand(!j) == Op2) {
               Swapped = true;
@@ -1066,7 +1074,7 @@ bool LoopReroll::reroll(Instruction *IV, Loop *L, BasicBlock *Header,
       continue;
     }
 
-    ++J;
+    ++J; 
   }
 
   // Insert the new induction variable.
@@ -1080,8 +1088,9 @@ bool LoopReroll::reroll(Instruction *IV, Loop *L, BasicBlock *Header,
                            L, SCEV::FlagAnyWrap));
   { // Limit the lifetime of SCEVExpander.
     SCEVExpander Expander(*SE, "reroll");
-    Value *NewIV = Expander.expandCodeFor(H, IV->getType(), Header->begin());
-
+    PHINode *NewIV =
+      cast<PHINode>(Expander.expandCodeFor(H, IV->getType(),
+                                           Header->begin()));
     for (DenseSet<Instruction *>::iterator J = BaseUseSet.begin(),
          JE = BaseUseSet.end(); J != JE; ++J)
       (*J)->replaceUsesOfWith(IV, NewIV);
@@ -1092,24 +1101,21 @@ bool LoopReroll::reroll(Instruction *IV, Loop *L, BasicBlock *Header,
         if (Inc == 1)
           ICSCEV =
             SE->getMulExpr(ICSCEV, SE->getConstant(ICSCEV->getType(), Scale));
-        // Iteration count SCEV minus 1
-        const SCEV *ICMinus1SCEV =
-          SE->getMinusSCEV(ICSCEV, SE->getConstant(ICSCEV->getType(), 1));
-
-        Value *ICMinus1; // Iteration count minus 1
-        if (isa<SCEVConstant>(ICMinus1SCEV)) {
-          ICMinus1 = Expander.expandCodeFor(ICMinus1SCEV, NewIV->getType(), BI);
+        Value *IC;
+        if (isa<SCEVConstant>(ICSCEV)) {
+          IC = Expander.expandCodeFor(ICSCEV, NewIV->getType(), BI);
         } else {
           BasicBlock *Preheader = L->getLoopPreheader();
           if (!Preheader)
             Preheader = InsertPreheaderForLoop(L, this);
 
-          ICMinus1 = Expander.expandCodeFor(ICMinus1SCEV, NewIV->getType(),
-                                            Preheader->getTerminator());
+          IC = Expander.expandCodeFor(ICSCEV, NewIV->getType(),
+                                      Preheader->getTerminator());
         }
-
-        Value *Cond =
-            new ICmpInst(BI, CmpInst::ICMP_EQ, NewIV, ICMinus1, "exitcond");
+ 
+        Value *NewIVNext = NewIV->getIncomingValueForBlock(Header); 
+        Value *Cond = new ICmpInst(BI, CmpInst::ICMP_EQ, NewIVNext, IC,
+                                   "exitcond");
         BI->setCondition(Cond);
 
         if (BI->getSuccessor(1) != Header)
@@ -1125,16 +1131,12 @@ bool LoopReroll::reroll(Instruction *IV, Loop *L, BasicBlock *Header,
 }
 
 bool LoopReroll::runOnLoop(Loop *L, LPPassManager &LPM) {
-  if (skipOptnoneFunction(L))
-    return false;
-
   AA = &getAnalysis<AliasAnalysis>();
   LI = &getAnalysis<LoopInfo>();
   SE = &getAnalysis<ScalarEvolution>();
   TLI = &getAnalysis<TargetLibraryInfo>();
-  DataLayoutPass *DLP = getAnalysisIfAvailable<DataLayoutPass>();
-  DL = DLP ? &DLP->getDataLayout() : nullptr;
-  DT = &getAnalysis<DominatorTreeWrapperPass>().getDomTree();
+  DL = getAnalysisIfAvailable<DataLayout>();
+  DT = &getAnalysis<DominatorTree>();
 
   BasicBlock *Header = L->getHeader();
   DEBUG(dbgs() << "LRR: F[" << Header->getParent()->getName() <<
@@ -1179,3 +1181,4 @@ bool LoopReroll::runOnLoop(Loop *L, LPPassManager &LPM) {
 
   return Changed;
 }
+

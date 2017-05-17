@@ -31,13 +31,13 @@ class TargetSelectionDAGInfo {
   TargetSelectionDAGInfo(const TargetSelectionDAGInfo &) LLVM_DELETED_FUNCTION;
   void operator=(const TargetSelectionDAGInfo &) LLVM_DELETED_FUNCTION;
 
-  const DataLayout *DL;
+  const DataLayout *TD;
 
 protected:
-  const DataLayout *getDataLayout() const { return DL; }
+  const DataLayout *getDataLayout() const { return TD; }
 
 public:
-  explicit TargetSelectionDAGInfo(const DataLayout *DL);
+  explicit TargetSelectionDAGInfo(const TargetMachine &TM);
   virtual ~TargetSelectionDAGInfo();
 
   /// EmitTargetCodeForMemcpy - Emit target-specific code that performs a
@@ -46,7 +46,7 @@ public:
   /// more efficient than using a library call. This function can return a null
   /// SDValue if the target declines to use custom code and a different
   /// lowering strategy should be used.
-  ///
+  /// 
   /// If AlwaysInline is true, the size is constant and the target should not
   /// emit any calls and is strongly encouraged to attempt to emit inline code
   /// even if it is beyond the usual threshold because this intrinsic is being

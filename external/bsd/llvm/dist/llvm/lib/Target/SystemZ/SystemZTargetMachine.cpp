@@ -11,7 +11,6 @@
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/Support/TargetRegistry.h"
 #include "llvm/Transforms/Scalar.h"
-#include "llvm/CodeGen/TargetLoweringObjectFileImpl.h"
 
 using namespace llvm;
 
@@ -23,15 +22,20 @@ extern "C" void LLVMInitializeSystemZTarget() {
 SystemZTargetMachine::SystemZTargetMachine(const Target &T, StringRef TT,
                                            StringRef CPU, StringRef FS,
                                            const TargetOptions &Options,
-                                           Reloc::Model RM, CodeModel::Model CM,
+                                           Reloc::Model RM,
+                                           CodeModel::Model CM,
                                            CodeGenOpt::Level OL)
-    : LLVMTargetMachine(T, TT, CPU, FS, Options, RM, CM, OL),
-      TLOF(make_unique<TargetLoweringObjectFileELF>()),
-      Subtarget(TT, CPU, FS, *this) {
+  : LLVMTargetMachine(T, TT, CPU, FS, Options, RM, CM, OL),
+    Subtarget(TT, CPU, FS),
+    // Make sure that global data has at least 16 bits of alignment by default,
+    // so that we can refer to it using LARL.  We don't have any special
+    // requirements for stack variables though.
+    DL("E-p:64:64:64-i1:8:16-i8:8:16-i16:16-i32:32-i64:64"
+       "-f32:32-f64:64-f128:64-a0:8:16-n32:64"),
+    InstrInfo(*this), TLInfo(*this), TSInfo(*this),
+    FrameLowering(*this, Subtarget) {
   initAsmInfo();
 }
-
-SystemZTargetMachine::~SystemZTargetMachine() {}
 
 namespace {
 /// SystemZ Code Generator Pass Configuration Options.
@@ -44,15 +48,16 @@ public:
     return getTM<SystemZTargetMachine>();
   }
 
-  void addIRPasses() override;
-  bool addInstSelector() override;
-  void addPreSched2() override;
-  void addPreEmitPass() override;
+  virtual void addIRPasses() LLVM_OVERRIDE;
+  virtual bool addInstSelector() LLVM_OVERRIDE;
+  virtual bool addPreSched2() LLVM_OVERRIDE;
+  virtual bool addPreEmitPass() LLVM_OVERRIDE;
 };
 } // end anonymous namespace
 
 void SystemZPassConfig::addIRPasses() {
   TargetPassConfig::addIRPasses();
+  addPass(createPartiallyInlineLibCallsPass());
 }
 
 bool SystemZPassConfig::addInstSelector() {
@@ -60,13 +65,13 @@ bool SystemZPassConfig::addInstSelector() {
   return false;
 }
 
-void SystemZPassConfig::addPreSched2() {
-  if (getOptLevel() != CodeGenOpt::None &&
-      getSystemZTargetMachine().getSubtargetImpl()->hasLoadStoreOnCond())
+bool SystemZPassConfig::addPreSched2() {
+  if (getSystemZTargetMachine().getSubtargetImpl()->hasLoadStoreOnCond())
     addPass(&IfConverterID);
+  return true;
 }
 
-void SystemZPassConfig::addPreEmitPass() {
+bool SystemZPassConfig::addPreEmitPass() {
   // We eliminate comparisons here rather than earlier because some
   // transformations can change the set of available CC values and we
   // generally want those transformations to have priority.  This is
@@ -91,10 +96,11 @@ void SystemZPassConfig::addPreEmitPass() {
   // between the comparison and the branch, but it isn't clear whether
   // preventing that would be a win or not.
   if (getOptLevel() != CodeGenOpt::None)
-    addPass(createSystemZElimComparePass(getSystemZTargetMachine()), false);
+    addPass(createSystemZElimComparePass(getSystemZTargetMachine()));
   if (getOptLevel() != CodeGenOpt::None)
-    addPass(createSystemZShortenInstPass(getSystemZTargetMachine()), false);
+    addPass(createSystemZShortenInstPass(getSystemZTargetMachine()));
   addPass(createSystemZLongBranchPass(getSystemZTargetMachine()));
+  return true;
 }
 
 TargetPassConfig *SystemZTargetMachine::createPassConfig(PassManagerBase &PM) {

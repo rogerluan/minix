@@ -7,8 +7,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-// REQUIRES: locale.fr_FR.UTF-8
-
 // <ios>
 
 // template <class charT, class traits> class basic_ios

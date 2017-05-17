@@ -11,37 +11,34 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/Support/Errc.h"
-#include "llvm/ADT/STLExtras.h"
-#include "llvm/ADT/SmallVector.h"
 #include "llvm/Support/FileOutputBuffer.h"
+#include "llvm/ADT/OwningPtr.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/Support/raw_ostream.h"
-#include <system_error>
-
-#if !defined(_MSC_VER) && !defined(__MINGW32__)
-#include <unistd.h>
-#else
-#include <io.h>
-#endif
+#include "llvm/Support/system_error.h"
 
 using llvm::sys::fs::mapped_file_region;
 
 namespace llvm {
-FileOutputBuffer::FileOutputBuffer(std::unique_ptr<mapped_file_region> R,
+FileOutputBuffer::FileOutputBuffer(mapped_file_region * R,
                                    StringRef Path, StringRef TmpPath)
-    : Region(std::move(R)), FinalPath(Path), TempPath(TmpPath) {}
-
-FileOutputBuffer::~FileOutputBuffer() {
-  sys::fs::remove(Twine(TempPath));
+  : Region(R)
+  , FinalPath(Path)
+  , TempPath(TmpPath) {
 }
 
-std::error_code
-FileOutputBuffer::create(StringRef FilePath, size_t Size,
-                         std::unique_ptr<FileOutputBuffer> &Result,
-                         unsigned Flags) {
+FileOutputBuffer::~FileOutputBuffer() {
+  bool Existed;
+  sys::fs::remove(Twine(TempPath), Existed);
+}
+
+error_code FileOutputBuffer::create(StringRef FilePath,
+                                    size_t Size,
+                                    OwningPtr<FileOutputBuffer> &Result,
+                                    unsigned Flags) {
   // If file already exists, it must be a regular file (to be mappable).
   sys::fs::file_status Stat;
-  std::error_code EC = sys::fs::status(FilePath, Stat);
+  error_code EC = sys::fs::status(FilePath, Stat);
   switch (Stat.type()) {
     case sys::fs::file_type::file_not_found:
       // If file does not exist, we'll create one.
@@ -60,7 +57,8 @@ FileOutputBuffer::create(StringRef FilePath, size_t Size,
   }
 
   // Delete target file.
-  EC = sys::fs::remove(FilePath);
+  bool Existed;
+  EC = sys::fs::remove(FilePath, Existed);
   if (EC)
     return EC;
 
@@ -77,28 +75,28 @@ FileOutputBuffer::create(StringRef FilePath, size_t Size,
   if (EC)
     return EC;
 
-  EC = sys::fs::resize_file(FD, Size);
+  OwningPtr<mapped_file_region> MappedFile(new mapped_file_region(
+      FD, true, mapped_file_region::readwrite, Size, 0, EC));
   if (EC)
     return EC;
 
-  auto MappedFile = llvm::make_unique<mapped_file_region>(
-      FD, mapped_file_region::readwrite, Size, 0, EC);
-  int Ret = close(FD);
-  if (EC)
-    return EC;
-  if (Ret)
-    return std::error_code(errno, std::generic_category());
+  Result.reset(new FileOutputBuffer(MappedFile.get(), FilePath, TempFilePath));
+  if (Result)
+    MappedFile.take();
 
-  Result.reset(
-      new FileOutputBuffer(std::move(MappedFile), FilePath, TempFilePath));
-
-  return std::error_code();
+  return error_code::success();
 }
 
-std::error_code FileOutputBuffer::commit() {
+error_code FileOutputBuffer::commit(int64_t NewSmallerSize) {
   // Unmap buffer, letting OS flush dirty pages to file on disk.
-  Region.reset();
+  Region.reset(0);
 
+  // If requested, resize file as part of commit.
+  if ( NewSmallerSize != -1 ) {
+    error_code EC = sys::fs::resize_file(Twine(TempPath), NewSmallerSize);
+    if (EC)
+      return EC;
+  }
 
   // Rename file to final name.
   return sys::fs::rename(Twine(TempPath), Twine(FinalPath));

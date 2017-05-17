@@ -6,16 +6,21 @@
 #include <machine/cmos.h>
 #include <machine/bios.h>
 #include <machine/cpu.h>
+#include <minix/portio.h>
 #include <minix/cpufeature.h>
 #include <sys/reboot.h>
 #include <assert.h>
 #include <signal.h>
+#include <machine/vm.h>
 
 #include <minix/u64.h>
 
+#include "archconst.h"
 #include "arch_proto.h"
+#include "serial.h"
 #include "oxpcie.h"
 #include "direct_utils.h"
+#include <machine/multiboot.h>
 
 #ifdef USE_ACPI
 #include "acpi.h"

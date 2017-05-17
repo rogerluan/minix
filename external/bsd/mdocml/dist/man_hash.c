@@ -1,4 +1,4 @@
-/*	Id: man_hash.c,v 1.25 2011/07/24 18:15:14 kristaps Exp  */
+/*	$Vendor-Id: man_hash.c,v 1.25 2011/07/24 18:15:14 kristaps Exp $ */
 /*
  * Copyright (c) 2008, 2009, 2010 Kristaps Dzonsons <kristaps@bsd.lv>
  *

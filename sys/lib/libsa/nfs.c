@@ -1,4 +1,4 @@
-/*	$NetBSD: nfs.c,v 1.48 2014/03/20 03:13:18 christos Exp $	*/
+/*	$NetBSD: nfs.c,v 1.47 2011/12/25 06:09:08 tsutsui Exp $	*/
 
 /*-
  *  Copyright (c) 1993 John Brezak
@@ -657,10 +657,11 @@ nfs_stat(struct open_file *f, struct stat *sb)
 }
 
 #if defined(LIBSA_ENABLE_LS_OP)
-#include "ls.h"
 __compactcall void
-nfs_ls(struct open_file *f, const char *pattern)
+nfs_ls(struct open_file *f, const char *pattern,
+	void (*funcp)(char* arg), char* path)
 {
-	lsunsup("nfs");
+	printf("Currently ls command is unsupported by nfs\n");
+	return;
 }
 #endif

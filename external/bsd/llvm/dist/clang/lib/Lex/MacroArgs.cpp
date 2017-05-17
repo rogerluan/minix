@@ -1,4 +1,4 @@
-//===--- MacroArgs.cpp - Formal argument info for Macros ------------------===//
+//===--- TokenLexer.cpp - Lex from a token stream -------------------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -7,7 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file implements the MacroArgs interface.
+// This file implements the TokenLexer interface.
 //
 //===----------------------------------------------------------------------===//
 
@@ -27,7 +27,7 @@ MacroArgs *MacroArgs::create(const MacroInfo *MI,
                              bool VarargsElided, Preprocessor &PP) {
   assert(MI->isFunctionLike() &&
          "Can't have args for an object-like macro!");
-  MacroArgs **ResultEnt = nullptr;
+  MacroArgs **ResultEnt = 0;
   unsigned ClosestMatch = ~0U;
   
   // See if we have an entry with a big enough argument list to reuse on the
@@ -46,7 +46,7 @@ MacroArgs *MacroArgs::create(const MacroInfo *MI,
     }
   
   MacroArgs *Result;
-  if (!ResultEnt) {
+  if (ResultEnt == 0) {
     // Allocate memory for a MacroArgs object with the lexer tokens at the end.
     Result = (MacroArgs*)malloc(sizeof(MacroArgs) + 
                                 UnexpArgTokens.size() * sizeof(Token));
@@ -218,7 +218,6 @@ Token MacroArgs::StringifyArgument(const Token *ArgToks,
     if (tok::isStringLiteral(Tok.getKind()) || // "foo", u8R"x(foo)x"_bar, etc.
         Tok.is(tok::char_constant) ||          // 'x'
         Tok.is(tok::wide_char_constant) ||     // L'x'.
-        Tok.is(tok::utf8_char_constant) ||     // u8'x'.
         Tok.is(tok::utf16_char_constant) ||    // u'x'.
         Tok.is(tok::utf32_char_constant)) {    // U'x'.
       bool Invalid = false;
@@ -234,14 +233,14 @@ Token MacroArgs::StringifyArgument(const Token *ArgToks,
       // in place and avoid copies where possible.
       unsigned CurStrLen = Result.size();
       Result.resize(CurStrLen+Tok.getLength());
-      const char *BufPtr = Result.data() + CurStrLen;
+      const char *BufPtr = &Result[CurStrLen];
       bool Invalid = false;
       unsigned ActualTokLen = PP.getSpelling(Tok, BufPtr, &Invalid);
 
       if (!Invalid) {
         // If getSpelling returned a pointer to an already uniqued version of
         // the string instead of filling in BufPtr, memcpy it onto our string.
-        if (ActualTokLen && BufPtr != &Result[CurStrLen])
+        if (BufPtr != &Result[CurStrLen])
           memcpy(&Result[CurStrLen], BufPtr, ActualTokLen);
 
         // If the token was dirty, the spelling may be shorter than the token.

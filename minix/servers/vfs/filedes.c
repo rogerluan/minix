@@ -83,28 +83,6 @@ void init_filps(void)
 }
 
 /*===========================================================================*
- *				check_fds				     *
- *===========================================================================*/
-int check_fds(struct fproc *rfp, int nfds)
-{
-/* Check whether at least 'nfds' file descriptors can be created in the process
- * 'rfp'.  Return OK on success, or otherwise an appropriate error code.
- */
-  int i;
-
-  assert(nfds >= 1);
-
-  for (i = 0; i < OPEN_MAX; i++) {
-	if (rfp->fp_filp[i] == NULL) {
-		if (--nfds == 0)
-			return OK;
-	}
-  }
-
-  return EMFILE;
-}
-
-/*===========================================================================*
  *				get_fd					     *
  *===========================================================================*/
 int get_fd(struct fproc *rfp, int start, mode_t bits, int *k, struct filp **fpt)
@@ -141,7 +119,7 @@ int get_fd(struct fproc *rfp, int start, mode_t bits, int *k, struct filp **fpt)
 		f->filp_selectors = 0;
 		f->filp_select_ops = 0;
 		f->filp_pipe_select_ops = 0;
-		f->filp_select_dev = NO_DEV;
+		f->filp_char_select_dev = NO_DEV;
 		f->filp_flags = 0;
 		f->filp_select_flags = 0;
 		f->filp_softlock = NULL;
@@ -159,11 +137,9 @@ int get_fd(struct fproc *rfp, int start, mode_t bits, int *k, struct filp **fpt)
 /*===========================================================================*
  *				get_filp				     *
  *===========================================================================*/
-struct filp *
-get_filp(
-	int fild,			/* file descriptor */
-	tll_access_t locktype
-)
+struct filp *get_filp(fild, locktype)
+int fild;			/* file descriptor */
+tll_access_t locktype;
 {
 /* See if 'fild' refers to a valid file descr.  If so, return its filp ptr. */
 
@@ -174,12 +150,10 @@ get_filp(
 /*===========================================================================*
  *				get_filp2				     *
  *===========================================================================*/
-struct filp *
-get_filp2(
-	register struct fproc *rfp,
-	int fild,			/* file descriptor */
-	tll_access_t locktype
-)
+struct filp *get_filp2(rfp, fild, locktype)
+register struct fproc *rfp;
+int fild;			/* file descriptor */
+tll_access_t locktype;
 {
 /* See if 'fild' refers to a valid file descr.  If so, return its filp ptr. */
   struct filp *filp;
@@ -224,27 +198,6 @@ struct filp *find_filp(struct vnode *vp, mode_t bits)
 }
 
 /*===========================================================================*
- *				find_filp_by_sock_dev			     *
- *===========================================================================*/
-struct filp *find_filp_by_sock_dev(dev_t dev)
-{
-/* See if there is a file pointer for a socket with the given socket device
- * number.
- */
-  struct filp *f;
-
-  for (f = &filp[0]; f < &filp[NR_FILPS]; f++) {
-	if (f->filp_count != 0 && f->filp_vno != NULL &&
-	    S_ISSOCK(f->filp_vno->v_mode) && f->filp_vno->v_sdev == dev &&
-	    f->filp_mode != FILP_CLOSED) {
-		return f;
-	}
-  }
-
-  return NULL;
-}
-
-/*===========================================================================*
  *				invalidate_filp				     *
  *===========================================================================*/
 void invalidate_filp(struct filp *rfilp)
@@ -272,27 +225,6 @@ void invalidate_filp_by_char_major(devmajor_t major)
 }
 
 /*===========================================================================*
- *			invalidate_filp_by_sock_drv			     *
- *===========================================================================*/
-void invalidate_filp_by_sock_drv(unsigned int num)
-{
-/* Invalidate all file pointers for sockets owned by the socket driver with the
- * smap number 'num'.
- */
-  struct filp *f;
-  struct smap *sp;
-
-  for (f = &filp[0]; f < &filp[NR_FILPS]; f++) {
-	if (f->filp_count != 0 && f->filp_vno != NULL) {
-		if (S_ISSOCK(f->filp_vno->v_mode) &&
-		    (sp = get_smap_by_dev(f->filp_vno->v_sdev, NULL)) != NULL
-		    && sp->smap_num == num)
-			invalidate_filp(f);
-	}
-  }
-}
-
-/*===========================================================================*
  *			invalidate_filp_by_endpt			     *
  *===========================================================================*/
 void invalidate_filp_by_endpt(endpoint_t proc_e)
@@ -310,8 +242,9 @@ void invalidate_filp_by_endpt(endpoint_t proc_e)
 /*===========================================================================*
  *				lock_filp				     *
  *===========================================================================*/
-void
-lock_filp(struct filp *filp, tll_access_t locktype)
+void lock_filp(filp, locktype)
+struct filp *filp;
+tll_access_t locktype;
 {
   struct worker_thread *org_self;
   struct vnode *vp;
@@ -354,8 +287,8 @@ lock_filp(struct filp *filp, tll_access_t locktype)
 /*===========================================================================*
  *				unlock_filp				     *
  *===========================================================================*/
-void
-unlock_filp(struct filp *filp)
+void unlock_filp(filp)
+struct filp *filp;
 {
   /* If this filp holds a soft lock on the vnode, we must be the owner */
   if (filp->filp_softlock != NULL)
@@ -379,8 +312,9 @@ unlock_filp(struct filp *filp)
 /*===========================================================================*
  *				unlock_filps				     *
  *===========================================================================*/
-void
-unlock_filps(struct filp *filp1, struct filp *filp2)
+void unlock_filps(filp1, filp2)
+struct filp *filp1;
+struct filp *filp2;
 {
 /* Unlock two filps that are tied to the same vnode. As a thread can lock a
  * vnode only once, unlocking the vnode twice would result in an error. */
@@ -410,17 +344,12 @@ unlock_filps(struct filp *filp1, struct filp *filp2)
 /*===========================================================================*
  *				close_filp				     *
  *===========================================================================*/
-int
-close_filp(struct filp * f, int may_suspend)
+void close_filp(f)
+struct filp *f;
 {
-/* Close a file.  Will also unlock filp when done.  The 'may_suspend' flag
- * indicates whether the current process may be suspended closing a socket.
- * That is currently supported only when the user issued a close(2), and (only)
- * in that case may this function return SUSPEND instead of OK.  In all other
- * cases, this function will always return OK.  It will never return another
- * error code, for reasons explained below.
- */
-  int r, rw;
+/* Close a file. Will also unlock filp when done */
+
+  int rw;
   dev_t dev;
   struct vnode *vp;
 
@@ -430,57 +359,24 @@ close_filp(struct filp * f, int may_suspend)
 
   vp = f->filp_vno;
 
-  r = OK;
-
   if (f->filp_count - 1 == 0 && f->filp_mode != FILP_CLOSED) {
 	/* Check to see if the file is special. */
-	if (S_ISCHR(vp->v_mode) || S_ISBLK(vp->v_mode) ||
-	    S_ISSOCK(vp->v_mode)) {
+	if (S_ISCHR(vp->v_mode) || S_ISBLK(vp->v_mode)) {
 		dev = vp->v_sdev;
 		if (S_ISBLK(vp->v_mode))  {
 			lock_bsf();
-			if (vp->v_bfs_e == ROOT_FS_E && dev != ROOT_DEV) {
+			if (vp->v_bfs_e == ROOT_FS_E) {
 				/* Invalidate the cache unless the special is
-				 * mounted. Be careful not to flush the root
-				 * file system either.
+				 * mounted. Assume that the root filesystem's
+				 * is open only for fsck.
 				 */
-				(void) req_flush(vp->v_bfs_e, dev);
+				req_flush(vp->v_bfs_e, dev);
 			}
 			unlock_bsf();
 
 			(void) bdev_close(dev);	/* Ignore errors */
-		} else if (S_ISCHR(vp->v_mode)) {
-			(void) cdev_close(dev);	/* Ignore errors */
 		} else {
-			/*
-			 * Sockets may take a while to be closed (SO_LINGER),
-			 * and thus, we may issue a suspending close to a
-			 * socket driver.  Getting this working for close(2) is
-			 * the easy case, and that is all we support for now.
-			 * However, there is also eg dup2(2), which if
-			 * interrupted by a signal should technically fail
-			 * without closing the file descriptor.  Then there are
-			 * cases where the close should never block: process
-			 * exit and close-on-exec for example.  Getting all
-			 * such cases right is left to future work; currently
-			 * they all perform thread-blocking socket closes and
-			 * thus cause the socket to perform lingering in the
-			 * background if at all.
-			 */
-			assert(!may_suspend || job_call_nr == VFS_CLOSE);
-
-			if (f->filp_flags & O_NONBLOCK)
-				may_suspend = FALSE;
-
-			r = sdev_close(dev, may_suspend);
-
-			/*
-			 * Returning a non-OK error is a bad idea, because it
-			 * will leave the application wondering whether closing
-			 * the file descriptor actually succeeded.
-			 */
-			if (r != SUSPEND)
-				r = OK;
+			(void) cdev_close(dev);	/* Ignore errors */
 		}
 
 		f->filp_mode = FILP_CLOSED;
@@ -514,8 +410,6 @@ close_filp(struct filp * f, int may_suspend)
   }
 
   mutex_unlock(&f->filp_lock);
-
-  return r;
 }
 
 /*===========================================================================*
@@ -525,15 +419,12 @@ int do_copyfd(void)
 {
 /* Copy a file descriptor between processes, or close a remote file descriptor.
  * This call is used as back-call by device drivers (UDS, VND), and is expected
- * to be used in response to either an IOCTL to VND or a SEND or RECV socket
- * request to UDS.
+ * to be used in response to an IOCTL to such device drivers.
  */
   struct fproc *rfp;
   struct filp *rfilp;
-  struct vnode *vp;
-  struct smap *sp;
   endpoint_t endpt;
-  int r, fd, what, flags, slot;
+  int r, fd, what, slot;
 
   /* This should be replaced with an ACL check. */
   if (!super_user) return(EPERM);
@@ -542,16 +433,13 @@ int do_copyfd(void)
   fd = job_m_in.m_lsys_vfs_copyfd.fd;
   what = job_m_in.m_lsys_vfs_copyfd.what;
 
-  flags = what & COPYFD_FLAGS;
-  what &= ~COPYFD_FLAGS;
-
   if (isokendpt(endpt, &slot) != OK) return(EINVAL);
   rfp = &fproc[slot];
 
   /* FIXME: we should now check that the user process is indeed blocked on an
-   * IOCTL or socket call, so that we can safely mess with its file
-   * descriptors.  We currently do not have the necessary state to verify this,
-   * so we assume that the call is always used in the right way.
+   * IOCTL call, so that we can safely mess with its file descriptors.  We
+   * currently do not have the necessary state to verify this, so we assume
+   * that the call is always used in the right way.
    */
 
   /* Depending on the operation, get the file descriptor from the caller or the
@@ -567,7 +455,7 @@ int do_copyfd(void)
    * passes in the file descriptor to the device node on which it is performing
    * the IOCTL.  We do not allow manipulation of such device nodes.  In
    * practice, this only applies to block-special files (and thus VND), because
-   * socket files (as used by UDS) are unlocked during the socket operation.
+   * character-special files (as used by UDS) are unlocked during the IOCTL.
    */
   if (rfilp->filp_ioctl_fp == rfp)
 	return(EBADF);
@@ -577,42 +465,7 @@ int do_copyfd(void)
 
   switch (what) {
   case COPYFD_FROM:
-	/*
-	 * If the caller is a socket driver (namely, UDS) and the file
-	 * descriptor being copied in is a socket for that socket driver, then
-	 * deny the call, because of at least two known issues.  Both issues
-	 * are related to UDS having an in-flight file descriptor that is the
-	 * last reference to a UDS socket:
-	 *
-	 * 1) if UDS tries to close the file descriptor, this will prompt VFS
-	 *    to close the underlying object, which is a UDS socket.  As a
-	 *    result, while UDS is blocked in the close(2), VFS will try to
-	 *    send a request to UDS to close the socket.  This results in a
-	 *    deadlock of the UDS service.
-	 *
-	 * 2) if a file descriptor for a UDS socket is sent across that same
-	 *    UDS socket, the socket will remain referenced by UDS, thus open
-	 *    in VFS, and therefore also open in UDS.  The socket and file
-	 *    descriptor will both remain in use for the rest of UDS' lifetime.
-	 *    This can easily result in denial-of-service in the UDS service.
-	 *    The same problem can be triggered using multiple sockets that
-	 *    have in-flight file descriptors referencing each other.
-	 *
-	 * A proper solution for these problems may consist of some form of
-	 * "soft reference counting" where VFS does not count UDS having a
-	 * filp open as a real reference.  That is tricky business, so for now
-	 * we prevent any such problems with the check here.
-	 */
-	if ((vp = rfilp->filp_vno) != NULL && S_ISSOCK(vp->v_mode) &&
-	    (sp = get_smap_by_dev(vp->v_sdev, NULL)) != NULL &&
-	    sp->smap_endpt == who_e) {
-		r = EDEADLK;
-
-		break;
-	}
-
 	rfp = fp;
-	flags &= ~COPYFD_CLOEXEC;
 
 	/* FALLTHROUGH */
   case COPYFD_TO:
@@ -624,8 +477,6 @@ int do_copyfd(void)
 	/* If found, fill the slot and return the slot number. */
 	if (fd < OPEN_MAX) {
 		rfp->fp_filp[fd] = rfilp;
-		if (flags & COPYFD_CLOEXEC)
-			FD_SET(fd, &rfp->fp_cloexec_set);
 		rfilp->filp_count++;
 		r = fd;
 	} else

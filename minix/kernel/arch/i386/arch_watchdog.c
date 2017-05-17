@@ -1,4 +1,6 @@
+#include "kernel/kernel.h"
 #include "kernel/watchdog.h"
+#include "arch_proto.h"
 #include "glo.h"
 #include <minix/minlib.h>
 #include <minix/u64.h>

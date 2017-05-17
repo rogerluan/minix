@@ -9,20 +9,11 @@
 
 // <cmath>
 
-// NOTE: isinf and isnan are tested separately because they are expected to fail
-// on linux. We don't want their expected failure to hide other failures in this file.
-
 #include <cmath>
 #include <type_traits>
 #include <cassert>
 
 #include "hexfloat.h"
-
-// convertible to int/float/double/etc
-template <class T, int N=0>
-struct Value {
-    operator T () { return T(N); }
-};
 
 void test_abs()
 {
@@ -193,8 +184,8 @@ void test_fabs()
     static_assert((std::is_same<decltype(std::fabs((unsigned long long)0)), double>::value), "");
     static_assert((std::is_same<decltype(std::fabs((double)0)), double>::value), "");
     static_assert((std::is_same<decltype(std::fabs((long double)0)), long double>::value), "");
-    static_assert((std::is_same<decltype(std::fabsf(0.0f)), float>::value), "");
-    static_assert((std::is_same<decltype(std::fabsl(0.0L)), long double>::value), "");
+    static_assert((std::is_same<decltype(std::fabsf(0)), float>::value), "");
+    static_assert((std::is_same<decltype(std::fabsl(0)), long double>::value), "");
     assert(std::fabs(-1) == 1);
 }
 
@@ -342,14 +333,7 @@ void test_pow()
     static_assert((std::is_same<decltype(std::powf(0,0)), float>::value), "");
     static_assert((std::is_same<decltype(std::powl(0,0)), long double>::value), "");
     static_assert((std::is_same<decltype(std::pow((int)0, (int)0)), double>::value), "");
-//     static_assert((std::is_same<decltype(std::pow(Value<int>(), (int)0)), double>::value), "");
-//     static_assert((std::is_same<decltype(std::pow(Value<long double>(), (float)0)), long double>::value), "");
-//     static_assert((std::is_same<decltype(std::pow((float) 0, Value<float>())), float>::value), "");
     assert(std::pow(1,1) == 1);
-//     assert(std::pow(Value<int,1>(), Value<float,1>())  == 1);
-//     assert(std::pow(1.0f, Value<double,1>()) == 1);
-//     assert(std::pow(1.0, Value<int,1>()) == 1);
-//     assert(std::pow(Value<long double,1>(), 1LL) == 1);
 }
 
 void test_sin()
@@ -476,6 +460,30 @@ void test_isfinite()
     static_assert((std::is_same<decltype(std::isfinite(0)), bool>::value), "");
     static_assert((std::is_same<decltype(std::isfinite((long double)0)), bool>::value), "");
     assert(std::isfinite(-1.0) == true);
+}
+
+void test_isinf()
+{
+#ifdef isinf
+#error isinf defined
+#endif
+    static_assert((std::is_same<decltype(std::isinf((float)0)), bool>::value), "");
+    static_assert((std::is_same<decltype(std::isinf((double)0)), bool>::value), "");
+    static_assert((std::is_same<decltype(std::isinf(0)), bool>::value), "");
+    static_assert((std::is_same<decltype(std::isinf((long double)0)), bool>::value), "");
+    assert(std::isinf(-1.0) == false);
+}
+
+void test_isnan()
+{
+#ifdef isnan
+#error isnan defined
+#endif
+    static_assert((std::is_same<decltype(std::isnan((float)0)), bool>::value), "");
+    static_assert((std::is_same<decltype(std::isnan((double)0)), bool>::value), "");
+    static_assert((std::is_same<decltype(std::isnan(0)), bool>::value), "");
+    static_assert((std::is_same<decltype(std::isnan((long double)0)), bool>::value), "");
+    assert(std::isnan(-1.0) == false);
 }
 
 void test_isnormal()
@@ -1271,7 +1279,6 @@ void test_trunc()
 
 int main()
 {
-    test_abs();
     test_acos();
     test_asin();
     test_atan();
@@ -1297,6 +1304,8 @@ int main()
     test_signbit();
     test_fpclassify();
     test_isfinite();
+    test_isinf();
+    test_isnan();
     test_isnormal();
     test_isgreater();
     test_isgreaterequal();

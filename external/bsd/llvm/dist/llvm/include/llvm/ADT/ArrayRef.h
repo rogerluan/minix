@@ -11,7 +11,6 @@
 #define LLVM_ADT_ARRAYREF_H
 
 #include "llvm/ADT/None.h"
-#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallVector.h"
 #include <vector>
 
@@ -44,28 +43,15 @@ namespace llvm {
     /// The number of elements.
     size_type Length;
 
-    /// \brief A dummy "optional" type that is only created by implicit
-    /// conversion from a reference to T.
-    ///
-    /// This type must *only* be used in a function argument or as a copy of
-    /// a function argument, as otherwise it will hold a pointer to a temporary
-    /// past that temporaries' lifetime.
-    struct TRefOrNothing {
-      const T *TPtr;
-
-      TRefOrNothing() : TPtr(nullptr) {}
-      TRefOrNothing(const T &TRef) : TPtr(&TRef) {}
-    };
-
   public:
     /// @name Constructors
     /// @{
 
     /// Construct an empty ArrayRef.
-    /*implicit*/ ArrayRef() : Data(nullptr), Length(0) {}
+    /*implicit*/ ArrayRef() : Data(0), Length(0) {}
 
     /// Construct an empty ArrayRef from None.
-    /*implicit*/ ArrayRef(NoneType) : Data(nullptr), Length(0) {}
+    /*implicit*/ ArrayRef(NoneType) : Data(0), Length(0) {}
 
     /// Construct an ArrayRef from a single element.
     /*implicit*/ ArrayRef(const T &OneElt)
@@ -90,7 +76,7 @@ namespace llvm {
     /// Construct an ArrayRef from a std::vector.
     template<typename A>
     /*implicit*/ ArrayRef(const std::vector<T, A> &Vec)
-      : Data(Vec.data()), Length(Vec.size()) {}
+      : Data(Vec.empty() ? (T*)0 : &Vec[0]), Length(Vec.size()) {}
 
     /// Construct an ArrayRef from a C array.
     template <size_t N>
@@ -103,14 +89,6 @@ namespace llvm {
     : Data(Vec.begin() == Vec.end() ? (T*)0 : Vec.begin()),
       Length(Vec.size()) {}
 #endif
-
-    /// Construct an ArrayRef<const T*> from ArrayRef<T*>. This uses SFINAE to
-    /// ensure that only ArrayRefs of pointers can be converted.
-    template <typename U>
-    ArrayRef(const ArrayRef<U *> &A,
-             typename std::enable_if<
-                 std::is_convertible<U *const *, T const *>::value>::type* = 0)
-      : Data(A.data()), Length(A.size()) {}
 
     /// @}
     /// @name Simple Operations
@@ -142,22 +120,12 @@ namespace llvm {
       return Data[Length-1];
     }
 
-    // copy - Allocate copy in Allocator and return ArrayRef<T> to it.
-    template <typename Allocator> ArrayRef<T> copy(Allocator &A) {
-      T *Buff = A.template Allocate<T>(Length);
-      std::copy(begin(), end(), Buff);
-      return ArrayRef<T>(Buff, Length);
-    }
-
     /// equals - Check for element-wise equality.
     bool equals(ArrayRef RHS) const {
       if (Length != RHS.Length)
         return false;
-      // Don't use std::equal(), since it asserts in MSVC on nullptr iterators.
-      for (auto L = begin(), LE = end(), R = RHS.begin(); L != LE; ++L, ++R)
-        // Match std::equal() in using == (instead of !=) to minimize API
-        // requirements of ArrayRef'ed types.
-        if (!(*L == *R))
+      for (size_type i = 0; i != Length; i++)
+        if (Data[i] != RHS.Data[i])
           return false;
       return true;
     }
@@ -173,12 +141,6 @@ namespace llvm {
     ArrayRef<T> slice(unsigned N, unsigned M) const {
       assert(N+M <= size() && "Invalid specifier");
       return ArrayRef<T>(data()+N, M);
-    }
-
-    // \brief Drop the last \p N elements of the array.
-    ArrayRef<T> drop_back(unsigned N = 1) const {
-      assert(size() >= N && "Dropping more elements than exist");
-      return slice(0, size() - N);
     }
 
     /// @}
@@ -204,47 +166,6 @@ namespace llvm {
     }
 
     /// @}
-    /// @{
-    /// @name Convenience methods
-
-    /// @brief Predicate for testing that the array equals the exact sequence of
-    /// arguments.
-    ///
-    /// Will return false if the size is not equal to the exact number of
-    /// arguments given or if the array elements don't equal the argument
-    /// elements in order. Currently supports up to 16 arguments, but can
-    /// easily be extended.
-    bool equals(TRefOrNothing Arg0 = TRefOrNothing(),
-                TRefOrNothing Arg1 = TRefOrNothing(),
-                TRefOrNothing Arg2 = TRefOrNothing(),
-                TRefOrNothing Arg3 = TRefOrNothing(),
-                TRefOrNothing Arg4 = TRefOrNothing(),
-                TRefOrNothing Arg5 = TRefOrNothing(),
-                TRefOrNothing Arg6 = TRefOrNothing(),
-                TRefOrNothing Arg7 = TRefOrNothing(),
-                TRefOrNothing Arg8 = TRefOrNothing(),
-                TRefOrNothing Arg9 = TRefOrNothing(),
-                TRefOrNothing Arg10 = TRefOrNothing(),
-                TRefOrNothing Arg11 = TRefOrNothing(),
-                TRefOrNothing Arg12 = TRefOrNothing(),
-                TRefOrNothing Arg13 = TRefOrNothing(),
-                TRefOrNothing Arg14 = TRefOrNothing(),
-                TRefOrNothing Arg15 = TRefOrNothing()) {
-      TRefOrNothing Args[] = {Arg0,  Arg1,  Arg2,  Arg3, Arg4,  Arg5,
-                              Arg6,  Arg7,  Arg8,  Arg9, Arg10, Arg11,
-                              Arg12, Arg13, Arg14, Arg15};
-      if (size() > array_lengthof(Args))
-        return false;
-
-      for (unsigned i = 0, e = size(); i != e; ++i)
-        if (Args[i].TPtr == nullptr || (*this)[i] != *Args[i].TPtr)
-          return false;
-
-      // Either the size is exactly as many args, or the next arg must be null.
-      return size() == array_lengthof(Args) || Args[size()].TPtr == nullptr;
-    }
-
-    /// @}
   };
 
   /// MutableArrayRef - Represent a mutable reference to an array (0 or more
@@ -263,8 +184,6 @@ namespace llvm {
   class MutableArrayRef : public ArrayRef<T> {
   public:
     typedef T *iterator;
-
-    typedef std::reverse_iterator<iterator> reverse_iterator;
 
     /// Construct an empty MutableArrayRef.
     /*implicit*/ MutableArrayRef() : ArrayRef<T>() {}
@@ -292,16 +211,13 @@ namespace llvm {
 
     /// Construct an MutableArrayRef from a C array.
     template <size_t N>
-    /*implicit*/ LLVM_CONSTEXPR MutableArrayRef(T (&Arr)[N])
+    /*implicit*/ MutableArrayRef(T (&Arr)[N])
       : ArrayRef<T>(Arr) {}
 
     T *data() const { return const_cast<T*>(ArrayRef<T>::data()); }
 
     iterator begin() const { return data(); }
     iterator end() const { return data() + this->size(); }
-
-    reverse_iterator rbegin() const { return reverse_iterator(end()); }
-    reverse_iterator rend() const { return reverse_iterator(begin()); }
 
     /// front - Get the first element.
     T &front() const {

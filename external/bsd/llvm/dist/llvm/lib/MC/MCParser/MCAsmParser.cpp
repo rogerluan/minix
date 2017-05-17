@@ -17,7 +17,7 @@
 #include "llvm/Support/raw_ostream.h"
 using namespace llvm;
 
-MCAsmParser::MCAsmParser() : TargetParser(nullptr), ShowParsedOperands(0) {
+MCAsmParser::MCAsmParser() : TargetParser(0), ShowParsedOperands(0) {
 }
 
 MCAsmParser::~MCAsmParser() {
@@ -29,7 +29,7 @@ void MCAsmParser::setTargetParser(MCTargetAsmParser &P) {
   TargetParser->Initialize(*this);
 }
 
-const AsmToken &MCAsmParser::getTok() const {
+const AsmToken &MCAsmParser::getTok() {
   return getLexer().getTok();
 }
 

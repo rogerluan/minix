@@ -2,12 +2,15 @@
 
 .include <bsd.own.mk>
 
-SUBDIR=	altq arch dev fs \
-	net net80211 netatalk netinet netinet6 \
-        netmpls \
+SUBDIR=	arch dev fs \
+	net netinet netinet6 \
+        \
 	sys ufs uvm
 
 .if !defined(__MINIX)
+# LSC the test is OR, but as it is not relevant to MINIX, we have
+# to completly ignore this.
+
 # interrupt implementation depends on the kernel within the port
 #.if (${MACHINE} != "evbppc")
 .if make(obj) || make(cleandir) || ${MKKMOD} != "no"

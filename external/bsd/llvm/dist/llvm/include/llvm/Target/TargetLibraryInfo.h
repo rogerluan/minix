@@ -26,18 +26,10 @@ namespace llvm {
       ZdaPv,
       /// void operator delete[](void*, nothrow);
       ZdaPvRKSt9nothrow_t,
-      /// void operator delete[](void*, unsigned int);
-      ZdaPvj,
-      /// void operator delete[](void*, unsigned long);
-      ZdaPvm,
       /// void operator delete(void*);
       ZdlPv,
       /// void operator delete(void*, nothrow);
       ZdlPvRKSt9nothrow_t,
-      /// void operator delete(void*, unsigned int);
-      ZdlPvj,
-      /// void operator delete(void*, unsigned long);
-      ZdlPvm,
       /// void *new[](unsigned int);
       Znaj,
       /// void *new[](unsigned int, nothrow);
@@ -62,7 +54,7 @@ namespace llvm {
       cxa_atexit,
       /// void __cxa_guard_abort(guard_t *guard);
       /// guard_t is int64_t in Itanium ABI or int32_t on ARM eabi.
-      cxa_guard_abort,
+      cxa_guard_abort,      
       /// int __cxa_guard_acquire(guard_t *guard);
       cxa_guard_acquire,
       /// void __cxa_guard_release(guard_t *guard);
@@ -73,15 +65,10 @@ namespace llvm {
       dunder_isoc99_sscanf,
       /// void *__memcpy_chk(void *s1, const void *s2, size_t n, size_t s1size);
       memcpy_chk,
-      /// void *__memmove_chk(void *s1, const void *s2, size_t n,
-      ///                     size_t s1size);
-      memmove_chk,
-      /// void *__memset_chk(void *s, char v, size_t n, size_t s1size);
-      memset_chk,
       /// double __sincospi_stret(double x);
       sincospi_stret,
-      /// float __sincospif_stret(float x);
-      sincospif_stret,
+      /// float __sincospi_stretf(float x);
+      sincospi_stretf,
       /// double __sinpi(double x);
       sinpi,
       /// float __sinpif(float x);
@@ -92,18 +79,8 @@ namespace llvm {
       sqrtf_finite,
       /// long double __sqrt_finite(long double x);
       sqrtl_finite,
-      /// char *__stpcpy_chk(char *s1, const char *s2, size_t s1size);
-      stpcpy_chk,
-      /// char *__stpncpy_chk(char *s1, const char *s2, size_t n,
-      ///                     size_t s1size);
-      stpncpy_chk,
-      /// char *__strcpy_chk(char *s1, const char *s2, size_t s1size);
-      strcpy_chk,
       /// char * __strdup(const char *s);
       dunder_strdup,
-      /// char *__strncpy_chk(char *s1, const char *s2, size_t n,
-      ///                     size_t s1size);
-      strncpy_chk,
       /// char *__strndup(const char *s, size_t n);
       dunder_strndup,
       /// char * __strtok_r(char *s, const char *delim, char **save_ptr);
@@ -274,18 +251,6 @@ namespace llvm {
       floorf,
       /// long double floorl(long double x);
       floorl,
-      /// double fmax(double x, double y);
-      fmax,
-      /// float fmaxf(float x, float y);
-      fmaxf,
-      /// long double fmaxl(long double x, long double y);
-      fmaxl,
-      /// double fmin(double x, double y);
-      fmin,
-      /// float fminf(float x, float y);
-      fminf,
-      /// long double fminl(long double x, long double y);
-      fminl,
       /// double fmod(double x, double y);
       fmod,
       /// float fmodf(float x, float y);
@@ -375,12 +340,6 @@ namespace llvm {
       labs,
       /// int lchown(const char *path, uid_t owner, gid_t group);
       lchown,
-      /// double ldexp(double x, int n);
-      ldexp,
-      /// float ldexpf(float x, int n);
-      ldexpf,
-      /// long double ldexpl(long double x, int n);
-      ldexpl,
       /// long long int llabs(long long int j);
       llabs,
       /// double log(double x);
@@ -719,7 +678,7 @@ public:
   TargetLibraryInfo();
   TargetLibraryInfo(const Triple &T);
   explicit TargetLibraryInfo(const TargetLibraryInfo &TLI);
-
+  
   /// getLibFunc - Search for a particular function name.  If it is one of the
   /// known library functions, return true and set F to the corresponding value.
   bool getLibFunc(StringRef funcName, LibFunc::Func &F) const;
@@ -744,8 +703,6 @@ public:
     case LibFunc::sqrt:      case LibFunc::sqrtf:      case LibFunc::sqrtl:
     case LibFunc::sqrt_finite: case LibFunc::sqrtf_finite:
                                                   case LibFunc::sqrtl_finite:
-    case LibFunc::fmax:      case LibFunc::fmaxf:      case LibFunc::fmaxl:
-    case LibFunc::fmin:      case LibFunc::fminf:      case LibFunc::fminl:
     case LibFunc::floor:     case LibFunc::floorf:     case LibFunc::floorl:
     case LibFunc::nearbyint: case LibFunc::nearbyintf: case LibFunc::nearbyintl:
     case LibFunc::ceil:      case LibFunc::ceilf:      case LibFunc::ceill:

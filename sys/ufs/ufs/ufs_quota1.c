@@ -1,4 +1,4 @@
-/*	$NetBSD: ufs_quota1.c,v 1.21 2014/11/25 19:48:24 christos Exp $	*/
+/*	$NetBSD: ufs_quota1.c,v 1.18 2012/02/02 03:00:48 matt Exp $	*/
 
 /*
  * Copyright (c) 1982, 1986, 1990, 1993, 1995
@@ -35,7 +35,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ufs_quota1.c,v 1.21 2014/11/25 19:48:24 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ufs_quota1.c,v 1.18 2012/02/02 03:00:48 matt Exp $");
 
 #include <sys/param.h>
 #include <sys/kernel.h>
@@ -304,8 +304,7 @@ quota1_handle_cmd_quotaon(struct lwp *l, struct ufsmount *ump, int type,
     const char *fname)
 {
 	struct mount *mp = ump->um_mountp;
-	struct vnode *vp, **vpp;
-	struct vnode_iterator *marker;
+	struct vnode *vp, **vpp, *mvp;
 	struct dquot *dq;
 	int error;
 	struct pathbuf *pb;
@@ -367,33 +366,41 @@ quota1_handle_cmd_quotaon(struct lwp *l, struct ufsmount *ump, int type,
 			ump->umq1_itime[type] = dq->dq_itime;
 		dqrele(NULLVP, dq);
 	}
+	/* Allocate a marker vnode. */
+	mvp = vnalloc(mp);
 	/*
 	 * Search vnodes associated with this mount point,
 	 * adding references to quota file being opened.
 	 * NB: only need to add dquot's for inodes being modified.
 	 */
-	vfs_vnode_iterator_init(mp, &marker);
-	while ((vp = vfs_vnode_iterator_next(marker, NULL, NULL))) {
-		error = vn_lock(vp, LK_EXCLUSIVE);
-		if (error) {
-			vrele(vp);
-			continue;
-		}
+	mutex_enter(&mntvnode_lock);
+again:
+	for (vp = TAILQ_FIRST(&mp->mnt_vnodelist); vp; vp = vunmark(mvp)) {
+		vmark(mvp, vp);
 		mutex_enter(vp->v_interlock);
-		if (VTOI(vp) == NULL || vp->v_type == VNON ||
-		    vp->v_writecount == 0) {
+		if (VTOI(vp) == NULL || vp->v_mount != mp || vismarker(vp) ||
+		    vp->v_type == VNON || vp->v_writecount == 0 ||
+		    (vp->v_iflag & (VI_XLOCK | VI_CLEAN)) != 0) {
 			mutex_exit(vp->v_interlock);
-			vput(vp);
 			continue;
 		}
-		mutex_exit(vp->v_interlock);
+		mutex_exit(&mntvnode_lock);
+		if (vget(vp, LK_EXCLUSIVE)) {
+			mutex_enter(&mntvnode_lock);
+			(void)vunmark(mvp);
+			goto again;
+		}
 		if ((error = getinoquota(VTOI(vp))) != 0) {
 			vput(vp);
+			mutex_enter(&mntvnode_lock);
+			(void)vunmark(mvp);
 			break;
 		}
 		vput(vp);
+		mutex_enter(&mntvnode_lock);
 	}
-	vfs_vnode_iterator_destroy(marker);
+	mutex_exit(&mntvnode_lock);
+	vnfree(mvp);
 
 	mutex_enter(&dqlock);
 	ump->umq1_qflags[type] &= ~QTF_OPENING;
@@ -414,18 +421,21 @@ quota1_handle_cmd_quotaoff(struct lwp *l, struct ufsmount *ump, int type)
 {
 	struct mount *mp = ump->um_mountp;
 	struct vnode *vp;
-	struct vnode *qvp;
-	struct vnode_iterator *marker;
+	struct vnode *qvp, *mvp;
 	struct dquot *dq;
 	struct inode *ip;
 	kauth_cred_t cred;
 	int i, error;
+
+	/* Allocate a marker vnode. */
+	mvp = vnalloc(mp);
 
 	mutex_enter(&dqlock);
 	while ((ump->umq1_qflags[type] & (QTF_CLOSING | QTF_OPENING)) != 0)
 		cv_wait(&dqcv, &dqlock);
 	if ((qvp = ump->um_quotas[type]) == NULLVP) {
 		mutex_exit(&dqlock);
+		vnfree(mvp);
 		return (0);
 	}
 	ump->umq1_qflags[type] |= QTF_CLOSING;
@@ -435,24 +445,31 @@ quota1_handle_cmd_quotaoff(struct lwp *l, struct ufsmount *ump, int type)
 	 * Search vnodes associated with this mount point,
 	 * deleting any references to quota file being closed.
 	 */
-	vfs_vnode_iterator_init(mp, &marker);
-	while ((vp = vfs_vnode_iterator_next(marker, NULL, NULL))) {
-		error = vn_lock(vp, LK_EXCLUSIVE);
-		if (error) {
-			vrele(vp);
+	mutex_enter(&mntvnode_lock);
+again:
+	for (vp = TAILQ_FIRST(&mp->mnt_vnodelist); vp; vp = vunmark(mvp)) {
+		vmark(mvp, vp);
+		mutex_enter(vp->v_interlock);
+		if (VTOI(vp) == NULL || vp->v_mount != mp || vismarker(vp) ||
+		    vp->v_type == VNON ||
+		    (vp->v_iflag & (VI_XLOCK | VI_CLEAN)) != 0) {
+			mutex_exit(vp->v_interlock);
 			continue;
+		}
+		mutex_exit(&mntvnode_lock);
+		if (vget(vp, LK_EXCLUSIVE)) {
+			mutex_enter(&mntvnode_lock);
+			(void)vunmark(mvp);
+			goto again;
 		}
 		ip = VTOI(vp);
-		if (ip == NULL || vp->v_type == VNON) {
-			vput(vp);
-			continue;
-		}
 		dq = ip->i_dquot[type];
 		ip->i_dquot[type] = NODQUOT;
 		dqrele(vp, dq);
 		vput(vp);
+		mutex_enter(&mntvnode_lock);
 	}
-	vfs_vnode_iterator_destroy(marker);
+	mutex_exit(&mntvnode_lock);
 #ifdef DIAGNOSTIC
 	dqflush(qvp);
 #endif
@@ -742,8 +759,7 @@ int
 q1sync(struct mount *mp)
 {
 	struct ufsmount *ump = VFSTOUFS(mp);
-	struct vnode *vp;
-	struct vnode_iterator *marker;
+	struct vnode *vp, *mvp;
 	struct dquot *dq;
 	int i, error;
 
@@ -757,19 +773,32 @@ q1sync(struct mount *mp)
 	if (i == MAXQUOTAS)
 		return (0);
 
+	/* Allocate a marker vnode. */
+	mvp = vnalloc(mp);
+
 	/*
 	 * Search vnodes associated with this mount point,
 	 * synchronizing any modified dquot structures.
 	 */
-	vfs_vnode_iterator_init(mp, &marker);
-	while ((vp = vfs_vnode_iterator_next(marker, NULL, NULL))) {
-		error = vn_lock(vp, LK_EXCLUSIVE);
-		if (error) {
-			vrele(vp);
+	mutex_enter(&mntvnode_lock);
+ again:
+	for (vp = TAILQ_FIRST(&mp->mnt_vnodelist); vp; vp = vunmark(mvp)) {
+		vmark(mvp, vp);
+		mutex_enter(vp->v_interlock);
+		if (VTOI(vp) == NULL || vp->v_mount != mp || vismarker(vp) ||
+		    vp->v_type == VNON ||
+		    (vp->v_iflag & (VI_XLOCK | VI_CLEAN)) != 0) {
+			mutex_exit(vp->v_interlock);
 			continue;
 		}
-		if (VTOI(vp) == NULL || vp->v_type == VNON) {
-			vput(vp);
+		mutex_exit(&mntvnode_lock);
+		error = vget(vp, LK_EXCLUSIVE | LK_NOWAIT);
+		if (error) {
+			mutex_enter(&mntvnode_lock);
+			if (error == ENOENT) {
+				(void)vunmark(mvp);
+				goto again;
+			}
 			continue;
 		}
 		for (i = 0; i < MAXQUOTAS; i++) {
@@ -782,8 +811,10 @@ q1sync(struct mount *mp)
 			mutex_exit(&dq->dq_interlock);
 		}
 		vput(vp);
+		mutex_enter(&mntvnode_lock);
 	}
-	vfs_vnode_iterator_destroy(marker);
+	mutex_exit(&mntvnode_lock);
+	vnfree(mvp);
 	return (0);
 }
 
@@ -860,7 +891,7 @@ dq1sync(struct vnode *vp, struct dquot *dq)
 	aiov.iov_base = (void *)&dq->dq_un.dq1_dqb;
 	aiov.iov_len = sizeof (struct dqblk);
 	auio.uio_resid = sizeof (struct dqblk);
-	auio.uio_offset = (off_t)dq->dq_id * sizeof (struct dqblk);
+	auio.uio_offset = (off_t)(dq->dq_id * sizeof (struct dqblk));
 	auio.uio_rw = UIO_WRITE;
 	UIO_SETUP_SYSSPACE(&auio);
 	error = VOP_WRITE(dqvp, &auio, 0, dq->dq_ump->um_cred[dq->dq_type]);

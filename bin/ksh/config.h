@@ -40,7 +40,7 @@
 #define HAVE_UNISTD_H 1
 
 /* Define if on MINIX.  */
-/* #undef _MINIX */
+#define _MINIX 1
 
 /* Define to `int' if <sys/types.h> doesn't define.  */
 /* #undef mode_t */
@@ -107,13 +107,13 @@
 /* #undef BSD_PGRP */
 
 /* Define if you have POSIX versions of the setpgid() and getpgrp() routines */
-#define POSIX_PGRP 1
+/* #undef POSIX_PGRP */
 
 /* Define if you have sysV versions of the setpgrp() and getpgrp() routines */
 /* #undef SYSV_PGRP */
 
 /* Define if you don't have setpgrp(), setpgid() or getpgrp() routines */
-/* #undef NO_PGRP */
+#define NO_PGRP 1
 
 /* Define to char if your compiler doesn't like the void keyword */
 /* #undef void */
@@ -262,7 +262,7 @@
 #define HAVE_GETPAGESIZE 1
 
 /* Define if you have the getrusage function.  */
-#define HAVE_GETRUSAGE
+/* #undef HAVE_GETRUSAGE */
 
 /* Define if you have the getwd function.  */
 #define HAVE_GETWD 1
@@ -274,7 +274,7 @@
 #define HAVE_NICE 1
 
 /* Define if you have the setrlimit function.  */
-#define HAVE_SETRLIMIT 1
+/* #undef HAVE_SETRLIMIT */
 
 /* Define if you have the sigsetjmp function.  */
 #define HAVE_SIGSETJMP 1
@@ -301,7 +301,7 @@
 #define HAVE_VALLOC 1
 
 /* Define if you have the wait3 function.  */
-#define HAVE_WAIT3 1
+/* #undef HAVE_WAIT3 */
 
 /* Define if you have the waitpid function.  */
 #define HAVE_WAITPID 1

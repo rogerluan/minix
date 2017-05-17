@@ -13,10 +13,6 @@ SRC=src
 : ${GITBRANCH:=master}
 : ${BUILDOPTIONS:=}
 
-# Packages we have to pre-install, and url to use
-: ${PACKAGEURL="http://www.minix3.org/pkgsrc/packages/$version_pretty/`uname -m`/All/"}
-: ${PREINSTALLED_PACKAGES:="pkg_install pkgin"}
-
 # List of packages included on installation media
 PACKAGELIST=packages.install
 secs=`expr 32 '*' 64`
@@ -29,6 +25,15 @@ if [ ! -x $PKG_ADD ]
 then	echo Please install pkg_install from pkgsrc.
 	exit 1
 fi
+
+# Packages we have to pre-install, and url to use
+PACKAGEURL=http://www.minix3.org/pkgsrc/packages/$version_pretty/`uname -m`/All/
+PREINSTALLED_PACKAGES="
+	pkg_install
+	pkgin
+	"
+
+PKG_ADD_URL=$PACKAGEURL
 
 RELEASERC=$HOME/.releaserc
 
@@ -95,9 +100,9 @@ do
 		;;
 	M)	MAKEMAP=1
 		;;
-	l)	PACKAGEURL=file://$PACKAGEDIR/All
+	l)	PKG_ADD_URL=file://$PACKAGEDIR/All
 		;;
-	L)	PACKAGEURL="$OPTARG"
+	L)	PKG_ADD_URL="$OPTARG"
 		CUSTOM_PACKAGES=1
 		;;
 	e)	EXTRAS_INSTALL=1
@@ -198,12 +203,12 @@ date >$RELEASEDIR/CD
 rm -f $RELEASEDIR/usr/$SRC/releasetools/revision
 
 for p in $PREINSTALLED_PACKAGES
-do	echo " * Pre-installing: $p from $PACKAGEURL"
-    $PKG_ADD -f -P $RELEASEDIR $PACKAGEURL/$p
+do	echo " * Pre-installing: $p from $PKG_ADD_URL"
+    $PKG_ADD -f -P $RELEASEDIR $PKG_ADD_URL/$p
 done
 
 if [ "$CUSTOM_PACKAGES" ]
-then	echo $PACKAGEURL >$RELEASEDIR/usr/pkg/etc/pkgin/repositories.conf
+then	echo $PKG_ADD_URL >$RELEASEDIR/usr/pkg/etc/pkgin/repositories.conf
 fi
 
 echo " * Resetting timestamps"

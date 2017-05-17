@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.127 2014/09/11 13:10:03 roy Exp $
+#	$NetBSD: Makefile,v 1.125 2013/10/28 19:05:21 mbalmer Exp $
 #	@(#)Makefile	8.5 (Berkeley) 3/31/94
 
 # Not ported: XNSrouted enpload scsiformat startslip
@@ -8,14 +8,14 @@
 
 SUBDIR= \
 	chown \
-	fsck ifconfig init \
+	fsck init \
 	mknod nologin \
 	ping \
-	reboot rcorder route \
-	shutdown sysctl \
+	reboot \
+	shutdown \
 
 # support for various file systems
-SUBDIR+= newfs_ext2fs fsck_ext2fs newfs_msdos newfs_udf newfs_v7fs
+SUBDIR+= newfs_ext2fs fsck_ext2fs
 .if !defined(__MINIX)
 SUBDIR+= newfs fsck_ffs fsdb dump restore clri tunefs resize_ffs
 SUBDIR+= newfs_lfs fsck_lfs dump_lfs resize_lfs
@@ -45,6 +45,7 @@ SUBDIR+= mount_portal
 SUBDIR+= mount_procfs
 SUBDIR+= mount_ptyfs
 SUBDIR+= mount_puffs
+SUBDIR+= mount_smbfs
 SUBDIR+= mount_sysvbfs
 SUBDIR+= mount_tmpfs
 SUBDIR+= mount_umap
@@ -54,13 +55,11 @@ SUBDIR+= mount_v7fs
 .if (${MKCRYPTO} != "no")
 SUBDIR+= cgdconfig
 .endif
-.endif # !defined(__MINIX)
 
 .if (${USE_INET6} != "no")
-SUBDIR+= ping6
+SUBDIR+= ping6 rtsol
 .endif
 
-.if !defined(__MINIX)
 .if (${MKISCSI} != "no")
 SUBDIR+= iscsictl iscsid
 .endif

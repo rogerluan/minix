@@ -1,4 +1,4 @@
-/* $NetBSD: t_cos.c,v 1.4 2014/03/03 10:39:08 martin Exp $ */
+/* $NetBSD: t_cos.c,v 1.3 2011/09/14 13:29:58 jruoho Exp $ */
 
 /*-
  * Copyright (c) 2011 The NetBSD Foundation, Inc.
@@ -84,10 +84,12 @@ ATF_TC_HEAD(cos_nan, tc)
 
 ATF_TC_BODY(cos_nan, tc)
 {
+#ifndef __vax__
 	const double x = 0.0L / 0.0L;
 
 	ATF_CHECK(isnan(x) != 0);
 	ATF_CHECK(isnan(cos(x)) != 0);
+#endif
 }
 
 ATF_TC(cos_inf_neg);
@@ -98,9 +100,11 @@ ATF_TC_HEAD(cos_inf_neg, tc)
 
 ATF_TC_BODY(cos_inf_neg, tc)
 {
+#ifndef __vax__
 	const double x = -1.0L / 0.0L;
 
 	ATF_CHECK(isnan(cos(x)) != 0);
+#endif
 }
 
 ATF_TC(cos_inf_pos);
@@ -111,9 +115,11 @@ ATF_TC_HEAD(cos_inf_pos, tc)
 
 ATF_TC_BODY(cos_inf_pos, tc)
 {
+#ifndef __vax__
 	const double x = 1.0L / 0.0L;
 
 	ATF_CHECK(isnan(cos(x)) != 0);
+#endif
 }
 
 
@@ -125,9 +131,11 @@ ATF_TC_HEAD(cos_zero_neg, tc)
 
 ATF_TC_BODY(cos_zero_neg, tc)
 {
+#ifndef __vax__
 	const double x = -0.0L;
 
 	ATF_CHECK(cos(x) == 1.0);
+#endif
 }
 
 ATF_TC(cos_zero_pos);
@@ -138,9 +146,11 @@ ATF_TC_HEAD(cos_zero_pos, tc)
 
 ATF_TC_BODY(cos_zero_pos, tc)
 {
+#ifndef __vax__
 	const double x = 0.0L;
 
 	ATF_CHECK(cos(x) == 1.0);
+#endif
 }
 
 /*
@@ -177,10 +187,12 @@ ATF_TC_HEAD(cosf_nan, tc)
 
 ATF_TC_BODY(cosf_nan, tc)
 {
+#ifndef __vax__
 	const float x = 0.0L / 0.0L;
 
 	ATF_CHECK(isnan(x) != 0);
 	ATF_CHECK(isnan(cosf(x)) != 0);
+#endif
 }
 
 ATF_TC(cosf_inf_neg);
@@ -191,12 +203,14 @@ ATF_TC_HEAD(cosf_inf_neg, tc)
 
 ATF_TC_BODY(cosf_inf_neg, tc)
 {
+#ifndef __vax__
 	const float x = -1.0L / 0.0L;
 
 	if (isnan(cosf(x)) == 0) {
 		atf_tc_expect_fail("PR lib/45362");
 		atf_tc_fail("cosf(-Inf) != NaN");
 	}
+#endif
 }
 
 ATF_TC(cosf_inf_pos);
@@ -207,12 +221,14 @@ ATF_TC_HEAD(cosf_inf_pos, tc)
 
 ATF_TC_BODY(cosf_inf_pos, tc)
 {
+#ifndef __vax__
 	const float x = 1.0L / 0.0L;
 
 	if (isnan(cosf(x)) == 0) {
 		atf_tc_expect_fail("PR lib/45362");
 		atf_tc_fail("cosf(+Inf) != NaN");
 	}
+#endif
 }
 
 
@@ -224,9 +240,11 @@ ATF_TC_HEAD(cosf_zero_neg, tc)
 
 ATF_TC_BODY(cosf_zero_neg, tc)
 {
+#ifndef __vax__
 	const float x = -0.0L;
 
 	ATF_CHECK(cosf(x) == 1.0);
+#endif
 }
 
 ATF_TC(cosf_zero_pos);
@@ -237,9 +255,11 @@ ATF_TC_HEAD(cosf_zero_pos, tc)
 
 ATF_TC_BODY(cosf_zero_pos, tc)
 {
+#ifndef __vax__
 	const float x = 0.0L;
 
 	ATF_CHECK(cosf(x) == 1.0);
+#endif
 }
 
 ATF_TP_ADD_TCS(tp)

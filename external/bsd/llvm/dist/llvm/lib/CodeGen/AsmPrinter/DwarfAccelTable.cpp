@@ -12,12 +12,11 @@
 //===----------------------------------------------------------------------===//
 
 #include "DwarfAccelTable.h"
-#include "DwarfCompileUnit.h"
+#include "DIE.h"
 #include "DwarfDebug.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/Twine.h"
 #include "llvm/CodeGen/AsmPrinter.h"
-#include "llvm/CodeGen/DIE.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCStreamer.h"
 #include "llvm/MC/MCSymbol.h"
@@ -30,15 +29,14 @@ DwarfAccelTable::DwarfAccelTable(ArrayRef<DwarfAccelTable::Atom> atomList)
     : Header(8 + (atomList.size() * 4)), HeaderData(atomList),
       Entries(Allocator) {}
 
-void DwarfAccelTable::AddName(StringRef Name, MCSymbol *StrSym, const DIE *die,
-                              char Flags) {
+DwarfAccelTable::~DwarfAccelTable() {}
+
+void DwarfAccelTable::AddName(StringRef Name, DIE *die, char Flags) {
   assert(Data.empty() && "Already finalized!");
   // If the string is in the list already then add this die to the list
   // otherwise add a new one.
   DataArray &DIEs = Entries[Name];
-  assert(!DIEs.StrSym || DIEs.StrSym == StrSym);
-  DIEs.StrSym = StrSym;
-  DIEs.Values.push_back(new (Allocator) HashDataContents(die, Flags));
+  DIEs.push_back(new (Allocator) HashDataContents(die, Flags));
 }
 
 void DwarfAccelTable::ComputeBucketCount(void) {
@@ -74,10 +72,9 @@ void DwarfAccelTable::FinalizeTable(AsmPrinter *Asm, StringRef Prefix) {
        EI != EE; ++EI) {
 
     // Unique the entries.
-    std::stable_sort(EI->second.Values.begin(), EI->second.Values.end(), compareDIEs);
-    EI->second.Values.erase(
-        std::unique(EI->second.Values.begin(), EI->second.Values.end()),
-        EI->second.Values.end());
+    std::stable_sort(EI->second.begin(), EI->second.end(), compareDIEs);
+    EI->second.erase(std::unique(EI->second.begin(), EI->second.end()),
+                     EI->second.end());
 
     HashData *Entry = new (Allocator) HashData(EI->getKey(), EI->second);
     Data.push_back(Entry);
@@ -175,8 +172,7 @@ void DwarfAccelTable::EmitOffsets(AsmPrinter *Asm, MCSymbol *SecBegin) {
 // Walk through the buckets and emit the full data for each element in
 // the bucket. For the string case emit the dies and the various offsets.
 // Terminate each HashData bucket with 0.
-void DwarfAccelTable::EmitData(AsmPrinter *Asm, DwarfDebug *D,
-                               MCSymbol *StrSym) {
+void DwarfAccelTable::EmitData(AsmPrinter *Asm, DwarfUnits *D) {
   uint64_t PrevHash = UINT64_MAX;
   for (size_t i = 0, e = Buckets.size(); i < e; ++i) {
     for (HashList::const_iterator HI = Buckets[i].begin(),
@@ -185,19 +181,21 @@ void DwarfAccelTable::EmitData(AsmPrinter *Asm, DwarfDebug *D,
       // Remember to emit the label for our offset.
       Asm->OutStreamer.EmitLabel((*HI)->Sym);
       Asm->OutStreamer.AddComment((*HI)->Str);
-      Asm->EmitSectionOffset((*HI)->Data.StrSym, StrSym);
+      Asm->EmitSectionOffset(D->getStringPoolEntry((*HI)->Str),
+                             D->getStringPoolSym());
       Asm->OutStreamer.AddComment("Num DIEs");
-      Asm->EmitInt32((*HI)->Data.Values.size());
-      for (HashDataContents *HD : (*HI)->Data.Values) {
+      Asm->EmitInt32((*HI)->Data.size());
+      for (ArrayRef<HashDataContents *>::const_iterator
+               DI = (*HI)->Data.begin(),
+               DE = (*HI)->Data.end();
+           DI != DE; ++DI) {
         // Emit the DIE offset
-        DwarfCompileUnit *CU = D->lookupUnit(HD->Die->getUnit());
-        assert(CU && "Accelerated DIE should belong to a CU.");
-        Asm->EmitInt32(HD->Die->getOffset() + CU->getDebugInfoOffset());
+        Asm->EmitInt32((*DI)->Die->getOffset());
         // If we have multiple Atoms emit that info too.
         // FIXME: A bit of a hack, we either emit only one atom or all info.
         if (HeaderData.Atoms.size() > 1) {
-          Asm->EmitInt16(HD->Die->getTag());
-          Asm->EmitInt8(HD->Flags);
+          Asm->EmitInt16((*DI)->Die->getTag());
+          Asm->EmitInt8((*DI)->Flags);
         }
       }
       // Emit a 0 to terminate the data unless we have a hash collision.
@@ -209,8 +207,7 @@ void DwarfAccelTable::EmitData(AsmPrinter *Asm, DwarfDebug *D,
 }
 
 // Emit the entire data structure to the output file.
-void DwarfAccelTable::Emit(AsmPrinter *Asm, MCSymbol *SecBegin, DwarfDebug *D,
-                           MCSymbol *StrSym) {
+void DwarfAccelTable::Emit(AsmPrinter *Asm, MCSymbol *SecBegin, DwarfUnits *D) {
   // Emit the header.
   EmitHeader(Asm);
 
@@ -224,7 +221,7 @@ void DwarfAccelTable::Emit(AsmPrinter *Asm, MCSymbol *SecBegin, DwarfDebug *D,
   EmitOffsets(Asm, SecBegin);
 
   // Emit the hash data.
-  EmitData(Asm, D, StrSym);
+  EmitData(Asm, D);
 }
 
 #ifndef NDEBUG
@@ -238,8 +235,10 @@ void DwarfAccelTable::print(raw_ostream &O) {
                                             EE = Entries.end();
        EI != EE; ++EI) {
     O << "Name: " << EI->getKeyData() << "\n";
-    for (HashDataContents *HD : EI->second.Values)
-      HD->print(O);
+    for (DataArray::const_iterator DI = EI->second.begin(),
+                                   DE = EI->second.end();
+         DI != DE; ++DI)
+      (*DI)->print(O);
   }
 
   O << "Buckets and Hashes: \n";

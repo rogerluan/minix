@@ -25,10 +25,9 @@ unit.
 
       class FindNamedClassAction : public clang::ASTFrontendAction {
       public:
-        virtual std::unique_ptr<clang::ASTConsumer> CreateASTConsumer(
+        virtual clang::ASTConsumer *CreateASTConsumer(
           clang::CompilerInstance &Compiler, llvm::StringRef InFile) {
-          return std::unique_ptr<clang::ASTConsumer>(
-              new FindNamedClassConsumer);
+          return new FindNamedClassConsumer;
         }
       };
 
@@ -112,10 +111,9 @@ freshly created FindNamedClassConsumer:
 
 ::
 
-      virtual std::unique_ptr<clang::ASTConsumer> CreateASTConsumer(
+      virtual clang::ASTConsumer *CreateASTConsumer(
         clang::CompilerInstance &Compiler, llvm::StringRef InFile) {
-        return std::unique_ptr<clang::ASTConsumer>(
-            new FindNamedClassConsumer(&Compiler.getASTContext()));
+        return new FindNamedClassConsumer(&Compiler.getASTContext());
       }
 
 Now that the ASTContext is available in the RecursiveASTVisitor, we can
@@ -187,10 +185,9 @@ Now we can combine all of the above into a small example program:
 
       class FindNamedClassAction : public clang::ASTFrontendAction {
       public:
-        virtual std::unique_ptr<clang::ASTConsumer> CreateASTConsumer(
+        virtual clang::ASTConsumer *CreateASTConsumer(
           clang::CompilerInstance &Compiler, llvm::StringRef InFile) {
-          return std::unique_ptr<clang::ASTConsumer>(
-              new FindNamedClassConsumer(&Compiler.getASTContext()));
+          return new FindNamedClassConsumer(&Compiler.getASTContext());
         }
       };
 

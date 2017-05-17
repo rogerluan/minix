@@ -1,4 +1,4 @@
-// REQUIRES: powerpc-registered-target
+// REQUIRES: ppc64-registered-target
 // RUN: %clang_cc1 -O2 -triple powerpc64-unknown-linux-gnu -emit-llvm -o - %s | FileCheck %s
 
 typedef float v4sf __attribute__ ((vector_size (16)));

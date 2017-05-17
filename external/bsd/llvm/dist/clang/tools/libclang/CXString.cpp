@@ -51,7 +51,7 @@ CXString createEmpty() {
 
 CXString createNull() {
   CXString Str;
-  Str.data = nullptr;
+  Str.data = 0;
   Str.private_flags = CXS_Unmanaged;
   return Str;
 }
@@ -81,11 +81,7 @@ CXString createDup(const char *String) {
 
 CXString createRef(StringRef String) {
   // If the string is not nul-terminated, we have to make a copy.
-
-  // FIXME: This is doing a one past end read, and should be removed! For memory
-  // we don't manage, the API string can become unterminated at any time outside
-  // our control.
-
+  // This is doing a one past end read, and should be removed!
   if (!String.empty() && String.data()[String.size()] != 0)
     return createDup(String);
 

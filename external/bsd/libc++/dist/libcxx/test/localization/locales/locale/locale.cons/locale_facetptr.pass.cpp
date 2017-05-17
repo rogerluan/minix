@@ -7,8 +7,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-// REQUIRES: locale.ru_RU.UTF-8
-
 // <locale>
 
 // template <class Facet> locale(const locale& other, Facet* f);

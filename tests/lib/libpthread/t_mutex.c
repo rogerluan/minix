@@ -1,4 +1,4 @@
-/* $NetBSD: t_mutex.c,v 1.7 2014/11/04 00:20:19 justin Exp $ */
+/* $NetBSD: t_mutex.c,v 1.5 2011/04/04 14:47:22 martin Exp $ */
 
 /*
  * Copyright (c) 2008 The NetBSD Foundation, Inc.
@@ -29,7 +29,7 @@
 #include <sys/cdefs.h>
 __COPYRIGHT("@(#) Copyright (c) 2008\
  The NetBSD Foundation, inc. All rights reserved.");
-__RCSID("$NetBSD: t_mutex.c,v 1.7 2014/11/04 00:20:19 justin Exp $");
+__RCSID("$NetBSD: t_mutex.c,v 1.5 2011/04/04 14:47:22 martin Exp $");
 
 #include <pthread.h>
 #include <stdio.h>
@@ -37,6 +37,7 @@ __RCSID("$NetBSD: t_mutex.c,v 1.7 2014/11/04 00:20:19 justin Exp $");
 #include <unistd.h>
 
 #include <atf-c.h>
+#include <atf-c/config.h>
 
 #include "h_common.h"
 
@@ -117,21 +118,22 @@ ATF_TC(mutex2);
 ATF_TC_HEAD(mutex2, tc)
 {
 	atf_tc_set_md_var(tc, "descr", "Checks mutexes");
-#if defined(__powerpc__)
-	atf_tc_set_md_var(tc, "timeout", "40");
-#endif
+	if (strcmp(atf_config_get("atf_arch"), "powerpc") == 0)
+		atf_tc_set_md_var(tc, "timeout", "40");
 }
 ATF_TC_BODY(mutex2, tc)
 {
+	const char *m_arch;
 	int count, count2;
 	pthread_t new;
 	void *joinval;
 
 	printf("1: Mutex-test 2\n");
 
-#if defined(__powerpc__)
-	atf_tc_expect_timeout("PR port-powerpc/44387");
-#endif
+	m_arch = atf_config_get("atf_arch");
+	if (strcmp(m_arch, "powerpc") == 0) {
+		atf_tc_expect_timeout("PR port-powerpc/44387");
+	}
 
 	PTHREAD_REQUIRE(pthread_mutex_init(&mutex, NULL));
 	
@@ -158,13 +160,13 @@ ATF_TC_BODY(mutex2, tc)
 		global_x, (long)joinval);
 	ATF_REQUIRE_EQ(global_x, 20000000);
 
-#if defined(__powerpc__)
 	/* XXX force a timeout in ppc case since an un-triggered race
 	   otherwise looks like a "failure" */
-	/* We sleep for longer than the timeout to make ATF not
-	   complain about unexpected success */
-	sleep(41);
-#endif
+	if (strcmp(m_arch, "powerpc") == 0) {
+		/* We sleep for longer than the timeout to make ATF not
+		   complain about unexpected success */
+		sleep(41);
+	}
 }
 
 static void *
@@ -188,21 +190,22 @@ ATF_TC_HEAD(mutex3, tc)
 {
 	atf_tc_set_md_var(tc, "descr", "Checks mutexes using a static "
 	    "initializer");
-#if defined(__powerpc__)
-	atf_tc_set_md_var(tc, "timeout", "40");
-#endif
+	if (strcmp(atf_config_get("atf_arch"), "powerpc") == 0)
+		atf_tc_set_md_var(tc, "timeout", "40");
 }
 ATF_TC_BODY(mutex3, tc)
 {
+	const char *m_arch;
 	int count, count2;
 	pthread_t new;
 	void *joinval;
 
 	printf("1: Mutex-test 3\n");
 
-#if defined(__powerpc__)
-	atf_tc_expect_timeout("PR port-powerpc/44387");
-#endif
+	m_arch = atf_config_get("atf_arch");
+	if (strcmp(m_arch, "powerpc") == 0) {
+		atf_tc_expect_timeout("PR port-powerpc/44387");
+	}
 
 	global_x = 0;
 	count = count2 = 10000000;
@@ -227,13 +230,13 @@ ATF_TC_BODY(mutex3, tc)
 		global_x, (long)joinval);
 	ATF_REQUIRE_EQ(global_x, 20000000);
 
-#if defined(__powerpc__)
 	/* XXX force a timeout in ppc case since an un-triggered race
 	   otherwise looks like a "failure" */
-	/* We sleep for longer than the timeout to make ATF not
-	   complain about unexpected success */
-	sleep(41);
-#endif
+	if (strcmp(m_arch, "powerpc") == 0) {
+		/* We sleep for longer than the timeout to make ATF not
+		   complain about unexpected success */
+		sleep(41);
+	}
 }
 
 static void *

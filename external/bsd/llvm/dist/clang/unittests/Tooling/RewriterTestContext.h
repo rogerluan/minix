@@ -11,8 +11,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_CLANG_UNITTESTS_TOOLING_REWRITERTESTCONTEXT_H
-#define LLVM_CLANG_UNITTESTS_TOOLING_REWRITERTESTCONTEXT_H
+#ifndef LLVM_CLANG_REWRITER_TEST_CONTEXT_H
+#define LLVM_CLANG_REWRITER_TEST_CONTEXT_H
 
 #include "clang/Basic/Diagnostic.h"
 #include "clang/Basic/DiagnosticOptions.h"
@@ -48,12 +48,12 @@ class RewriterTestContext {
   ~RewriterTestContext() {}
 
   FileID createInMemoryFile(StringRef Name, StringRef Content) {
-    std::unique_ptr<llvm::MemoryBuffer> Source =
-        llvm::MemoryBuffer::getMemBuffer(Content);
+    const llvm::MemoryBuffer *Source =
+      llvm::MemoryBuffer::getMemBuffer(Content);
     const FileEntry *Entry =
       Files.getVirtualFile(Name, Source->getBufferSize(), 0);
-    Sources.overrideFileContents(Entry, std::move(Source));
-    assert(Entry != nullptr);
+    Sources.overrideFileContents(Entry, Source, true);
+    assert(Entry != NULL);
     return Sources.createFileID(Entry, SourceLocation(), SrcMgr::C_User);
   }
 
@@ -62,7 +62,8 @@ class RewriterTestContext {
   FileID createOnDiskFile(StringRef Name, StringRef Content) {
     SmallString<1024> Path;
     int FD;
-    std::error_code EC = llvm::sys::fs::createTemporaryFile(Name, "", FD, Path);
+    llvm::error_code EC =
+        llvm::sys::fs::createTemporaryFile(Name, "", FD, Path);
     assert(!EC);
     (void)EC;
 
@@ -70,10 +71,9 @@ class RewriterTestContext {
     OutStream << Content;
     OutStream.close();
     const FileEntry *File = Files.getFile(Path);
-    assert(File != nullptr);
+    assert(File != NULL);
 
-    StringRef Found =
-        TemporaryFiles.insert(std::make_pair(Name, Path.str())).first->second;
+    StringRef Found = TemporaryFiles.GetOrCreateValue(Name, Path.str()).second;
     assert(Found == Path);
     (void)Found;
     return Sources.createFileID(File, SourceLocation(), SrcMgr::C_User);
@@ -102,8 +102,7 @@ class RewriterTestContext {
     // descriptor, which might not see the changes made.
     // FIXME: Figure out whether there is a way to get the SourceManger to
     // reopen the file.
-    auto FileBuffer = Files.getBufferForFile(Path);
-    return (*FileBuffer)->getBuffer();
+    return Files.getBufferForFile(Path, NULL)->getBuffer();
   }
 
   IntrusiveRefCntPtr<DiagnosticOptions> DiagOpts;

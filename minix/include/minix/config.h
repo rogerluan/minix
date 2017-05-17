@@ -3,8 +3,7 @@
 
 /* Minix release and version numbers. */
 #define OS_NAME "Minix"
-#define OS_RELEASE "3.4.0"	/* 3.m.p */
-#define OS_REV 304000000	/* see NetBSD sys/param.h: 3mm00pp00 */
+#define OS_RELEASE "3.3.0"
 #define OS_CONFIG "GENERIC"
 #define OS_VERSION OS_NAME " " OS_RELEASE " (" OS_CONFIG ")"
 
@@ -57,9 +56,6 @@
 /* Max. number of IRQs that can be assigned to a process */
 #define NR_IRQ	16
 
-/* Max. number of domains (protocol families) per socket driver */
-#define NR_DOMAIN	8
-
 /* Scheduling priorities. Values must start at zero (highest
  * priority) and increment.
  */
@@ -93,14 +89,10 @@
 
 /* Enable or disable system profiling. */
 #define SPROFILE          0    /* statistical profiling */
+#define CPROFILE          0    /* call profiling */
 
 /* PCI configuration parameters */
 #define NR_PCIBUS 40
 #define NR_PCIDEV 50
-
-/* Network device driver protocol parameters. */
-#define NDEV_NAME_MAX	16	/* max network driver name length (incl nul) */
-#define NDEV_HWADDR_MAX	6	/* max network hardware address length */
-#define NDEV_IOV_MAX	8	/* max number of elements in I/O vector */
 
 #endif /* _CONFIG_H */

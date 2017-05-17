@@ -6,7 +6,7 @@
 #include <machine/asm.h>
 
 #if defined(LIBC_SCCS)
-	RCSID("$NetBSD: strlen.S,v 1.2 2014/03/22 19:38:46 jakllsch Exp $")
+	RCSID("$NetBSD: strlen.S,v 1.1 2005/12/20 19:28:49 christos Exp $")
 #endif
 
 ENTRY(strlen)
@@ -139,4 +139,3 @@ ENTRY(strlen)
 .Ldone:
 	subl	4(%esp),%eax
 	ret
-END(strlen)

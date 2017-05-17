@@ -1,5 +1,4 @@
-; RUN: llc -march=r600 -mcpu=redwood < %s | FileCheck -check-prefix=EG -check-prefix=FUNC %s
-
+; RUN: llc < %s -march=r600 -mcpu=redwood | FileCheck %s
 
 ; Normally icmp + select is optimized to select_cc, when this happens the
 ; DAGLegalizer never sees the select and doesn't have a chance to leaglize it.
@@ -7,13 +6,13 @@
 ; In order to avoid the select_cc optimization, this test case calculates the
 ; condition for the select in a separate basic block.
 
-; FUNC-LABEL: {{^}}select:
-; EG-DAG: MEM_RAT_CACHELESS STORE_RAW T{{[0-9]+}}.X
-; EG-DAG: MEM_RAT_CACHELESS STORE_RAW T{{[0-9]+}}.X
-; EG-DAG: MEM_RAT_CACHELESS STORE_RAW T{{[0-9]+}}.XY
-; EG-DAG: MEM_RAT_CACHELESS STORE_RAW T{{[0-9]+}}.XY
-; EG-DAG: MEM_RAT_CACHELESS STORE_RAW T{{[0-9]+}}.XYZW
-; EG-DAG: MEM_RAT_CACHELESS STORE_RAW T{{[0-9]+}}.XYZW
+; CHECK-LABEL: @select
+; CHECK-DAG: MEM_RAT_CACHELESS STORE_RAW T{{[0-9]+}}.X
+; CHECK-DAG: MEM_RAT_CACHELESS STORE_RAW T{{[0-9]+}}.X
+; CHECK-DAG: MEM_RAT_CACHELESS STORE_RAW T{{[0-9]+}}.XY
+; CHECK-DAG: MEM_RAT_CACHELESS STORE_RAW T{{[0-9]+}}.XY
+; CHECK-DAG: MEM_RAT_CACHELESS STORE_RAW T{{[0-9]+}}.XYZW
+; CHECK-DAG: MEM_RAT_CACHELESS STORE_RAW T{{[0-9]+}}.XYZW
 define void @select (i32 addrspace(1)* %i32out, float addrspace(1)* %f32out,
                      <2 x i32> addrspace(1)* %v2i32out, <2 x float> addrspace(1)* %v2f32out,
                      <4 x i32> addrspace(1)* %v4i32out, <4 x float> addrspace(1)* %v4f32out,

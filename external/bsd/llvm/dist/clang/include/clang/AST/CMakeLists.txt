@@ -13,11 +13,6 @@ clang_tablegen(AttrDump.inc -gen-clang-attr-dump
   SOURCE ../Basic/Attr.td
   TARGET ClangAttrDump)
 
-clang_tablegen(AttrVisitor.inc -gen-clang-attr-ast-visitor
-  -I ${CMAKE_CURRENT_SOURCE_DIR}/../../
-  SOURCE ../Basic/Attr.td
-  TARGET ClangAttrVisitor)
-
 clang_tablegen(StmtNodes.inc -gen-clang-stmt-nodes
   SOURCE ../Basic/StmtNodes.td
   TARGET ClangStmtNodes)

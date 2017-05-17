@@ -35,20 +35,11 @@ extern "C" {
 /** See llvm::createAggressiveDCEPass function. */
 void LLVMAddAggressiveDCEPass(LLVMPassManagerRef PM);
 
-/** See llvm::createAlignmentFromAssumptionsPass function. */
-void LLVMAddAlignmentFromAssumptionsPass(LLVMPassManagerRef PM);
-
 /** See llvm::createCFGSimplificationPass function. */
 void LLVMAddCFGSimplificationPass(LLVMPassManagerRef PM);
 
 /** See llvm::createDeadStoreEliminationPass function. */
 void LLVMAddDeadStoreEliminationPass(LLVMPassManagerRef PM);
-
-/** See llvm::createScalarizerPass function. */
-void LLVMAddScalarizerPass(LLVMPassManagerRef PM);
-
-/** See llvm::createMergedLoadStoreMotionPass function. */
-void LLVMAddMergedLoadStoreMotionPass(LLVMPassManagerRef PM);
 
 /** See llvm::createGVNPass function. */
 void LLVMAddGVNPass(LLVMPassManagerRef PM);
@@ -88,9 +79,6 @@ void LLVMAddMemCpyOptPass(LLVMPassManagerRef PM);
 
 /** See llvm::createPartiallyInlineLibCallsPass function. */
 void LLVMAddPartiallyInlineLibCallsPass(LLVMPassManagerRef PM);
-
-/** See llvm::createLowerSwitchPass function. */
-void LLVMAddLowerSwitchPass(LLVMPassManagerRef PM);
 
 /** See llvm::createPromoteMemoryToRegisterPass function. */
 void LLVMAddPromoteMemoryToRegisterPass(LLVMPassManagerRef PM);
@@ -137,9 +125,6 @@ void LLVMAddLowerExpectIntrinsicPass(LLVMPassManagerRef PM);
 
 /** See llvm::createTypeBasedAliasAnalysisPass function */
 void LLVMAddTypeBasedAliasAnalysisPass(LLVMPassManagerRef PM);
-
-/** See llvm::createScopedNoAliasAAPass function */
-void LLVMAddScopedNoAliasAAPass(LLVMPassManagerRef PM);
 
 /** See llvm::createBasicAliasAnalysisPass function */
 void LLVMAddBasicAliasAnalysisPass(LLVMPassManagerRef PM);

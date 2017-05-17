@@ -1,4 +1,4 @@
-/*	$NetBSD: tables.c,v 1.5 2014/10/30 18:44:05 christos Exp $	*/
+/*	$NetBSD: tables.c,v 1.3 2013/04/06 14:27:52 christos Exp $	*/
 
 /*  tables.c - tables serialization code
  *
@@ -33,10 +33,9 @@
  *  WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  *  PURPOSE.
  */
-#include "flexdef.h"
-__RCSID("$NetBSD: tables.c,v 1.5 2014/10/30 18:44:05 christos Exp $");
 
 
+#include "flexdef.h"
 #include "tables.h"
 
 /** Convert size_t to t_flag.

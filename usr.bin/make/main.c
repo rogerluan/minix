@@ -1,4 +1,4 @@
-/*	$NetBSD: main.c,v 1.233 2015/09/10 17:15:11 sjg Exp $	*/
+/*	$NetBSD: main.c,v 1.225 2013/09/14 15:09:34 matt Exp $	*/
 
 /*
  * Copyright (c) 1988, 1989, 1990, 1993
@@ -69,7 +69,7 @@
  */
 
 #ifndef MAKE_NATIVE
-static char rcsid[] = "$NetBSD: main.c,v 1.233 2015/09/10 17:15:11 sjg Exp $";
+static char rcsid[] = "$NetBSD: main.c,v 1.225 2013/09/14 15:09:34 matt Exp $";
 #else
 #include <sys/cdefs.h>
 #ifndef lint
@@ -81,7 +81,7 @@ __COPYRIGHT("@(#) Copyright (c) 1988, 1989, 1990, 1993\
 #if 0
 static char sccsid[] = "@(#)main.c	8.3 (Berkeley) 3/19/94";
 #else
-__RCSID("$NetBSD: main.c,v 1.233 2015/09/10 17:15:11 sjg Exp $");
+__RCSID("$NetBSD: main.c,v 1.225 2013/09/14 15:09:34 matt Exp $");
 #endif
 #endif /* not lint */
 #endif
@@ -99,14 +99,14 @@ __RCSID("$NetBSD: main.c,v 1.233 2015/09/10 17:15:11 sjg Exp $");
  *
  *	Error			Print a tagged error message. The global
  *				MAKE variable must have been defined. This
- *				takes a format string and optional arguments
- *				for it.
+ *				takes a format string and two optional
+ *				arguments for it.
  *
  *	Fatal			Print an error message and exit. Also takes
- *				a format string and arguments for it.
+ *				a format string and two arguments.
  *
  *	Punt			Aborts all jobs and exits with a message. Also
- *				takes a format string and arguments for it.
+ *				takes a format string and two arguments.
  *
  *	Finish			Finish things up by printing the number of
  *				errors which occurred, as passed to it, and
@@ -168,7 +168,6 @@ Boolean			keepgoing;	/* -k flag */
 Boolean			queryFlag;	/* -q flag */
 Boolean			touchFlag;	/* -t flag */
 Boolean			enterFlag;	/* -w flag */
-Boolean			enterFlagObj;	/* -w and objdir != srcdir */
 Boolean			ignoreErrors;	/* -i flag */
 Boolean			beSilent;	/* -s flag */
 Boolean			oldVars;	/* variable substitution style */
@@ -711,8 +710,6 @@ Main_SetObjdir(const char *path)
 			setenv("PWD", objdir, 1);
 			Dir_InitDot();
 			rc = TRUE;
-			if (enterFlag && strcmp(objdir, curdir) != 0)
-				enterFlagObj = TRUE;
 		}
 	}
 
@@ -885,7 +882,7 @@ main(int argc, char **argv)
 	}
 
 	if (!machine_arch) {
-#if defined(MAKE_NATIVE)
+#if defined(MAKE_NATIVE) && !defined(__minix)
 	    static char machine_arch_buf[sizeof(utsname.machine)];
 	    const int mib[2] = { CTL_HW, HW_MACHINE_ARCH };
 	    size_t len = sizeof(machine_arch_buf);
@@ -1070,12 +1067,11 @@ main(int argc, char **argv)
 	 */
 #ifndef NO_PWD_OVERRIDE
 	if (!ignorePWD) {
-		char *pwd, *ptmp1 = NULL, *ptmp2 = NULL;
+		char *pwd;
 
 		if ((pwd = getenv("PWD")) != NULL &&
-		    Var_Value("MAKEOBJDIRPREFIX", VAR_CMD, &ptmp1) == NULL) {
-			const char *makeobjdir = Var_Value("MAKEOBJDIR",
-			    VAR_CMD, &ptmp2);
+		    getenv("MAKEOBJDIRPREFIX") == NULL) {
+			const char *makeobjdir = getenv("MAKEOBJDIR");
 
 			if (makeobjdir == NULL || !strchr(makeobjdir, '$')) {
 				if (stat(pwd, &sb) == 0 &&
@@ -1084,8 +1080,6 @@ main(int argc, char **argv)
 					(void)strncpy(curdir, pwd, MAXPATHLEN);
 			}
 		}
-		free(ptmp1);
-		free(ptmp2);
 	}
 #endif
 	Var_Set(".CURDIR", curdir, VAR_GLOBAL, 0);
@@ -1102,13 +1096,11 @@ main(int argc, char **argv)
 	Dir_Init(curdir);
 	(void)Main_SetObjdir(curdir);
 
-	if ((path = Var_Value("MAKEOBJDIRPREFIX", VAR_CMD, &p1)) != NULL) {
+	if ((path = getenv("MAKEOBJDIRPREFIX")) != NULL) {
 		(void)snprintf(mdpath, MAXPATHLEN, "%s%s", path, curdir);
 		(void)Main_SetObjdir(mdpath);
-		free(p1);
-	} else if ((path = Var_Value("MAKEOBJDIR", VAR_CMD, &p1)) != NULL) {
+	} else if ((path = getenv("MAKEOBJDIR")) != NULL) {
 		(void)Main_SetObjdir(path);
-		free(p1);
 	} else {
 		(void)snprintf(mdpath, MAXPATHLEN, "%s.%s", _PATH_OBJDIR, machine);
 		if (!Main_SetObjdir(mdpath) && !Main_SetObjdir(_PATH_OBJDIR)) {
@@ -1234,9 +1226,6 @@ main(int argc, char **argv)
 	    doing_depend = FALSE;
 	}
 
-	if (enterFlagObj)
-		printf("%s: Entering directory `%s'\n", progname, objdir);
-	
 	MakeMode(NULL);
 
 	Var_Append("MFLAGS", Var_Value(MAKEFLAGS, VAR_GLOBAL, &p1), VAR_GLOBAL);
@@ -1378,8 +1367,6 @@ main(int argc, char **argv)
 
 	Trace_Log(MAKEEND, 0);
 
-	if (enterFlagObj)
-		printf("%s: Leaving directory `%s'\n", progname, objdir);
 	if (enterFlag)
 		printf("%s: Leaving directory `%s'\n", progname, curdir);
 
@@ -1496,8 +1483,7 @@ Cmd_Exec(const char *cmd, const char **errnum)
     int		status;		/* command exit status */
     Buffer	buf;		/* buffer to store the result */
     char	*cp;
-    int		cc;		/* bytes read, or -1 */
-    int		savederr;	/* saved errno */
+    int		cc;
 
 
     *errnum = NULL;
@@ -1554,7 +1540,6 @@ Cmd_Exec(const char *cmd, const char **errnum)
 	 */
 	(void)close(fds[1]);
 
-	savederr = 0;
 	Buf_Init(&buf, 0);
 
 	do {
@@ -1564,8 +1549,6 @@ Cmd_Exec(const char *cmd, const char **errnum)
 		Buf_AddBytes(&buf, cc, result);
 	}
 	while (cc > 0 || (cc == -1 && errno == EINTR));
-	if (cc == -1)
-	    savederr = errno;
 
 	/*
 	 * Close the input side of the pipe.
@@ -1582,7 +1565,7 @@ Cmd_Exec(const char *cmd, const char **errnum)
 	cc = Buf_Size(&buf);
 	res = Buf_Destroy(&buf, FALSE);
 
-	if (savederr != 0)
+	if (cc == 0)
 	    *errnum = "Couldn't read shell's output for \"%s\"";
 
 	if (WIFSIGNALED(status))

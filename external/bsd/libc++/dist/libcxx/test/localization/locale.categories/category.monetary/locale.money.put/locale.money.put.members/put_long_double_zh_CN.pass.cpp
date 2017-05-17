@@ -7,8 +7,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-// REQUIRES: locale.zh_CN.UTF-8
-
 // <locale>
 
 // class money_put<charT, OutputIterator>

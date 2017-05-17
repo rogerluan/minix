@@ -1,13 +1,10 @@
-#	$NetBSD: Makefile,v 1.2 2014/05/30 18:28:16 joerg Exp $
+#	$NetBSD: Makefile,v 1.1 2013/09/29 12:12:02 joerg Exp $
 
 LIB=	lldbPluginProcessNetBSD
 
 .include <bsd.init.mk>
 
 .PATH: ${LLDB_SRCDIR}/source/Plugins/Process/FreeBSD
-
-CPPFLAGS.ProcessFreeBSD.cpp+=	-I${LLDB_SRCDIR}/source/Plugins/Process/Utility
-CPPFLAGS.ProcessMonitor.cpp+=	-I${LLDB_SRCDIR}/source/Plugins/Process/Utility
 
 SRCS+=	ProcessFreeBSD.cpp \
 	ProcessMonitor.cpp

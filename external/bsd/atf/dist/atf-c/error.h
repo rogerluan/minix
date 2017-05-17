@@ -33,7 +33,6 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-#include <atf-c/defs.h>
 #include <atf-c/error_fwd.h>
 
 /* ---------------------------------------------------------------------
@@ -63,8 +62,7 @@ void atf_error_format(const atf_error_t, char *, size_t);
  * Common error types.
  * --------------------------------------------------------------------- */
 
-atf_error_t atf_libc_error(int, const char *, ...)
-    ATF_DEFS_ATTRIBUTE_FORMAT_PRINTF(2, 3);
+atf_error_t atf_libc_error(int, const char *, ...);
 int atf_libc_error_code(const atf_error_t);
 const char *atf_libc_error_msg(const atf_error_t);
 

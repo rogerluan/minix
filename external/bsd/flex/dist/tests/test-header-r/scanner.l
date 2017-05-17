@@ -1,3 +1,5 @@
+/*	$NetBSD: scanner.l,v 1.1.1.1 2009/10/26 00:29:20 christos Exp $	*/
+
 /*
  * This file is part of flex.
  * 

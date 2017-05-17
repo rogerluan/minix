@@ -1,4 +1,4 @@
-/* $NetBSD: t_mbsnrtowcs.c,v 1.2 2014/05/06 00:41:26 yamt Exp $ */
+/* $NetBSD: t_mbsnrtowcs.c,v 1.1 2013/05/28 16:57:56 joerg Exp $ */
 
 /*-
  * Copyright (c) 2013 The NetBSD Foundation, Inc.
@@ -30,10 +30,9 @@
  */
 
 #include <sys/cdefs.h>
-__RCSID("$NetBSD: t_mbsnrtowcs.c,v 1.2 2014/05/06 00:41:26 yamt Exp $");
+__RCSID("$NetBSD: t_mbsnrtowcs.c,v 1.1 2013/05/28 16:57:56 joerg Exp $");
 
 #include <locale.h>
-#include <string.h>
 #include <wchar.h>
 
 #include <atf-c.h>

@@ -34,10 +34,8 @@
 /* Define to 1 if you have the <string.h> header file. */
 #define HAVE_STRING_H 1
 
-#if !defined(__minix)
 /* Define to 1 if you have the `sysctlbyname' function. */
-#define HAVE_SYSCTLBYNAME 1
-#endif /* !defined(__minix) */
+/* #undef HAVE_SYSCTLBYNAME */
 
 /* Define to 1 if you have the <sys/param.h> header file. */
 #define HAVE_SYS_PARAM_H 1
@@ -70,7 +68,7 @@
 #define MEMORY_QUERY_SYSCTL_MIB "hw.usermem64"
 
 /* Define to the memory query type */
-#define MEMORY_QUERY_TYPE "sysctlbyname"
+#define MEMORY_QUERY_TYPE "sysctl"
 
 /* Name of package */
 #define PACKAGE "kyua-cli"

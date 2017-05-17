@@ -6,6 +6,7 @@
 
 #include "watchdog.h"
 #include "arch/i386/glo.h"
+#include "profile.h"
 
 unsigned watchdog_local_timer_ticks = 0U;
 struct arch_watchdog *watchdog;

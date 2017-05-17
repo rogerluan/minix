@@ -1,4 +1,4 @@
-/*	$NetBSD: env.h,v 1.3 2015/01/20 18:31:25 christos Exp $	*/
+/*	$NetBSD: env.h,v 1.2 2010/11/14 22:04:36 tron Exp $	*/
 
 /*-
  * Copyright (c) 2010 The NetBSD Foundation, Inc.
@@ -56,7 +56,11 @@ __writelockenv(void)
 }
 
 static __inline bool
+#if defined(__minix)
 __unlockenv(void)
+#else /* Bug-to-bug compatibility? LSC: FIXME We should upstream that. */
+__unlocklockenv(void)
+#endif /* defined(__minix) */
 {
 	return true;
 }

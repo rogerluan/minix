@@ -17,12 +17,16 @@
 
 using namespace llvm;
 
+MCSchedModel MCSchedModel::DefaultSchedModel; // For unknown processors.
+
 /// InitMCProcessorInfo - Set or change the CPU (optionally supplemented
 /// with feature string). Recompute feature bits and scheduling model.
 void
 MCSubtargetInfo::InitMCProcessorInfo(StringRef CPU, StringRef FS) {
   SubtargetFeatures Features(FS);
-  FeatureBits = Features.getFeatureBits(CPU, ProcDesc, ProcFeatures);
+  FeatureBits = Features.getFeatureBits(CPU, ProcDesc, NumProcs,
+                                        ProcFeatures, NumFeatures);
+
   InitCPUSchedModel(CPU);
 }
 
@@ -31,20 +35,21 @@ MCSubtargetInfo::InitCPUSchedModel(StringRef CPU) {
   if (!CPU.empty())
     CPUSchedModel = getSchedModelForCPU(CPU);
   else
-    CPUSchedModel = MCSchedModel::GetDefaultSchedModel();
+    CPUSchedModel = &MCSchedModel::DefaultSchedModel;
 }
 
 void
 MCSubtargetInfo::InitMCSubtargetInfo(StringRef TT, StringRef CPU, StringRef FS,
-                                     ArrayRef<SubtargetFeatureKV> PF,
-                                     ArrayRef<SubtargetFeatureKV> PD,
+                                     const SubtargetFeatureKV *PF,
+                                     const SubtargetFeatureKV *PD,
                                      const SubtargetInfoKV *ProcSched,
                                      const MCWriteProcResEntry *WPR,
                                      const MCWriteLatencyEntry *WL,
                                      const MCReadAdvanceEntry *RA,
                                      const InstrStage *IS,
                                      const unsigned *OC,
-                                     const unsigned *FP) {
+                                     const unsigned *FP,
+                                     unsigned NF, unsigned NP) {
   TargetTriple = TT;
   ProcFeatures = PF;
   ProcDesc = PD;
@@ -56,6 +61,8 @@ MCSubtargetInfo::InitMCSubtargetInfo(StringRef TT, StringRef CPU, StringRef FS,
   Stages = IS;
   OperandCycles = OC;
   ForwardingPaths = FP;
+  NumFeatures = NF;
+  NumProcs = NP;
 
   InitMCProcessorInfo(CPU, FS);
 }
@@ -71,16 +78,16 @@ uint64_t MCSubtargetInfo::ToggleFeature(uint64_t FB) {
 /// bits. This version will also change all implied bits.
 uint64_t MCSubtargetInfo::ToggleFeature(StringRef FS) {
   SubtargetFeatures Features;
-  FeatureBits = Features.ToggleFeature(FeatureBits, FS, ProcFeatures);
+  FeatureBits = Features.ToggleFeature(FeatureBits, FS,
+                                       ProcFeatures, NumFeatures);
   return FeatureBits;
 }
 
 
-MCSchedModel
+const MCSchedModel *
 MCSubtargetInfo::getSchedModelForCPU(StringRef CPU) const {
   assert(ProcSchedModels && "Processor machine model not available!");
 
-  unsigned NumProcs = ProcDesc.size();
 #ifndef NDEBUG
   for (size_t i = 1; i < NumProcs; i++) {
     assert(strcmp(ProcSchedModels[i - 1].Key, ProcSchedModels[i].Key) < 0 &&
@@ -95,15 +102,15 @@ MCSubtargetInfo::getSchedModelForCPU(StringRef CPU) const {
     errs() << "'" << CPU
            << "' is not a recognized processor for this target"
            << " (ignoring processor)\n";
-    return MCSchedModel::GetDefaultSchedModel();
+    return &MCSchedModel::DefaultSchedModel;
   }
   assert(Found->Value && "Missing processor SchedModel value");
-  return *(const MCSchedModel *)Found->Value;
+  return (const MCSchedModel *)Found->Value;
 }
 
 InstrItineraryData
 MCSubtargetInfo::getInstrItineraryForCPU(StringRef CPU) const {
-  const MCSchedModel SchedModel = getSchedModelForCPU(CPU);
+  const MCSchedModel *SchedModel = getSchedModelForCPU(CPU);
   return InstrItineraryData(SchedModel, Stages, OperandCycles, ForwardingPaths);
 }
 

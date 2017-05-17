@@ -1,4 +1,4 @@
-/*	$NetBSD: cksum.c,v 1.48 2015/06/16 22:54:10 christos Exp $	*/
+/*	$NetBSD: cksum.c,v 1.46 2013/10/18 20:47:06 christos Exp $	*/
 
 /*-
  * Copyright (c) 1991, 1993
@@ -81,7 +81,7 @@ __COPYRIGHT("@(#) Copyright (c) 1991, 1993\
 #if 0
 static char sccsid[] = "@(#)cksum.c	8.2 (Berkeley) 4/28/95";
 #endif
-__RCSID("$NetBSD: cksum.c,v 1.48 2015/06/16 22:54:10 christos Exp $");
+__RCSID("$NetBSD: cksum.c,v 1.46 2013/10/18 20:47:06 christos Exp $");
 #endif /* not lint */
 
 #include <sys/types.h>
@@ -103,9 +103,6 @@ __RCSID("$NetBSD: cksum.c,v 1.48 2015/06/16 22:54:10 christos Exp $");
 #include <unistd.h>
 
 #include "extern.h"
-
-#define PRINT_NORMAL     0x01
-#define PRINT_QUIET      0x02
 
 typedef char *(*_filefunc)(const char *, char *);
 
@@ -160,15 +157,14 @@ main(int argc, char **argv)
 	int (*cfncn) (int, u_int32_t *, off_t *);
 	void (*pfncn) (char *, u_int32_t, off_t);
 	const struct hash *hash;
-	int i, check_warn, do_check;
-	int print_flags;
+	int normal, i, check_warn, do_check;
 
 	cfncn = NULL;
 	pfncn = NULL;
 	pflag = nohashstdin = 0;
+	normal = 0;
 	check_warn = 0;
 	do_check = 0;
-	print_flags = 0;
 
 	setlocale(LC_ALL, "");
 
@@ -190,11 +186,11 @@ main(int argc, char **argv)
 		}
 	}
 
-	while ((ch = getopt(argc, argv, "a:cno:pqs:twx")) != -1)
+	while ((ch = getopt(argc, argv, "a:cno:ps:twx")) != -1)
 		switch(ch) {
 		case 'a':
 			if (hash) {
-				warnx("illegal use of -a option");
+				warnx("illegal use of -a option\n");
 				usage();
 			}
 			i = 0;
@@ -225,7 +221,7 @@ main(int argc, char **argv)
 			do_check = 1;
 			break;
 		case 'n':
-			print_flags |= PRINT_NORMAL;
+			normal = 1;
 			break;
 		case 'o':
 			if (hash) {
@@ -248,9 +244,6 @@ main(int argc, char **argv)
 			if (hash == NULL)
 				requirehash("-p");
 			pflag = 1;
-			break;
-		case 'q':
-			print_flags |= PRINT_QUIET;
 			break;
 		case 's':
 			if (hash == NULL)
@@ -305,7 +298,7 @@ main(int argc, char **argv)
 			    argc>0?argv[0]:"stdin");
 		
 		while(fgets(buf, sizeof(buf), f) != NULL) {
-			s = strrchr(buf, '\n');
+			s=strrchr(buf, '\n');
 			if (s)
 				*s = '\0';
 
@@ -317,7 +310,7 @@ main(int argc, char **argv)
 				 * Assume 'normal' output if there's a '('
 				 */
 				p_filename += 1;
-				print_flags &= ~(PRINT_NORMAL);
+				normal = 0;
 
 				p_cksum = strrchr(p_filename, ')');
 				if (p_cksum == NULL) {
@@ -371,7 +364,7 @@ main(int argc, char **argv)
 					/*
 					 * 'normal' output, no (ck)sum
 					 */
-					print_flags |= PRINT_NORMAL;
+					normal = 1;
 					nspaces = 1;
 					
 					p_cksum = buf;
@@ -475,7 +468,7 @@ main(int argc, char **argv)
 			if (*argv) {
 				fn = *argv++;
 				if (hash != NULL) {
-					if (hash_digest_file(fn, hash, print_flags)) {
+					if (hash_digest_file(fn, hash, normal)) {
 						warn("%s", fn);
 						rval = 1;
 					}
@@ -504,7 +497,7 @@ main(int argc, char **argv)
 }
 
 static int
-hash_digest_file(char *fn, const struct hash *hash, int flags)
+hash_digest_file(char *fn, const struct hash *hash, int normal)
 {
 	char *cp;
 
@@ -512,9 +505,7 @@ hash_digest_file(char *fn, const struct hash *hash, int flags)
 	if (cp == NULL)
 		return 1;
 
-	if (flags & PRINT_QUIET)
-		printf("%s\n", cp);
-	else if (flags & PRINT_NORMAL)
+	if (normal)
 		printf("%s %s\n", cp, fn);
 	else
 		printf("%s (%s) = %s\n", hash->hashname, fn, cp);

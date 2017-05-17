@@ -270,19 +270,21 @@ public:
 
     pint_t base = n->hdr_base;
     pint_t first = n->hdr_start;
-    for (pint_t len = n->hdr_entries; len > 1; ) {
-      pint_t next = first + (len / 2) * 8;
+    pint_t len = n->hdr_entries;
+    while (len) {
+      pint_t next = first + ((len + 1) / 2) * 8;
       pint_t nextPC = base + (int32_t)get32(next);
       if (nextPC == pc) {
         first = next;
         break;
       }
       if (nextPC < pc) {
+        len -= (len + 1) / 2;
         first = next;
-        len -= (len / 2);
-      } else {
-        len /= 2;
-      }
+      } else if (len == 1)
+        break;
+      else
+        len = (len + 1) / 2;
     }
     fdeStart = base + (int32_t)get32(first + 4);
     data_base = n->data_base;
@@ -299,7 +301,7 @@ public:
     n->last_pc = pcEnd;
     n->data_base = 0;
     n->ehframe_base = 0;
-    if (static_cast<Range *>(rb_tree_insert_node(&segmentTree, n)) == n) {
+    if (rb_tree_insert_node(&segmentTree, n) == n) {
       pthread_rwlock_unlock(&fdeTreeLock);
       return true;
     }
@@ -310,7 +312,7 @@ public:
 
   bool removeFDE(pint_t pcStart, pint_t pcEnd, pint_t fde) {
     pthread_rwlock_wrlock(&fdeTreeLock);
-    Range *n = static_cast<Range *>(rb_tree_find_node(&segmentTree, &pcStart));
+    Range *n = (Range *)rb_tree_find_node(&segmentTree, &pcStart);
     if (n == NULL) {
       pthread_rwlock_unlock(&fdeTreeLock);
       return false;
@@ -351,9 +353,9 @@ public:
 private:
   findPCRange_t findPCRange;
   bool needsReload;
-#if !defined(__minix)
+#ifndef __minix
   pthread_rwlock_t fdeTreeLock;
-#endif /* !defined(__minix) */
+#endif
   rb_tree_t segmentTree;
   rb_tree_t dsoTree;
 
@@ -409,7 +411,7 @@ private:
     n->data_base = data_base;
     n->ehframe_base = ehframe_base;
 
-    if (static_cast<Range *>(rb_tree_insert_node(&segmentTree, n)) != n) {
+    if (rb_tree_insert_node(&segmentTree, n) != n) {
       free(n);
       return;
     }

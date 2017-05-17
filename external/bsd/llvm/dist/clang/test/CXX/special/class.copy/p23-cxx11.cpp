@@ -30,8 +30,8 @@ struct NonTrivialMoveAssign {
   NonTrivialMoveAssign &operator=(NonTrivialMoveAssign &&);
 };
 struct AmbiguousCopyAssign {
-  AmbiguousCopyAssign &operator=(const AmbiguousCopyAssign &) volatile;
-  AmbiguousCopyAssign &operator=(const AmbiguousCopyAssign &) const;
+  AmbiguousCopyAssign &operator=(const AmbiguousCopyAssign &);
+  AmbiguousCopyAssign &operator=(volatile AmbiguousCopyAssign &);
 };
 struct AmbiguousMoveAssign {
   AmbiguousMoveAssign &operator=(const AmbiguousMoveAssign &&);
@@ -174,18 +174,3 @@ namespace PR13381 {
     t = T(); // expected-error{{object of type 'PR13381::T' cannot be assigned because its copy assignment operator is implicitly deleted}}
   }
 }
-
-namespace Mutable {
-  struct AmbiguousCopyAssign {
-    AmbiguousCopyAssign &operator=(const AmbiguousCopyAssign &);
-    AmbiguousCopyAssign &operator=(volatile AmbiguousCopyAssign &);
-  };
-  struct X {
-    AmbiguousCopyAssign a;
-  };
-  struct Y {
-    mutable AmbiguousCopyAssign a; // expected-note {{multiple copy assignment operators}}
-  };
-}
-template struct CopyAssign<Mutable::X>;
-template struct CopyAssign<Mutable::Y>; // expected-note {{here}}

@@ -1,7 +1,5 @@
 ; RUN: opt -S -instcombine < %s | FileCheck %s
 
-declare double @llvm.fabs.f64(double) nounwind readnone
-
 define i1 @test1(float %x, float %y) nounwind {
   %ext1 = fpext float %x to double
   %ext2 = fpext float %y to double
@@ -83,32 +81,12 @@ define i32 @test9(double %a) nounwind {
 ; CHECK: ret i32 0
 }
 
-define i32 @test9_intrinsic(double %a) nounwind {
-  %call = tail call double @llvm.fabs.f64(double %a) nounwind
-  %cmp = fcmp olt double %call, 0.000000e+00
-  %conv = zext i1 %cmp to i32
-  ret i32 %conv
-; CHECK-LABEL: @test9_intrinsic(
-; CHECK-NOT: fabs
-; CHECK: ret i32 0
-}
-
 define i32 @test10(double %a) nounwind {
   %call = tail call double @fabs(double %a) nounwind
   %cmp = fcmp ole double %call, 0.000000e+00
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 ; CHECK-LABEL: @test10(
-; CHECK-NOT: fabs
-; CHECK: fcmp oeq double %a, 0.000000e+00
-}
-
-define i32 @test10_intrinsic(double %a) nounwind {
-  %call = tail call double @llvm.fabs.f64(double %a) nounwind
-  %cmp = fcmp ole double %call, 0.000000e+00
-  %conv = zext i1 %cmp to i32
-  ret i32 %conv
-; CHECK-LABEL: @test10_intrinsic(
 ; CHECK-NOT: fabs
 ; CHECK: fcmp oeq double %a, 0.000000e+00
 }
@@ -123,32 +101,12 @@ define i32 @test11(double %a) nounwind {
 ; CHECK: fcmp one double %a, 0.000000e+00
 }
 
-define i32 @test11_intrinsic(double %a) nounwind {
-  %call = tail call double @llvm.fabs.f64(double %a) nounwind
-  %cmp = fcmp ogt double %call, 0.000000e+00
-  %conv = zext i1 %cmp to i32
-  ret i32 %conv
-; CHECK-LABEL: @test11_intrinsic(
-; CHECK-NOT: fabs
-; CHECK: fcmp one double %a, 0.000000e+00
-}
-
 define i32 @test12(double %a) nounwind {
   %call = tail call double @fabs(double %a) nounwind
   %cmp = fcmp oge double %call, 0.000000e+00
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 ; CHECK-LABEL: @test12(
-; CHECK-NOT: fabs
-; CHECK: fcmp ord double %a, 0.000000e+00
-}
-
-define i32 @test12_intrinsic(double %a) nounwind {
-  %call = tail call double @llvm.fabs.f64(double %a) nounwind
-  %cmp = fcmp oge double %call, 0.000000e+00
-  %conv = zext i1 %cmp to i32
-  ret i32 %conv
-; CHECK-LABEL: @test12_intrinsic(
 ; CHECK-NOT: fabs
 ; CHECK: fcmp ord double %a, 0.000000e+00
 }
@@ -163,32 +121,12 @@ define i32 @test13(double %a) nounwind {
 ; CHECK: fcmp une double %a, 0.000000e+00
 }
 
-define i32 @test13_intrinsic(double %a) nounwind {
-  %call = tail call double @llvm.fabs.f64(double %a) nounwind
-  %cmp = fcmp une double %call, 0.000000e+00
-  %conv = zext i1 %cmp to i32
-  ret i32 %conv
-; CHECK-LABEL: @test13_intrinsic(
-; CHECK-NOT: fabs
-; CHECK: fcmp une double %a, 0.000000e+00
-}
-
 define i32 @test14(double %a) nounwind {
   %call = tail call double @fabs(double %a) nounwind
   %cmp = fcmp oeq double %call, 0.000000e+00
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 ; CHECK-LABEL: @test14(
-; CHECK-NOT: fabs
-; CHECK: fcmp oeq double %a, 0.000000e+00
-}
-
-define i32 @test14_intrinsic(double %a) nounwind {
-  %call = tail call double @llvm.fabs.f64(double %a) nounwind
-  %cmp = fcmp oeq double %call, 0.000000e+00
-  %conv = zext i1 %cmp to i32
-  ret i32 %conv
-; CHECK-LABEL: @test14_intrinsic(
 ; CHECK-NOT: fabs
 ; CHECK: fcmp oeq double %a, 0.000000e+00
 }
@@ -203,32 +141,12 @@ define i32 @test15(double %a) nounwind {
 ; CHECK: fcmp one double %a, 0.000000e+00
 }
 
-define i32 @test15_intrinsic(double %a) nounwind {
-  %call = tail call double @llvm.fabs.f64(double %a) nounwind
-  %cmp = fcmp one double %call, 0.000000e+00
-  %conv = zext i1 %cmp to i32
-  ret i32 %conv
-; CHECK-LABEL: @test15_intrinsic(
-; CHECK-NOT: fabs
-; CHECK: fcmp one double %a, 0.000000e+00
-}
-
 define i32 @test16(double %a) nounwind {
   %call = tail call double @fabs(double %a) nounwind
   %cmp = fcmp ueq double %call, 0.000000e+00
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 ; CHECK-LABEL: @test16(
-; CHECK-NOT: fabs
-; CHECK: fcmp ueq double %a, 0.000000e+00
-}
-
-define i32 @test16_intrinsic(double %a) nounwind {
-  %call = tail call double @llvm.fabs.f64(double %a) nounwind
-  %cmp = fcmp ueq double %call, 0.000000e+00
-  %conv = zext i1 %cmp to i32
-  ret i32 %conv
-; CHECK-LABEL: @test16_intrinsic(
 ; CHECK-NOT: fabs
 ; CHECK: fcmp ueq double %a, 0.000000e+00
 }

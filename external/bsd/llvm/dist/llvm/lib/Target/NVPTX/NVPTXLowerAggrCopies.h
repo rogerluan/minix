@@ -12,11 +12,10 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_LIB_TARGET_NVPTX_NVPTXLOWERAGGRCOPIES_H
-#define LLVM_LIB_TARGET_NVPTX_NVPTXLOWERAGGRCOPIES_H
+#ifndef NVPTX_LOWER_AGGR_COPIES_H
+#define NVPTX_LOWER_AGGR_COPIES_H
 
 #include "llvm/CodeGen/MachineFunctionAnalysis.h"
-#include "llvm/CodeGen/StackProtector.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/Pass.h"
 
@@ -28,17 +27,16 @@ struct NVPTXLowerAggrCopies : public FunctionPass {
 
   NVPTXLowerAggrCopies() : FunctionPass(ID) {}
 
-  void getAnalysisUsage(AnalysisUsage &AU) const override {
-    AU.addRequired<DataLayoutPass>();
+  void getAnalysisUsage(AnalysisUsage &AU) const {
+    AU.addRequired<DataLayout>();
     AU.addPreserved<MachineFunctionAnalysis>();
-    AU.addPreserved<StackProtector>();
   }
 
-  bool runOnFunction(Function &F) override;
+  virtual bool runOnFunction(Function &F);
 
   static const unsigned MaxAggrCopySize = 128;
 
-  const char *getPassName() const override {
+  virtual const char *getPassName() const {
     return "Lower aggregate copies/intrinsics into loops";
   }
 };

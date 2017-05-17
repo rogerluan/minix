@@ -1,4 +1,4 @@
-/*	$NetBSD: unistd.h,v 1.145 2015/03/24 07:44:52 wiz Exp $	*/
+/*	$NetBSD: unistd.h,v 1.139 2013/10/09 09:38:21 njoly Exp $	*/
 
 /*-
  * Copyright (c) 1998, 1999, 2008 The NetBSD Foundation, Inc.
@@ -159,23 +159,10 @@ extern	 int optopt;
 #endif
 
 /*
- * The Open Group Base Specifications, Issue 5; IEEE Std 1003.1-2001 (POSIX)
- */
-#if (_POSIX_C_SOURCE - 0) >= 200112L || (_XOPEN_SOURCE - 0) >= 500 || \
-    defined(_NETBSD_SOURCE)
-#if __SSP_FORTIFY_LEVEL == 0
-ssize_t	 readlink(const char * __restrict, char * __restrict, size_t);
-#endif
-#endif
-
-/*
  * The Open Group Base Specifications, Issue 6; IEEE Std 1003.1-2001 (POSIX)
  */
 #if (_POSIX_C_SOURCE - 0) >= 200112L || (_XOPEN_SOURCE - 0) >= 600 || \
     defined(_NETBSD_SOURCE)
-#if !defined(__minix)
-int	 posix_fallocate(int, off_t, off_t);
-#endif /* !defined(__minix) */
 int	 setegid(gid_t);
 int	 seteuid(uid_t);
 #endif
@@ -305,11 +292,10 @@ char	*getwd(char *);				/* obsoleted by getcwd() */
 /*
  * X/Open CAE Specification Issue 5 Version 2
  */
-#if (_POSIX_C_SOURCE - 0) >= 200112L || (_XOPEN_SOURCE - 0) >= 500 || \
-    defined(_NETBSD_SOURCE)
+#if (_XOPEN_SOURCE - 0) >= 500 || defined(_NETBSD_SOURCE)
 ssize_t	 pread(int, void *, size_t, off_t);
 ssize_t	 pwrite(int, const void *, size_t, off_t);
-#endif /* (_POSIX_C_SOURCE - 0) >= 200112L || ... */
+#endif
 
 /*
  * X/Open Extended API set 2 (a.k.a. C063)
@@ -320,7 +306,7 @@ int	linkat(int, const char *, int, const char *, int);
 int	renameat(int, const char *, int, const char *);
 int	faccessat(int, const char *, int, int);
 int	fchownat(int, const char *, uid_t, gid_t, int);
-ssize_t	readlinkat(int, const char *, char *, size_t);
+int	readlinkat(int, const char *, char *, size_t);
 int	symlinkat(const char *, int, const char *);
 int	unlinkat(int, const char *, int);
 #endif
@@ -342,12 +328,7 @@ int	 des_setkey(const char *);
 int	 dup3(int, int, int);
 void	 endusershell(void);
 int	 exect(const char *, char * const *, char * const *);
-int	 execvpe(const char *, char * const *, char * const *);
-int	 execlpe(const char *, const char *, ...);
 int	 fchroot(int);
-#if !defined(__minix)
-int	 fdiscard(int, off_t, off_t);
-#endif /* !defined(__minix) */
 int	 fsync_range(int, int, off_t, off_t);
 int	 getdomainname(char *, size_t);
 int	 getgrouplist(const char *, gid_t, gid_t *, int *);
@@ -373,7 +354,6 @@ __aconst char *getusershell(void);
 int	 initgroups(const char *, gid_t);
 int	 iruserok(uint32_t, int, const char *, const char *);
 int      issetugid(void);
-int	 mkstemps(char *, int);
 int	 nfssvc(int, void *);
 int	 pipe2(int *, int);
 #if !defined(__minix)

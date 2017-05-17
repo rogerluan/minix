@@ -1,13 +1,8 @@
-#	$NetBSD: Makefile,v 1.182 2015/07/23 08:03:26 mrg Exp $
+#	$NetBSD: Makefile,v 1.170 2013/09/02 14:34:57 joerg Exp $
 
 .include <bsd.own.mk>
 .include <bsd.endian.mk>
 
-.if defined(__MINIX)
-# Some tools do not compile warning free with newer toolchains.
-NOGCCERROR=	yes
-NOCLANGERROR=	yes
-.endif # defined(__MINIX)
 # Make sure that the ordered build/install processing applies when using
 # plain make.
 .MAIN: build_install
@@ -30,35 +25,37 @@ NOCLANGERROR=	yes
 TOOLS_BUILDRUMP?=no
 
 .if ${TOOLCHAIN_MISSING} == "no"
-. if defined(HAVE_GCC) && ${HAVE_GCC} > 0
+.if defined(HAVE_GCC)
 TOOLCHAIN_BITS= gmake .WAIT
+.endif
+
+.if defined(HAVE_GCC)
+.if ${HAVE_GCC} >= 45
 TOOLCHAIN_BITS+= gmp .WAIT
 TOOLCHAIN_BITS+= mpfr .WAIT
 TOOLCHAIN_BITS+= mpc .WAIT
-. endif
+.endif
+.endif
 .endif
 
 .if ${TOOLCHAIN_MISSING} == "no"
 TOOLCHAIN_BITS+= binutils .WAIT
 .endif
 
-.if defined(HAVE_GCC) && ${HAVE_GCC} > 0
-. if ${TOOLCHAIN_MISSING} == "no"
+.if defined(HAVE_GCC)
+.if ${TOOLCHAIN_MISSING} == "no"
 TOOLCHAIN_BITS+= gcc
-.if !defined(__MINIX)
-# The following test is broken as it still tries to create the directory
-.  if ${MKCROSSGDB:Uno} != "no" || make(obj)
+.  if ${MKCROSSGDB:Uno} != "no" # LSC: Doesn't work || make(obj)
 TOOLCHAIN_BITS+= gdb
 .  endif
-.endif # !defined(__MINIX)
 TOOLCHAIN_BITS+= .WAIT
-. endif
+.endif
 .endif
 
 .if defined(HAVE_PCC)
-. if ${TOOLCHAIN_MISSING} == "no"
+.if ${TOOLCHAIN_MISSING} == "no"
 TOOLCHAIN_BITS+= pcc
-. endif
+.endif
 .endif
 
 .if !defined(__MINIX)
@@ -70,12 +67,10 @@ TOOLCHAIN_BITS+= dbsym mdsetimage
 .endif # !defined(__MINIX)
 
 DTRACE_BITS=
-.if ${MKDTRACE} != "no" || ${MKCTF} != "no"
+.if ${MKDTRACE} != "no"
 DTRACE_BITS+= .WAIT libelf
 DTRACE_BITS+= .WAIT libdwarf
 DTRACE_BITS+= .WAIT libctf
-.endif
-.if ${MKCTF} != "no"
 DTRACE_BITS+= .WAIT ctfconvert ctfmerge
 .endif
 
@@ -105,14 +100,14 @@ dependall-binstall: dependall-compat
 # See above for special treatment for host-mkdep, compat, and binstall.
 #
 SUBDIR=	host-mkdep compat binstall \
-	.WAIT mktemp .WAIT sed .WAIT genassym
+	.WAIT mktemp .WAIT sed .WAIT
 .if ${TOOLS_BUILDRUMP} == "no"
-SUBDIR+=  gencat \
+SUBDIR+= genassym \
 		${LINT_BITS} \
-		makewhatis mtree nbperf .WAIT uudecode
+		makewhatis mtree nbperf .WAIT
 .endif
 
-SUBDIR+= cat join lorder m4 mkdep tsort .WAIT yacc .WAIT awk .WAIT lex
+SUBDIR+= join lorder m4 mkdep tsort .WAIT yacc .WAIT awk .WAIT lex
 
 .if ${TOOLS_BUILDRUMP} == "no"
 SUBDIR += .WAIT texinfo \
@@ -120,22 +115,21 @@ SUBDIR += .WAIT texinfo \
 	.WAIT pax \
 	.WAIT ${TOOLCHAIN_BITS} \
 	${DTRACE_BITS} \
-		 cksum \
+		 cat cksum \
 		file \
-		makefs .WAIT mkcsmapper mkesdb mklocale \
 		.WAIT \
 		.WAIT \
 		.WAIT \
-		.WAIT installboot \
-		pwd_mkdb strfile zic
+		.WAIT \
+		.WAIT \
+		pwd_mkdb stat strfile zic
 .endif
-SUBDIR+= stat .WAIT
-
 .if defined(__MINIX)
 SUBDIR += \
 	mkfs.mfs \
 	partition \
-	toproto
+	toproto \
+	writeisofs
 .else
 SUBDIR+= .WAIT config
 .endif # defined(__MINIX)
@@ -148,18 +142,18 @@ SUBDIR+= \
 	llvm-include .WAIT \
 	llvm-lib .WAIT \
 	llvm-clang
-. if ${MKLLD} != "no"
+.if ${MKLLD} != "no"
 SUBDIR+=	llvm-lld
-. endif
-. if ${MKMCLINKER} != "no"
+.endif
+.if ${MKMCLINKER} != "no"
 SUBDIR+=	llvm-mcld
-. endif
+.endif
 .endif
 
 .if ${MKMAN} != "no" || ${MKDOC} != "no" || ${MKHTML} != "no"
-. if ${MKGROFF} != "no"
+.  if ${MKGROFF} != "no"
 SUBDIR+=	groff
-. endif
+.  endif
 SUBDIR+=	mandoc
 .endif
 
@@ -173,8 +167,8 @@ SUBDIR+=	autoconf .WAIT gettext
 SUBDIR+=	pigz
 .endif
 
-.if ${MACHINE} == "hppa"
-SUBDIR+=	hppa-mkboot
+.if ${MACHINE} == "hp700"
+SUBDIR+=	hp700-mkboot
 .endif
 
 .if ${MACHINE} == "ibmnws"
@@ -231,11 +225,6 @@ SUBDIR+=	elftosb
 SUBDIR+=	mkubootimage
 .endif
 .endif # !defined(__MINIX)
-
-.if ${MKX11} != "no"
-SUBDIR+=	makestrs
-SUBDIR+=	makekeys
-.endif
 
 .endif # TOOLCHAIN_BUILDRUMP
 

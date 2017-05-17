@@ -1,4 +1,4 @@
-/*	$NetBSD: var.c,v 1.196 2015/10/06 17:36:25 christos Exp $	*/
+/*	$NetBSD: var.c,v 1.184 2013/09/04 15:38:26 sjg Exp $	*/
 
 /*
  * Copyright (c) 1988, 1989, 1990, 1993
@@ -69,14 +69,14 @@
  */
 
 #ifndef MAKE_NATIVE
-static char rcsid[] = "$NetBSD: var.c,v 1.196 2015/10/06 17:36:25 christos Exp $";
+static char rcsid[] = "$NetBSD: var.c,v 1.184 2013/09/04 15:38:26 sjg Exp $";
 #else
 #include <sys/cdefs.h>
 #ifndef lint
 #if 0
 static char sccsid[] = "@(#)var.c	8.3 (Berkeley) 3/19/94";
 #else
-__RCSID("$NetBSD: var.c,v 1.196 2015/10/06 17:36:25 christos Exp $");
+__RCSID("$NetBSD: var.c,v 1.184 2013/09/04 15:38:26 sjg Exp $");
 #endif
 #endif /* not lint */
 #endif
@@ -138,7 +138,6 @@ __RCSID("$NetBSD: var.c,v 1.196 2015/10/06 17:36:25 christos Exp $");
 #include    "buf.h"
 #include    "dir.h"
 #include    "job.h"
-#include    "metachar.h"
 
 extern int makelevel;
 /*
@@ -982,7 +981,8 @@ Var_Set(const char *name, const char *val, GNode *ctxt, int flags)
     }
 	
  out:
-    free(expanded_name);
+    if (expanded_name != NULL)
+	free(expanded_name);
     if (v != NULL)
 	VarFreeEnv(v, TRUE);
 }
@@ -1060,7 +1060,8 @@ Var_Append(const char *name, const char *val, GNode *ctxt)
 	    Hash_SetValue(h, v);
 	}
     }
-    free(expanded_name);
+    if (expanded_name != NULL)
+	free(expanded_name);
 }
 
 /*-
@@ -1090,7 +1091,9 @@ Var_Exists(const char *name, GNode *ctxt)
 	cp = Var_Subst(NULL, name, ctxt, FALSE);
     }
     v = VarFind(cp ? cp : name, ctxt, FIND_CMD|FIND_GLOBAL|FIND_ENV);
-    free(cp);
+    if (cp != NULL) {
+	free(cp);
+    }
     if (v == NULL) {
 	return(FALSE);
     } else {
@@ -2188,7 +2191,8 @@ VarGetPattern(GNode *ctxt, Var_Parse_State *vpstate MAKE_ATTR_UNUSED,
 		     */
 		    cp2 = Var_Parse(cp, ctxt, errnum, &len, &freeIt);
 		    Buf_AddBytes(&buf, strlen(cp2), cp2);
-		    free(freeIt);
+		    if (freeIt)
+			free(freeIt);
 		    cp += len - 1;
 		} else {
 		    const char *cp2 = &cp[1];
@@ -2241,7 +2245,7 @@ VarGetPattern(GNode *ctxt, Var_Parse_State *vpstate MAKE_ATTR_UNUSED,
 /*-
  *-----------------------------------------------------------------------
  * VarQuote --
- *	Quote shell meta-characters and space characters in the string
+ *	Quote shell meta-characters in the string
  *
  * Results:
  *	The quoted string
@@ -2256,25 +2260,29 @@ VarQuote(char *str)
 {
 
     Buffer  	  buf;
+    /* This should cover most shells :-( */
+    static const char meta[] = "\n \t'`\";&<>()|*?{}[]\\$!#^~";
     const char	*newline;
-    size_t nlen;
+    size_t len, nlen;
 
     if ((newline = Shell_GetNewline()) == NULL)
 	    newline = "\\\n";
     nlen = strlen(newline);
 
     Buf_Init(&buf, 0);
-
-    for (; *str != '\0'; str++) {
-	if (*str == '\n') {
+    while (*str != '\0') {
+	if ((len = strcspn(str, meta)) != 0) {
+	    Buf_AddBytes(&buf, len, str);
+	    str += len;
+	} else if (*str == '\n') {
 	    Buf_AddBytes(&buf, nlen, newline);
-	    continue;
-	}
-	if (isspace((unsigned char)*str) || ismeta((unsigned char)*str))
+	    ++str;
+	} else {
 	    Buf_AddByte(&buf, '\\');
-	Buf_AddByte(&buf, *str);
+	    Buf_AddByte(&buf, *str);
+	    ++str;
+	}
     }
-
     str = Buf_Destroy(&buf, FALSE);
     if (DEBUG(VAR))
 	fprintf(debug_file, "QuoteMeta: [%s]\n", str);
@@ -2500,7 +2508,8 @@ ApplyModifiers(char *nstr, const char *tstr,
 		(c = tstr[rlen]) != '\0' &&
 		c != ':' &&
 		c != endc) {
-		free(freeIt);
+		if (freeIt)
+		    free(freeIt);
 		goto apply_mods;
 	    }
 
@@ -2520,11 +2529,13 @@ ApplyModifiers(char *nstr, const char *tstr,
 		if (nstr == var_Error
 		    || (nstr == varNoError && errnum == 0)
 		    || strlen(rval) != (size_t) used) {
-		    free(freeIt);
+		    if (freeIt)
+			free(freeIt);
 		    goto out;		/* error already reported */
 		}
 	    }
-	    free(freeIt);
+	    if (freeIt)
+		free(freeIt);
 	    if (*tstr == ':')
 		tstr++;
 	    else if (!*tstr && endc) {
@@ -2613,7 +2624,8 @@ ApplyModifiers(char *nstr, const char *tstr,
 			    Error(emsg, nstr);
 			else
 			    Var_Set(v->name, newStr,  v_ctxt, 0);
-			free(newStr);
+			if (newStr)
+			    free(newStr);
 			break;
 		    case '?':
 			if ((v->flags & VAR_JUNK) == 0)
@@ -2624,7 +2636,7 @@ ApplyModifiers(char *nstr, const char *tstr,
 			break;
 		    }
 		    free(UNCONST(pattern.rhs));
-		    newStr = varNoError;
+		    newStr = var_Error;
 		    break;
 		}
 		goto default_case; /* "::<unrecognised>" */
@@ -2695,7 +2707,8 @@ ApplyModifiers(char *nstr, const char *tstr,
 
 			    cp2 = Var_Parse(cp, ctxt, errnum, &len, &freeIt);
 			    Buf_AddBytes(&buf, strlen(cp2), cp2);
-			    free(freeIt);
+			    if (freeIt)
+				free(freeIt);
 			    cp += len - 1;
 			} else {
 			    Buf_AddByte(&buf, *cp);
@@ -3247,7 +3260,7 @@ ApplyModifiers(char *nstr, const char *tstr,
 
 		termc = *--cp;
 		delim = '\0';
-		if (Cond_EvalExpression(NULL, v->name, &value, 0, FALSE)
+		if (Cond_EvalExpression(NULL, v->name, &value, 0)
 		    == COND_INVALID) {
 		    Error("Bad conditional expression `%s' in %s?%s:%s",
 			  v->name, v->name, pattern.lhs, pattern.rhs);
@@ -3533,8 +3546,10 @@ ApplyModifiers(char *nstr, const char *tstr,
     if (delim != '\0')
 	Error("Unclosed substitution for %s (%c missing)",
 	      v->name, delim);
-    free(*freePtr);
-    *freePtr = NULL;
+    if (*freePtr) {
+	free(*freePtr);
+	*freePtr = NULL;
+    }
     return (var_Error);
 }
 
@@ -3584,13 +3599,14 @@ Var_Parse(const char *str, GNode *ctxt, Boolean errnum, int *lengthPtr,
 				 * expanding it in a non-local context. This
 				 * is done to support dynamic sources. The
 				 * result is just the invocation, unaltered */
-    const char     *extramodifiers; /* extra modifiers to apply first */
+    Var_Parse_State parsestate; /* Flags passed to helper functions */
     char	  name[2];
 
     *freePtr = NULL;
-    extramodifiers = NULL;
     dynamic = FALSE;
     start = str;
+    parsestate.oneBigWord = FALSE;
+    parsestate.varSpace = ' ';	/* word separator */
 
     startc = str[1];
     if (startc != PROPEN && startc != BROPEN) {
@@ -3644,7 +3660,6 @@ Var_Parse(const char *str, GNode *ctxt, Boolean errnum, int *lengthPtr,
 	}
     } else {
 	Buffer buf;	/* Holds the variable name */
-	int depth = 1;
 
 	endc = startc == PROPEN ? PRCLOSE : BRCLOSE;
 	Buf_Init(&buf, 0);
@@ -3652,21 +3667,10 @@ Var_Parse(const char *str, GNode *ctxt, Boolean errnum, int *lengthPtr,
 	/*
 	 * Skip to the end character or a colon, whichever comes first.
 	 */
-	for (tstr = str + 2; *tstr != '\0'; tstr++)
+	for (tstr = str + 2;
+	     *tstr != '\0' && *tstr != endc && *tstr != ':';
+	     tstr++)
 	{
-	    /*
-	     * Track depth so we can spot parse errors.
-	     */
-	    if (*tstr == startc) {
-		depth++;
-	    }
-	    if (*tstr == endc) {
-		if (--depth == 0)
-		    break;
-	    }
-	    if (depth == 1 && *tstr == ':') {
-		break;
-	    }
 	    /*
 	     * A variable inside a variable, expand
 	     */
@@ -3677,7 +3681,8 @@ Var_Parse(const char *str, GNode *ctxt, Boolean errnum, int *lengthPtr,
 		if (rval != NULL) {
 		    Buf_AddBytes(&buf, strlen(rval), rval);
 		}
-		free(freeIt);
+		if (freeIt)
+		    free(freeIt);
 		tstr += rlen - 1;
 	    }
 	    else
@@ -3685,7 +3690,7 @@ Var_Parse(const char *str, GNode *ctxt, Boolean errnum, int *lengthPtr,
 	}
 	if (*tstr == ':') {
 	    haveModifier = TRUE;
-	} else if (*tstr == endc) {
+	} else if (*tstr != '\0') {
 	    haveModifier = FALSE;
 	} else {
 	    /*
@@ -3717,7 +3722,7 @@ Var_Parse(const char *str, GNode *ctxt, Boolean errnum, int *lengthPtr,
 	 */
 	if ((v == NULL) && (ctxt != VAR_CMD) && (ctxt != VAR_GLOBAL) &&
 		(vlen == 2) && (str[1] == 'F' || str[1] == 'D') &&
-		strchr("@%?*!<>", str[0]) != NULL) {
+		strchr("@%*!<>", str[0]) != NULL) {
 	    /*
 	     * Well, it's local -- go look for it.
 	     */
@@ -3726,12 +3731,29 @@ Var_Parse(const char *str, GNode *ctxt, Boolean errnum, int *lengthPtr,
 	    v = VarFind(name, ctxt, 0);
 
 	    if (v != NULL) {
+		/*
+		 * No need for nested expansion or anything, as we're
+		 * the only one who sets these things and we sure don't
+		 * but nested invocations in them...
+		 */
+		nstr = Buf_GetAll(&v->val, NULL);
+
 		if (str[1] == 'D') {
-			extramodifiers = "H:";
+		    nstr = VarModify(ctxt, &parsestate, nstr, VarHead,
+				    NULL);
+		} else {
+		    nstr = VarModify(ctxt, &parsestate, nstr, VarTail,
+				    NULL);
 		}
-		else { /* F */
-			extramodifiers = "T:";
-		}
+		/*
+		 * Resulting string is dynamically allocated, so
+		 * tell caller to free it.
+		 */
+		*freePtr = nstr;
+		*lengthPtr = tstr-start+1;
+		Buf_Destroy(&buf, TRUE);
+		VarFreeEnv(v, TRUE);
+		return nstr;
 	    }
 	}
 
@@ -3826,27 +3848,16 @@ Var_Parse(const char *str, GNode *ctxt, Boolean errnum, int *lengthPtr,
 
     v->flags &= ~VAR_IN_USE;
 
-    if ((nstr != NULL) && (haveModifier || extramodifiers != NULL)) {
-	void *extraFree;
+    if ((nstr != NULL) && haveModifier) {
 	int used;
+	/*
+	 * Skip initial colon.
+	 */
+	tstr++;
 
-	extraFree = NULL;
-	if (extramodifiers != NULL) {
-		nstr = ApplyModifiers(nstr, extramodifiers, '(', ')',
-				      v, ctxt, errnum, &used, &extraFree);
-	}
-
-	if (haveModifier) {
-		/* Skip initial colon. */
-		tstr++;
-
-		nstr = ApplyModifiers(nstr, tstr, startc, endc,
-				      v, ctxt, errnum, &used, freePtr);
-		tstr += used;
-		free(extraFree);
-	} else {
-		*freePtr = extraFree;
-	}
+	nstr = ApplyModifiers(nstr, tstr, startc, endc,
+			      v, ctxt, errnum, &used, freePtr);
+	tstr += used;
     }
     if (*tstr) {
 	*lengthPtr = tstr - start + 1;
@@ -4029,7 +4040,7 @@ Var_Subst(const char *var, const char *str, GNode *ctxt, Boolean undefErr)
 		 */
 		if (oldVars) {
 		    str += length;
-		} else if (undefErr || val == var_Error) {
+		} else if (undefErr) {
 		    /*
 		     * If variable is undefined, complain and skip the
 		     * variable. The complaint will stop us from doing anything
@@ -4060,8 +4071,10 @@ Var_Subst(const char *var, const char *str, GNode *ctxt, Boolean undefErr)
 		Buf_AddBytes(&buf, length, val);
 		trailingBslash = length > 0 && val[length - 1] == '\\';
 	    }
-	    free(freeIt);
-	    freeIt = NULL;
+	    if (freeIt) {
+		free(freeIt);
+		freeIt = NULL;
+	    }
 	}
     }
 

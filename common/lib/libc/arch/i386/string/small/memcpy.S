@@ -1,4 +1,4 @@
-/*	$NetBSD: memcpy.S,v 1.2 2014/05/23 03:17:31 uebayasi Exp $	*/
+/*	$NetBSD: memcpy.S,v 1.1 2011/06/16 16:39:14 joerg Exp $	*/
 /*-
  * Copyright (c) 2011 The NetBSD Foundation, Inc.
  * All rights reserved.
@@ -29,7 +29,7 @@
  */
 
 #include <machine/asm.h>
-	RCSID("$NetBSD: memcpy.S,v 1.2 2014/05/23 03:17:31 uebayasi Exp $")
+	RCSID("$NetBSD: memcpy.S,v 1.1 2011/06/16 16:39:14 joerg Exp $")
 
 #  ifdef BCOPY
 ENTRY(bcopy)
@@ -68,9 +68,4 @@ __memmove_start:
 	popl	%edi
 	popl	%esi
 	ret
-END(memcpy)
-END(memmove)
 #  endif /* MEMMOVE */
-#  ifdef BCOPY
-END(bcopy)
-#  endif

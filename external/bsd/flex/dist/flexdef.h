@@ -1,4 +1,5 @@
-/*	$NetBSD: flexdef.h,v 1.7 2014/10/30 18:44:05 christos Exp $	*/
+/*	$NetBSD: flexdef.h,v 1.5 2013/04/09 15:19:45 christos Exp $	*/
+
 
 /* flexdef - definitions file for flex */
 
@@ -41,7 +42,6 @@
 #endif
 
 /* AIX requires this to be the first thing in the file.  */
-#ifndef __lint__
 #ifndef __GNUC__
 # if HAVE_ALLOCA_H
 #  include <alloca.h>
@@ -54,7 +54,6 @@ char *alloca ();
 #   endif
 #  endif
 # endif
-#endif
 #endif
 
 #ifdef STDC_HEADERS
@@ -911,13 +910,6 @@ extern void lerrif PROTO ((const char *, int));
 /* Report an error message formatted with one string argument. */
 extern void lerrsf PROTO ((const char *, const char *));
 
-/* Like lerrsf, but also exit after displaying message. */
-extern
-#ifdef __printflike
-__printflike(1, 2)
-#endif
-void lerrsf_fatal (const char *msg, ...);
-
 /* Spit out a "#line" statement. */
 extern void line_directive_out PROTO ((FILE *, int));
 
@@ -1229,8 +1221,12 @@ extern void sf_init(void);
 extern void sf_push(void);
 extern void sf_pop(void);
 
-#ifndef __RCSID
-#define __RCSID(a)
+/*
+ * From "misc.c"
+ */
+#ifdef __printflike
+__printflike(1, 2)
 #endif
+void lerrsf_fatal (const char *msg, ...);
 
 #endif /* not defined FLEXDEF_H */

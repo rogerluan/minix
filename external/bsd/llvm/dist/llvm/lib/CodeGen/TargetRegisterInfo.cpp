@@ -16,7 +16,6 @@
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/VirtRegMap.h"
-#include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
 
 using namespace llvm;
@@ -102,19 +101,19 @@ TargetRegisterInfo::getAllocatableClass(const TargetRegisterClass *RC) const {
       Idx += Offset + 1;
     }
   }
-  return nullptr;
+  return NULL;
 }
 
 /// getMinimalPhysRegClass - Returns the Register Class of a physical
 /// register of the given type, picking the most sub register class of
 /// the right type that contains this physreg.
 const TargetRegisterClass *
-TargetRegisterInfo::getMinimalPhysRegClass(unsigned reg, MVT VT) const {
+TargetRegisterInfo::getMinimalPhysRegClass(unsigned reg, EVT VT) const {
   assert(isPhysicalRegister(reg) && "reg must be a physical register");
 
   // Pick the most sub register class of the right type that contains
   // this physreg.
-  const TargetRegisterClass* BestRC = nullptr;
+  const TargetRegisterClass* BestRC = 0;
   for (regclass_iterator I = regclass_begin(), E = regclass_end(); I != E; ++I){
     const TargetRegisterClass* RC = *I;
     if ((VT == MVT::Other || RC->hasType(VT)) && RC->contains(reg) &&
@@ -131,7 +130,7 @@ TargetRegisterInfo::getMinimalPhysRegClass(unsigned reg, MVT VT) const {
 static void getAllocatableSetForRC(const MachineFunction &MF,
                                    const TargetRegisterClass *RC, BitVector &R){
   assert(RC->isAllocatable() && "invalid for nonallocatable sets");
-  ArrayRef<MCPhysReg> Order = RC->getRawAllocationOrder(MF);
+  ArrayRef<uint16_t> Order = RC->getRawAllocationOrder(MF);
   for (unsigned i = 0; i != Order.size(); ++i)
     R.set(Order[i]);
 }
@@ -165,7 +164,7 @@ const TargetRegisterClass *firstCommonClass(const uint32_t *A,
   for (unsigned I = 0, E = TRI->getNumRegClasses(); I < E; I += 32)
     if (unsigned Common = *A++ & *B++)
       return TRI->getRegClass(I + countTrailingZeros(Common));
-  return nullptr;
+  return 0;
 }
 
 const TargetRegisterClass *
@@ -175,7 +174,7 @@ TargetRegisterInfo::getCommonSubClass(const TargetRegisterClass *A,
   if (A == B)
     return A;
   if (!A || !B)
-    return nullptr;
+    return 0;
 
   // Register classes are ordered topologically, so the largest common
   // sub-class it the common sub-class with the smallest ID.
@@ -195,7 +194,7 @@ TargetRegisterInfo::getMatchingSuperRegClass(const TargetRegisterClass *A,
       // The bit mask contains all register classes that are projected into B
       // by Idx. Find a class that is also a sub-class of A.
       return firstCommonClass(RCI.getMask(), A->getSubClassMask(), this);
-  return nullptr;
+  return 0;
 }
 
 const TargetRegisterClass *TargetRegisterInfo::
@@ -216,7 +215,7 @@ getCommonSuperRegClass(const TargetRegisterClass *RCA, unsigned SubA,
   // Arrange for RCA to be the larger register so the answer will be found in
   // the first iteration. This makes the search linear for the most common
   // case.
-  const TargetRegisterClass *BestRC = nullptr;
+  const TargetRegisterClass *BestRC = 0;
   unsigned *BestPreA = &PreA;
   unsigned *BestPreB = &PreB;
   if (RCA->getSize() < RCB->getSize()) {
@@ -294,11 +293,3 @@ TargetRegisterInfo::getRegAllocationHints(unsigned VirtReg,
   // All clear, tell the register allocator to prefer this register.
   Hints.push_back(Phys);
 }
-
-#if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
-void
-TargetRegisterInfo::dumpReg(unsigned Reg, unsigned SubRegIndex,
-                            const TargetRegisterInfo *TRI) {
-  dbgs() << PrintReg(Reg, TRI, SubRegIndex) << "\n";
-}
-#endif

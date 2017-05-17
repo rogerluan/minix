@@ -1,3 +1,5 @@
+/*	$NetBSD: testxxLexer.l,v 1.1.1.1 2009/10/26 00:28:31 christos Exp $	*/
+
 	// An example of using the flex C++ scanner class.
 
 %option C++ noyywrap

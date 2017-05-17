@@ -7,7 +7,7 @@
 #include <machine/asm.h>
 
 #if defined(LIBC_SCCS)
-	RCSID("$NetBSD: memcmp.S,v 1.3 2014/03/22 19:16:34 jakllsch Exp $")
+	RCSID("$NetBSD: memcmp.S,v 1.2 2007/11/12 18:41:59 ad Exp $")
 #endif
 
 ENTRY(memcmp)
@@ -37,4 +37,3 @@ L6:	xorl	%eax,%eax		/* Perform unsigned comparison	*/
 	movb	-1(%rsi),%dl
 	subl    %edx,%eax
 	ret
-END(memcmp)

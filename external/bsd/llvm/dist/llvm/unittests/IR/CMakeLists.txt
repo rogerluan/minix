@@ -1,16 +1,12 @@
 set(LLVM_LINK_COMPONENTS
-  Analysis
-  AsmParser
-  Core
-  IPA
-  Support
+  asmparser
+  core
+  ipa
   )
 
 set(IRSources
   AttributesTest.cpp
-  ConstantRangeTest.cpp
   ConstantsTest.cpp
-  DebugInfoTest.cpp
   DominatorTreeTest.cpp
   IRBuilderTest.cpp
   InstructionsTest.cpp
@@ -21,14 +17,17 @@ set(IRSources
   PatternMatch.cpp
   TypeBuilderTest.cpp
   TypesTest.cpp
-  UseTest.cpp
-  UserTest.cpp
-  ValueHandleTest.cpp
   ValueMapTest.cpp
   ValueTest.cpp
   VerifierTest.cpp
   WaymarkTest.cpp
   )
+
+# MSVC9 and 8 cannot compile ValueMapTest.cpp due to their bug.
+# See issue#331418 in Visual Studio.
+if(MSVC AND MSVC_VERSION LESS 1600)
+  list(REMOVE_ITEM IRSources ValueMapTest.cpp)
+endif()
 
 # HACK: Declare a couple of source files as optionally compiled to satisfy the
 # missing-file-checker in LLVM's weird CMake build.

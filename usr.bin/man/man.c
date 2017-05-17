@@ -1,4 +1,4 @@
-/*	$NetBSD: man.c,v 1.62 2014/08/14 15:31:12 apb Exp $	*/
+/*	$NetBSD: man.c,v 1.60 2013/10/28 23:46:17 christos Exp $	*/
 
 /*
  * Copyright (c) 1987, 1993, 1994, 1995
@@ -40,7 +40,7 @@ __COPYRIGHT("@(#) Copyright (c) 1987, 1993, 1994, 1995\
 #if 0
 static char sccsid[] = "@(#)man.c	8.17 (Berkeley) 1/31/95";
 #else
-__RCSID("$NetBSD: man.c,v 1.62 2014/08/14 15:31:12 apb Exp $");
+__RCSID("$NetBSD: man.c,v 1.60 2013/10/28 23:46:17 christos Exp $");
 #endif
 #endif /* not lint */
 
@@ -574,14 +574,10 @@ manual(char *page, struct manstate *mp, glob_t *pg)
 	*eptr = '\0';
 
 	/*
-	 * If 'page' is given with an absolute path,
-	 * or a relative path explicitly beginning with "./"
-	 * or "../", then interpret it as a file specification.
+	 * If 'page' contains a slash then it's
+	 * interpreted as a file specification.
 	 */
-	if ((page[0] == '/')
-	    || (page[0] == '.' && page[1] == '/')
-	    || (page[0] == '.' && page[1] == '.' && page[2] == '/')
-	    ) {
+	if (strchr(page, '/') != NULL) {
 		/* check if file actually exists */
 		(void)strlcpy(buf, escpage, sizeof(buf));
 		error = glob(buf, GLOB_APPEND | GLOB_BRACE | GLOB_NOSORT, NULL, pg);
@@ -718,18 +714,6 @@ next:				anyfound = 1;
 	return anyfound;
 }
 
-/*
- * A do-nothing counterpart to fmtcheck(3) that only supplies the
- * __format_arg marker.  Actual fmtcheck(3) call is done once in
- * config().
- */
-__always_inline __format_arg(2)
-static inline const char *
-fmtcheck_ok(const char *userfmt, const char *template)
-{
-	return userfmt;
-}
-
 /* 
  * build_page --
  *	Build a man page for display.
@@ -804,7 +788,7 @@ build_page(const char *fmt, char **pathp, struct manstate *mp)
 		exit(EXIT_FAILURE);
 	}
 	(void)snprintf(buf, sizeof(buf), "%s > %s", fmt, tpath);
-	(void)snprintf(cmd, sizeof(cmd), fmtcheck_ok(buf, "%s"), p);
+	(void)snprintf(cmd, sizeof(cmd), buf, p);
 	(void)system(cmd);
 	(void)close(fd);
 	if ((*pathp = strdup(tpath)) == NULL) {

@@ -12,8 +12,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_LIB_IR_LLVMCONTEXTIMPL_H
-#define LLVM_LIB_IR_LLVMCONTEXTIMPL_H
+#ifndef LLVM_LLVMCONTEXT_IMPL_H
+#define LLVM_LLVMCONTEXT_IMPL_H
 
 #include "AttributeImpl.h"
 #include "ConstantsContext.h"
@@ -22,7 +22,6 @@
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/DenseMap.h"
-#include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/FoldingSet.h"
 #include "llvm/ADT/Hashing.h"
 #include "llvm/ADT/SmallPtrSet.h"
@@ -31,47 +30,67 @@
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Metadata.h"
-#include "llvm/IR/ValueHandle.h"
+#include "llvm/Support/ValueHandle.h"
 #include <vector>
 
 namespace llvm {
 
 class ConstantInt;
 class ConstantFP;
-class DiagnosticInfoOptimizationRemark;
-class DiagnosticInfoOptimizationRemarkMissed;
-class DiagnosticInfoOptimizationRemarkAnalysis;
 class LLVMContext;
 class Type;
 class Value;
 
 struct DenseMapAPIntKeyInfo {
-  static inline APInt getEmptyKey() {
-    APInt V(nullptr, 0);
-    V.VAL = 0;
-    return V;
-  }
-  static inline APInt getTombstoneKey() {
-    APInt V(nullptr, 0);
-    V.VAL = 1;
-    return V;
-  }
-  static unsigned getHashValue(const APInt &Key) {
+  struct KeyTy {
+    APInt val;
+    Type* type;
+    KeyTy(const APInt& V, Type* Ty) : val(V), type(Ty) {}
+    bool operator==(const KeyTy& that) const {
+      return type == that.type && this->val == that.val;
+    }
+    bool operator!=(const KeyTy& that) const {
+      return !this->operator==(that);
+    }
+    friend hash_code hash_value(const KeyTy &Key) {
+      return hash_combine(Key.type, Key.val);
+    }
+  };
+  static inline KeyTy getEmptyKey() { return KeyTy(APInt(1,0), 0); }
+  static inline KeyTy getTombstoneKey() { return KeyTy(APInt(1,1), 0); }
+  static unsigned getHashValue(const KeyTy &Key) {
     return static_cast<unsigned>(hash_value(Key));
   }
-  static bool isEqual(const APInt &LHS, const APInt &RHS) {
-    return LHS.getBitWidth() == RHS.getBitWidth() && LHS == RHS;
+  static bool isEqual(const KeyTy &LHS, const KeyTy &RHS) {
+    return LHS == RHS;
   }
 };
 
 struct DenseMapAPFloatKeyInfo {
-  static inline APFloat getEmptyKey() { return APFloat(APFloat::Bogus, 1); }
-  static inline APFloat getTombstoneKey() { return APFloat(APFloat::Bogus, 2); }
-  static unsigned getHashValue(const APFloat &Key) {
+  struct KeyTy {
+    APFloat val;
+    KeyTy(const APFloat& V) : val(V){}
+    bool operator==(const KeyTy& that) const {
+      return this->val.bitwiseIsEqual(that.val);
+    }
+    bool operator!=(const KeyTy& that) const {
+      return !this->operator==(that);
+    }
+    friend hash_code hash_value(const KeyTy &Key) {
+      return hash_combine(Key.val);
+    }
+  };
+  static inline KeyTy getEmptyKey() { 
+    return KeyTy(APFloat(APFloat::Bogus,1));
+  }
+  static inline KeyTy getTombstoneKey() { 
+    return KeyTy(APFloat(APFloat::Bogus,2)); 
+  }
+  static unsigned getHashValue(const KeyTy &Key) {
     return static_cast<unsigned>(hash_value(Key));
   }
-  static bool isEqual(const APFloat &LHS, const APFloat &RHS) {
-    return LHS.bitwiseIsEqual(RHS);
+  static bool isEqual(const KeyTy &LHS, const KeyTy &RHS) {
+    return LHS == RHS;
   }
 };
 
@@ -81,8 +100,9 @@ struct AnonStructTypeKeyInfo {
     bool isPacked;
     KeyTy(const ArrayRef<Type*>& E, bool P) :
       ETypes(E), isPacked(P) {}
-    KeyTy(const StructType *ST)
-        : ETypes(ST->elements()), isPacked(ST->isPacked()) {}
+    KeyTy(const StructType* ST) :
+      ETypes(ArrayRef<Type*>(ST->element_begin(), ST->element_end())),
+      isPacked(ST->isPacked()) {}
     bool operator==(const KeyTy& that) const {
       if (isPacked != that.isPacked)
         return false;
@@ -125,9 +145,10 @@ struct FunctionTypeKeyInfo {
     bool isVarArg;
     KeyTy(const Type* R, const ArrayRef<Type*>& P, bool V) :
       ReturnType(R), Params(P), isVarArg(V) {}
-    KeyTy(const FunctionType *FT)
-        : ReturnType(FT->getReturnType()), Params(FT->params()),
-          isVarArg(FT->isVarArg()) {}
+    KeyTy(const FunctionType* FT) :
+      ReturnType(FT->getReturnType()),
+      Params(ArrayRef<Type*>(FT->param_begin(), FT->param_end())),
+      isVarArg(FT->isVarArg()) {}
     bool operator==(const KeyTy& that) const {
       if (ReturnType != that.ReturnType)
         return false;
@@ -166,97 +187,49 @@ struct FunctionTypeKeyInfo {
   }
 };
 
-/// \brief DenseMapInfo for MDTuple.
-///
-/// Note that we don't need the is-function-local bit, since that's implicit in
-/// the operands.
-struct MDTupleInfo {
-  struct KeyTy {
-    ArrayRef<Metadata *> RawOps;
-    ArrayRef<MDOperand> Ops;
-    unsigned Hash;
+// Provide a FoldingSetTrait::Equals specialization for MDNode that can use a
+// shortcut to avoid comparing all operands.
+template<> struct FoldingSetTrait<MDNode> : DefaultFoldingSetTrait<MDNode> {
+  static bool Equals(const MDNode &X, const FoldingSetNodeID &ID,
+                     unsigned IDHash, FoldingSetNodeID &TempID) {
+    assert(!X.isNotUniqued() && "Non-uniqued MDNode in FoldingSet?");
+    // First, check if the cached hashes match.  If they don't we can skip the
+    // expensive operand walk.
+    if (X.Hash != IDHash)
+      return false;
 
-    KeyTy(ArrayRef<Metadata *> Ops)
-        : RawOps(Ops), Hash(hash_combine_range(Ops.begin(), Ops.end())) {}
-
-    KeyTy(MDTuple *N)
-        : Ops(N->op_begin(), N->op_end()), Hash(N->getHash()) {}
-
-    bool operator==(const MDTuple *RHS) const {
-      if (RHS == getEmptyKey() || RHS == getTombstoneKey())
-        return false;
-      if (Hash != RHS->getHash())
-        return false;
-      assert((RawOps.empty() || Ops.empty()) && "Two sets of operands?");
-      return RawOps.empty() ? compareOps(Ops, RHS) : compareOps(RawOps, RHS);
-    }
-    template <class T>
-    static bool compareOps(ArrayRef<T> Ops, const MDTuple *RHS) {
-      if (Ops.size() != RHS->getNumOperands())
-        return false;
-      return std::equal(Ops.begin(), Ops.end(), RHS->op_begin());
-    }
-  };
-  static inline MDTuple *getEmptyKey() {
-    return DenseMapInfo<MDTuple *>::getEmptyKey();
+    // If they match we have to compare the operands.
+    X.Profile(TempID);
+    return TempID == ID;
   }
-  static inline MDTuple *getTombstoneKey() {
-    return DenseMapInfo<MDTuple *>::getTombstoneKey();
-  }
-  static unsigned getHashValue(const KeyTy &Key) { return Key.Hash; }
-  static unsigned getHashValue(const MDTuple *U) {
-    return U->getHash();
-  }
-  static bool isEqual(const KeyTy &LHS, const MDTuple *RHS) {
-    return LHS == RHS;
-  }
-  static bool isEqual(const MDTuple *LHS, const MDTuple *RHS) {
-    return LHS == RHS;
+  static unsigned ComputeHash(const MDNode &X, FoldingSetNodeID &) {
+    return X.Hash; // Return cached hash.
   }
 };
 
-/// \brief DenseMapInfo for MDLocation.
-struct MDLocationInfo {
-  struct KeyTy {
-    unsigned Line;
-    unsigned Column;
-    Metadata *Scope;
-    Metadata *InlinedAt;
-
-    KeyTy(unsigned Line, unsigned Column, Metadata *Scope, Metadata *InlinedAt)
-        : Line(Line), Column(Column), Scope(Scope), InlinedAt(InlinedAt) {}
-
-    KeyTy(const MDLocation *L)
-        : Line(L->getLine()), Column(L->getColumn()), Scope(L->getScope()),
-          InlinedAt(L->getInlinedAt()) {}
-
-    bool operator==(const MDLocation *RHS) const {
-      if (RHS == getEmptyKey() || RHS == getTombstoneKey())
-        return false;
-      return Line == RHS->getLine() && Column == RHS->getColumn() &&
-             Scope == RHS->getScope() && InlinedAt == RHS->getInlinedAt();
-    }
-  };
-  static inline MDLocation *getEmptyKey() {
-    return DenseMapInfo<MDLocation *>::getEmptyKey();
+/// DebugRecVH - This is a CallbackVH used to keep the Scope -> index maps
+/// up to date as MDNodes mutate.  This class is implemented in DebugLoc.cpp.
+class DebugRecVH : public CallbackVH {
+  /// Ctx - This is the LLVM Context being referenced.
+  LLVMContextImpl *Ctx;
+  
+  /// Idx - The index into either ScopeRecordIdx or ScopeInlinedAtRecords that
+  /// this reference lives in.  If this is zero, then it represents a
+  /// non-canonical entry that has no DenseMap value.  This can happen due to
+  /// RAUW.
+  int Idx;
+public:
+  DebugRecVH(MDNode *n, LLVMContextImpl *ctx, int idx)
+    : CallbackVH(n), Ctx(ctx), Idx(idx) {}
+  
+  MDNode *get() const {
+    return cast_or_null<MDNode>(getValPtr());
   }
-  static inline MDLocation *getTombstoneKey() {
-    return DenseMapInfo<MDLocation *>::getTombstoneKey();
-  }
-  static unsigned getHashValue(const KeyTy &Key) {
-    return hash_combine(Key.Line, Key.Column, Key.Scope, Key.InlinedAt);
-  }
-  static unsigned getHashValue(const MDLocation *U) {
-    return getHashValue(KeyTy(U));
-  }
-  static bool isEqual(const KeyTy &LHS, const MDLocation *RHS) {
-    return LHS == RHS;
-  }
-  static bool isEqual(const MDLocation *LHS, const MDLocation *RHS) {
-    return LHS == RHS;
-  }
+  
+  virtual void deleted();
+  virtual void allUsesReplacedWith(Value *VNew);
 };
-
+  
 class LLVMContextImpl {
 public:
   /// OwnedModules - The set of modules instantiated in this context, and which
@@ -265,46 +238,38 @@ public:
   
   LLVMContext::InlineAsmDiagHandlerTy InlineAsmDiagHandler;
   void *InlineAsmDiagContext;
-
-  LLVMContext::DiagnosticHandlerTy DiagnosticHandler;
-  void *DiagnosticContext;
-  bool RespectDiagnosticFilters;
-
-  LLVMContext::YieldCallbackTy YieldCallback;
-  void *YieldOpaqueHandle;
-
-  typedef DenseMap<APInt, ConstantInt *, DenseMapAPIntKeyInfo> IntMapTy;
+  
+  typedef DenseMap<DenseMapAPIntKeyInfo::KeyTy, ConstantInt*, 
+                         DenseMapAPIntKeyInfo> IntMapTy;
   IntMapTy IntConstants;
-
-  typedef DenseMap<APFloat, ConstantFP *, DenseMapAPFloatKeyInfo> FPMapTy;
+  
+  typedef DenseMap<DenseMapAPFloatKeyInfo::KeyTy, ConstantFP*, 
+                         DenseMapAPFloatKeyInfo> FPMapTy;
   FPMapTy FPConstants;
 
   FoldingSet<AttributeImpl> AttrsSet;
   FoldingSet<AttributeSetImpl> AttrsLists;
   FoldingSet<AttributeSetNode> AttrsSetNodes;
 
-  StringMap<MDString> MDStringCache;
-  DenseMap<Value *, ValueAsMetadata *> ValuesAsMetadata;
-  DenseMap<Metadata *, MetadataAsValue *> MetadataAsValues;
+  StringMap<Value*> MDStringCache;
 
-  DenseSet<MDTuple *, MDTupleInfo> MDTuples;
-  DenseSet<MDLocation *, MDLocationInfo> MDLocations;
+  FoldingSet<MDNode> MDNodeSet;
 
   // MDNodes may be uniqued or not uniqued.  When they're not uniqued, they
   // aren't in the MDNodeSet, but they're still shared between objects, so no
   // one object can destroy them.  This set allows us to at least destroy them
   // on Context destruction.
-  SmallPtrSet<UniquableMDNode *, 1> DistinctMDNodes;
-
+  SmallPtrSet<MDNode*, 1> NonUniquedMDNodes;
+  
   DenseMap<Type*, ConstantAggregateZero*> CAZConstants;
 
-  typedef ConstantUniqueMap<ConstantArray> ArrayConstantsTy;
+  typedef ConstantAggrUniqueMap<ArrayType, ConstantArray> ArrayConstantsTy;
   ArrayConstantsTy ArrayConstants;
   
-  typedef ConstantUniqueMap<ConstantStruct> StructConstantsTy;
+  typedef ConstantAggrUniqueMap<StructType, ConstantStruct> StructConstantsTy;
   StructConstantsTy StructConstants;
   
-  typedef ConstantUniqueMap<ConstantVector> VectorConstantsTy;
+  typedef ConstantAggrUniqueMap<VectorType, ConstantVector> VectorConstantsTy;
   VectorConstantsTy VectorConstants;
   
   DenseMap<PointerType*, ConstantPointerNull*> CPNConstants;
@@ -313,18 +278,19 @@ public:
   
   StringMap<ConstantDataSequential*> CDSConstants;
 
-  DenseMap<std::pair<const Function *, const BasicBlock *>, BlockAddress *>
-    BlockAddresses;
-  ConstantUniqueMap<ConstantExpr> ExprConstants;
+  
+  DenseMap<std::pair<Function*, BasicBlock*> , BlockAddress*> BlockAddresses;
+  ConstantUniqueMap<ExprMapKeyType, const ExprMapKeyType&, Type, ConstantExpr>
+    ExprConstants;
 
-  ConstantUniqueMap<InlineAsm> InlineAsms;
-
+  ConstantUniqueMap<InlineAsmKeyType, const InlineAsmKeyType&, PointerType,
+                    InlineAsm> InlineAsms;
+  
   ConstantInt *TheTrueVal;
   ConstantInt *TheFalseVal;
   
   LeakDetectorImpl<Value> LLVMObjects;
-  LeakDetectorImpl<Metadata> LLVMMDObjects;
-
+  
   // Basic type instances.
   Type VoidTy, LabelTy, HalfTy, FloatTy, DoubleTy, MetadataTy;
   Type X86_FP80Ty, FP128Ty, PPC_FP128Ty, X86_MMXTy;
@@ -336,11 +302,11 @@ public:
   BumpPtrAllocator TypeAllocator;
   
   DenseMap<unsigned, IntegerType*> IntegerTypes;
-
-  typedef DenseSet<FunctionType *, FunctionTypeKeyInfo> FunctionTypeSet;
-  FunctionTypeSet FunctionTypes;
-  typedef DenseSet<StructType *, AnonStructTypeKeyInfo> StructTypeSet;
-  StructTypeSet AnonStructTypes;
+  
+  typedef DenseMap<FunctionType*, bool, FunctionTypeKeyInfo> FunctionTypeMap;
+  FunctionTypeMap FunctionTypes;
+  typedef DenseMap<StructType*, bool, AnonStructTypeKeyInfo> StructTypeMap;
+  StructTypeMap AnonStructTypes;
   StringMap<StructType*> NamedStructTypes;
   unsigned NamedStructTypesUniqueID;
     
@@ -358,19 +324,32 @@ public:
   
   /// CustomMDKindNames - Map to hold the metadata string to ID mapping.
   StringMap<unsigned> CustomMDKindNames;
-
-  typedef std::pair<unsigned, TrackingMDNodeRef> MDPairTy;
+  
+  typedef std::pair<unsigned, TrackingVH<MDNode> > MDPairTy;
   typedef SmallVector<MDPairTy, 2> MDMapTy;
 
   /// MetadataStore - Collection of per-instruction metadata used in this
   /// context.
   DenseMap<const Instruction *, MDMapTy> MetadataStore;
   
-  /// DiscriminatorTable - This table maps file:line locations to an
-  /// integer representing the next DWARF path discriminator to assign to
-  /// instructions in different blocks at the same location.
-  DenseMap<std::pair<const char *, unsigned>, unsigned> DiscriminatorTable;
-
+  /// ScopeRecordIdx - This is the index in ScopeRecords for an MDNode scope
+  /// entry with no "inlined at" element.
+  DenseMap<MDNode*, int> ScopeRecordIdx;
+  
+  /// ScopeRecords - These are the actual mdnodes (in a value handle) for an
+  /// index.  The ValueHandle ensures that ScopeRecordIdx stays up to date if
+  /// the MDNode is RAUW'd.
+  std::vector<DebugRecVH> ScopeRecords;
+  
+  /// ScopeInlinedAtIdx - This is the index in ScopeInlinedAtRecords for an
+  /// scope/inlined-at pair.
+  DenseMap<std::pair<MDNode*, MDNode*>, int> ScopeInlinedAtIdx;
+  
+  /// ScopeInlinedAtRecords - These are the actual mdnodes (in value handles)
+  /// for an index.  The ValueHandle ensures that ScopeINlinedAtIdx stays up
+  /// to date.
+  std::vector<std::pair<DebugRecVH, DebugRecVH> > ScopeInlinedAtRecords;
+  
   /// IntrinsicIDCache - Cache of intrinsic name (string) to numeric ID mappings
   /// requested in this context
   typedef DenseMap<const Function*, unsigned> IntrinsicIDCacheTy;
@@ -380,12 +359,6 @@ public:
   /// operand of an unparented ReturnInst so that the prefix data has a Use.
   typedef DenseMap<const Function *, ReturnInst *> PrefixDataMapTy;
   PrefixDataMapTy PrefixDataMap;
-
-  /// \brief Mapping from a function to its prologue data, which is stored as
-  /// the operand of an unparented ReturnInst so that the prologue data has a
-  /// Use.
-  typedef DenseMap<const Function *, ReturnInst *> PrologueDataMapTy;
-  PrologueDataMapTy PrologueDataMap;
 
   int getOrAddScopeRecordIdxEntry(MDNode *N, int ExistingIdx);
   int getOrAddScopeInlinedAtIdxEntry(MDNode *Scope, MDNode *IA,int ExistingIdx);

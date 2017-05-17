@@ -11,29 +11,26 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_LIB_TARGET_MIPS_MIPS16ISELLOWERING_H
-#define LLVM_LIB_TARGET_MIPS_MIPS16ISELLOWERING_H
+#ifndef Mips16ISELLOWERING_H
+#define Mips16ISELLOWERING_H
 
 #include "MipsISelLowering.h"
 
 namespace llvm {
   class Mips16TargetLowering : public MipsTargetLowering  {
   public:
-    explicit Mips16TargetLowering(const MipsTargetMachine &TM,
-                                  const MipsSubtarget &STI);
+    explicit Mips16TargetLowering(MipsTargetMachine &TM);
 
-    bool allowsMisalignedMemoryAccesses(EVT VT, unsigned AddrSpace,
-                                        unsigned Align,
-                                        bool *Fast) const override;
+    virtual bool allowsUnalignedMemoryAccesses(EVT VT, bool *Fast) const;
 
-    MachineBasicBlock *
-    EmitInstrWithCustomInserter(MachineInstr *MI,
-                                MachineBasicBlock *MBB) const override;
+    virtual MachineBasicBlock *
+    EmitInstrWithCustomInserter(MachineInstr *MI, MachineBasicBlock *MBB) const;
 
   private:
-    bool isEligibleForTailCallOptimization(
-        const CCState &CCInfo, unsigned NextStackOffset,
-        const MipsFunctionInfo &FI) const override;
+    virtual bool
+    isEligibleForTailCallOptimization(const MipsCC &MipsCCInfo,
+                                      unsigned NextStackOffset,
+                                      const MipsFunctionInfo& FI) const;
 
     void setMips16HardFloatLibCalls();
 
@@ -43,12 +40,11 @@ namespace llvm {
     const char *getMips16HelperFunction
       (Type* RetTy, ArgListTy &Args, bool &needHelper) const;
 
-    void
+    virtual void
     getOpndList(SmallVectorImpl<SDValue> &Ops,
                 std::deque< std::pair<unsigned, SDValue> > &RegsToPass,
                 bool IsPICCall, bool GlobalOrExternal, bool InternalLinkage,
-                bool IsCallReloc, CallLoweringInfo &CLI, SDValue Callee,
-                SDValue Chain) const override;
+                CallLoweringInfo &CLI, SDValue Callee, SDValue Chain) const;
 
     MachineBasicBlock *emitSel16(unsigned Opc, MachineInstr *MI,
                                  MachineBasicBlock *BB) const;
@@ -79,4 +75,4 @@ namespace llvm {
   };
 }
 
-#endif
+#endif // Mips16ISELLOWERING_H

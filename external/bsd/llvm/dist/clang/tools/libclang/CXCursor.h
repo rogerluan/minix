@@ -11,8 +11,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_CLANG_TOOLS_LIBCLANG_CXCURSOR_H
-#define LLVM_CLANG_TOOLS_LIBCLANG_CXCURSOR_H
+#ifndef LLVM_CLANG_CXCURSOR_H
+#define LLVM_CLANG_CXCURSOR_H
 
 #include "clang-c/Index.h"
 #include "clang/Basic/SourceLocation.h"
@@ -56,7 +56,7 @@ CXCursor MakeCXCursor(const clang::Decl *D, CXTranslationUnit TU,
 CXCursor MakeCXCursor(const clang::Stmt *S, const clang::Decl *Parent,
                       CXTranslationUnit TU,
                       SourceRange RegionOfInterest = SourceRange());
-CXCursor MakeCXCursorInvalid(CXCursorKind K, CXTranslationUnit TU = nullptr);
+CXCursor MakeCXCursorInvalid(CXCursorKind K, CXTranslationUnit TU = 0);
 
 /// \brief Create an Objective-C superclass reference at the given location.
 CXCursor MakeCursorObjCSuperClassRef(ObjCInterfaceDecl *Super, 
@@ -172,7 +172,7 @@ class MacroExpansionCursor {
   CXCursor C;
 
   bool isPseudo() const {
-    return C.data[1] != nullptr;
+    return C.data[1] != 0;
   }
   const MacroDefinition *getAsMacroDefinition() const {
     assert(isPseudo());

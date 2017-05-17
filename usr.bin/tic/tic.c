@@ -1,4 +1,4 @@
-/* $NetBSD: tic.c,v 1.24 2014/07/20 20:20:16 christos Exp $ */
+/* $NetBSD: tic.c,v 1.23 2012/12/08 23:29:28 joerg Exp $ */
 
 /*
  * Copyright (c) 2009, 2010 The NetBSD Foundation, Inc.
@@ -32,7 +32,7 @@
 #endif
 
 #include <sys/cdefs.h>
-__RCSID("$NetBSD: tic.c,v 1.24 2014/07/20 20:20:16 christos Exp $");
+__RCSID("$NetBSD: tic.c,v 1.23 2012/12/08 23:29:28 joerg Exp $");
 
 #include <sys/types.h>
 #include <sys/queue.h>
@@ -429,11 +429,7 @@ print_dump(int argc, char **argv)
 		}
 		if (col != 0)
 			printf("\",\n");
-#if defined(__minix)
-		printf("\t\t%zu\n", (size_t) len);
-#else
 		printf("\t\t%zu\n", len);
-#endif /* defined(__minix) */
 		printf("\t}");
 		if (i + 1 < argc)
 			printf(",");
@@ -589,7 +585,7 @@ main(int argc, char **argv)
 		free(term->name);
 		free(term);
 	}
-	hdestroy1(free, NULL);
+	hdestroy();
 #endif
 
 

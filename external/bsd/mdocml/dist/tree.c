@@ -1,7 +1,6 @@
-/*	Id: tree.c,v 1.50 2013/12/24 19:11:46 schwarze Exp  */
+/*	$Vendor-Id: tree.c,v 1.47 2011/09/18 14:14:15 schwarze Exp $ */
 /*
  * Copyright (c) 2008, 2009, 2011 Kristaps Dzonsons <kristaps@bsd.lv>
- * Copyright (c) 2013 Ingo Schwarze <schwarze@openbsd.org>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -59,11 +58,13 @@ print_mdoc(const struct mdoc_node *n, int indent)
 {
 	const char	 *p, *t;
 	int		  i, j;
-	size_t		  argc;
+	size_t		  argc, sz;
+	char		**params;
 	struct mdoc_argv *argv;
 
 	argv = NULL;
-	argc = 0;
+	argc = sz = 0;
+	params = NULL;
 	t = p = NULL;
 
 	switch (n->type) {
@@ -160,14 +161,11 @@ print_mdoc(const struct mdoc_node *n, int indent)
 			if (argv[i].sz > 0)
 				printf(" ]");
 		}
+		
+		for (i = 0; i < (int)sz; i++)
+			printf(" [%s]", params[i]);
 
-		putchar(' ');
-		if (MDOC_LINE & n->flags)
-			putchar('*');
-		printf("%d:%d", n->line, n->pos);
-		if (n->lastline != n->line)
-			printf("-%d", n->lastline);
-		putchar('\n');
+		printf(" %d:%d\n", n->line, n->pos);
 	}
 
 	if (n->child)

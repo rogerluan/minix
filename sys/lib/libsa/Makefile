@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.86 2015/09/07 03:44:19 uebayasi Exp $
+#	$NetBSD: Makefile,v 1.79 2013/08/21 08:30:50 matt Exp $
 
 LIB=	sa
 LIBISPRIVATE?= yes
@@ -23,12 +23,14 @@ CPPFLAGS=	-I${SADIR} ${SACPPFLAGS} ${SAMISCCPPFLAGS} \
 .PATH.c: ${SADIR} ${.PARSEDIR}/../../../common/lib/libc/string
 
 # stand routines
-SRCS+=	alloc.c atoi.c errno.c exit.c files.c \
+SRCS+=	alloc.c errno.c exit.c files.c \
 	getfile.c gets.c globals.c \
-	panic.c printf.c qsort.c snprintf.c strerror.c \
-	subr_prf.c twiddle.c checkpasswd.c
+	panic.c printf.c qsort.c snprintf.c sprintf.c strerror.c \
+	subr_prf.c twiddle.c vsprintf.c checkpasswd.c
 
-SRCS+=	bootcfg.c
+.if (${MACHINE_CPU} != "mips") && !defined(__MINIX)
+SRCS+=	exec.c
+.endif
 
 # string routines
 .if ${MACHINE_ARCH} != "i386" && ${MACHINE_ARCH} != "x86_64"
@@ -95,14 +97,13 @@ SRCS+=	md5c.c
 
 .include <bsd.lib.mk>
 
-lib${LIB}.o:: ${OBJS:O}
+lib${LIB}.o:: ${OBJS}
 	@echo building standard ${LIB} library
 	@rm -f lib${LIB}.o
 	@${LD} -r -o lib${LIB}.o `lorder ${OBJS} | tsort`
-	@echo done
 
 CPPFLAGS+=	-Wno-pointer-sign
 
-.if defined(HAVE_GCC) && ${MACHINE_ARCH} == "vax"
+.if defined(HAVE_GCC) && ${HAVE_GCC} >= 45 && ${MACHINE_ARCH} == "vax"
 COPTS.bootp.c+=	-O0
 .endif

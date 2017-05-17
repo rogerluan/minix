@@ -1,4 +1,4 @@
-/*	Id: cgi.c,v 1.46 2013/10/11 00:06:48 schwarze Exp  */
+/*	$Vendor-Id: cgi.c,v 1.42 2012/03/24 01:46:25 kristaps Exp $ */
 /*
  * Copyright (c) 2011, 2012 Kristaps Dzonsons <kristaps@bsd.lv>
  *
@@ -18,6 +18,7 @@
 #include "config.h"
 #endif
 
+#include <sys/param.h>
 #include <sys/wait.h>
 
 #include <assert.h>
@@ -34,13 +35,6 @@
 #include <string.h>
 #include <unistd.h>
 
-#if defined(__sun)
-/* for stat() */
-#include <fcntl.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#endif
-
 #include "apropos_db.h"
 #include "mandoc.h"
 #include "mdoc.h"
@@ -49,7 +43,7 @@
 #include "manpath.h"
 #include "mandocdb.h"
 
-#if defined(__linux__) || defined(__sun)
+#ifdef __linux__
 # include <db_185.h>
 #else
 # include <db.h>
@@ -732,14 +726,14 @@ format(const struct req *req, const char *file)
 	struct man	*man;
 	void		*vp;
 	enum mandoclevel rc;
-	char		 opts[PATH_MAX + 128];
+	char		 opts[MAXPATHLEN + 128];
 
 	if (-1 == (fd = open(file, O_RDONLY, 0))) {
 		resp_baddb();
 		return;
 	}
 
-	mp = mparse_alloc(MPARSE_AUTO, MANDOCLEVEL_FATAL, NULL, NULL, NULL);
+	mp = mparse_alloc(MPARSE_AUTO, MANDOCLEVEL_FATAL, NULL, NULL);
 	rc = mparse_readfd(mp, fd, file);
 	close(fd);
 
@@ -749,7 +743,7 @@ format(const struct req *req, const char *file)
 	}
 
 	snprintf(opts, sizeof(opts), "fragment,"
-			"man=%s/search.html?sec=%%S&expr=Nm~^%%N$,"
+			"man=%s/search.html?sec=%%S&expr=%%N,"
 			/*"includes=/cgi-bin/man.cgi/usr/include/%%I"*/,
 			progname);
 
@@ -783,7 +777,7 @@ pg_show(const struct req *req, char *path)
 	struct manpaths	 ps;
 	size_t		 sz;
 	char		*sub;
-	char		 file[PATH_MAX];
+	char		 file[MAXPATHLEN];
 	const char	*cp;
 	int		 rc, catm;
 	unsigned int	 vol, rec, mr;
@@ -837,10 +831,10 @@ pg_show(const struct req *req, char *path)
 		goto out;
 	}
 
-	sz = strlcpy(file, ps.paths[vol], PATH_MAX);
-	assert(sz < PATH_MAX);
-	strlcat(file, "/", PATH_MAX);
-	strlcat(file, MANDOC_IDX, PATH_MAX);
+	sz = strlcpy(file, ps.paths[vol], MAXPATHLEN);
+	assert(sz < MAXPATHLEN);
+	strlcat(file, "/", MAXPATHLEN);
+	strlcat(file, MANDOC_IDX, MAXPATHLEN);
 
 	/* Open the index recno(3) database. */
 
@@ -869,8 +863,8 @@ pg_show(const struct req *req, char *path)
 		resp_baddb();
 	else {
  		file[(int)sz] = '\0';
- 		strlcat(file, "/", PATH_MAX);
- 		strlcat(file, cp, PATH_MAX);
+ 		strlcat(file, "/", MAXPATHLEN);
+ 		strlcat(file, cp, MAXPATHLEN);
 		if (catm) 
 			catman(req, file);
 		else
@@ -979,7 +973,7 @@ int
 main(void)
 {
 	int		 i;
-	char		 buf[PATH_MAX];
+	char		 buf[MAXPATHLEN];
 	DIR		*cwd;
 	struct req	 req;
 	char		*p, *path, *subpath;
@@ -1016,7 +1010,7 @@ main(void)
 
 	memset(&req, 0, sizeof(struct req));
 
-	strlcpy(buf, ".", PATH_MAX);
+	strlcpy(buf, ".", MAXPATHLEN);
 	pathgen(cwd, buf, &req);
 	closedir(cwd);
 
@@ -1104,20 +1098,11 @@ static int
 pathstop(DIR *dir)
 {
 	struct dirent	*d;
-#if defined(__sun)
-	struct stat	 sb;
-#endif
 
-	while (NULL != (d = readdir(dir))) {
-#if defined(__sun)
-		stat(d->d_name, &sb);
-		if (S_IFREG & sb.st_mode)
-#else
+	while (NULL != (d = readdir(dir)))
 		if (DT_REG == d->d_type)
-#endif
 			if (0 == strcmp(d->d_name, "catman.conf"))
 				return(1);
-  }
 
 	return(0);
 }
@@ -1134,12 +1119,9 @@ pathgen(DIR *dir, char *path, struct req *req)
 	DIR		*cd;
 	int		 rc;
 	size_t		 sz, ssz;
-#if defined(__sun)
-	struct stat	 sb;
-#endif
 
-	sz = strlcat(path, "/", PATH_MAX);
-	if (sz >= PATH_MAX) {
+	sz = strlcat(path, "/", MAXPATHLEN);
+	if (sz >= MAXPATHLEN) {
 		fprintf(stderr, "%s: Path too long", path);
 		return;
 	} 
@@ -1152,19 +1134,13 @@ pathgen(DIR *dir, char *path, struct req *req)
 
 	rc = 0;
 	while (0 == rc && NULL != (d = readdir(dir))) {
-#if defined(__sun)
-		stat(d->d_name, &sb);
-		if (!(S_IFDIR & sb.st_mode)
-#else
-		if (DT_DIR != d->d_type
-#endif
-        || strcmp(d->d_name, "etc"))
+		if (DT_DIR != d->d_type || strcmp(d->d_name, "etc"))
 			continue;
 
 		path[(int)sz] = '\0';
-		ssz = strlcat(path, d->d_name, PATH_MAX);
+		ssz = strlcat(path, d->d_name, MAXPATHLEN);
 
-		if (ssz >= PATH_MAX) {
+		if (ssz >= MAXPATHLEN) {
 			fprintf(stderr, "%s: Path too long", path);
 			return;
 		} else if (NULL == (cd = opendir(path))) {
@@ -1207,19 +1183,13 @@ pathgen(DIR *dir, char *path, struct req *req)
 
 	rewinddir(dir);
 	while (NULL != (d = readdir(dir))) {
-#if defined(__sun)
-		stat(d->d_name, &sb);
-		if (!(S_IFDIR & sb.st_mode)
-#else
-		if (DT_DIR != d->d_type
-#endif
-        || '.' == d->d_name[0])
+		if (DT_DIR != d->d_type || '.' == d->d_name[0])
 			continue;
 
 		path[(int)sz] = '\0';
-		ssz = strlcat(path, d->d_name, PATH_MAX);
+		ssz = strlcat(path, d->d_name, MAXPATHLEN);
 
-		if (ssz >= PATH_MAX) {
+		if (ssz >= MAXPATHLEN) {
 			fprintf(stderr, "%s: Path too long", path);
 			return;
 		} else if (NULL == (cd = opendir(path))) {

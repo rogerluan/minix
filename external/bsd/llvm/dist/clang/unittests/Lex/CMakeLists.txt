@@ -1,7 +1,3 @@
-set(LLVM_LINK_COMPONENTS
-  Support
-  )
-
 add_clang_unittest(LexTests
   LexerTest.cpp
   PPCallbacksTest.cpp
@@ -9,9 +5,5 @@ add_clang_unittest(LexTests
   )
 
 target_link_libraries(LexTests
-  clangAST
-  clangBasic
-  clangLex
-  clangParse
-  clangSema
+  clangLex clangParse clangSema
   )

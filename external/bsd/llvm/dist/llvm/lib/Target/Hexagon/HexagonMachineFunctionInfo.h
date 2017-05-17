@@ -7,11 +7,11 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_LIB_TARGET_HEXAGON_HEXAGONMACHINEFUNCTIONINFO_H
-#define LLVM_LIB_TARGET_HEXAGON_HEXAGONMACHINEFUNCTIONINFO_H
+#ifndef HexagonMACHINEFUNCTIONINFO_H
+#define HexagonMACHINEFUNCTIONINFO_H
 
-#include "llvm/CodeGen/MachineFunction.h"
 #include <map>
+#include "llvm/CodeGen/MachineFunction.h"
 
 namespace llvm {
 

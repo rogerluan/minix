@@ -38,6 +38,8 @@ extern "C" {
 #include <atf-c/defs.h>
 }
 
+#include <atf-c++/noncopyable.hpp>
+
 namespace atf {
 namespace tests {
 
@@ -72,11 +74,7 @@ typedef std::map< std::string, std::string > vars_map;
 
 struct tc_impl;
 
-class tc {
-    // Non-copyable.
-    tc(const tc&);
-    tc& operator=(const tc&);
-
+class tc : noncopyable {
     std::auto_ptr< tc_impl > pimpl;
 
 protected:

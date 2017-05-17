@@ -1,4 +1,4 @@
-; RUN: llc -mtriple arm-eabi -mcpu swift -verify-machineinstrs %s -o /dev/null
+; RUN: llc < %s -march arm -mcpu swift -verify-machineinstrs
 
 declare i32 @f(i32 %p0, i32 %p1)
 

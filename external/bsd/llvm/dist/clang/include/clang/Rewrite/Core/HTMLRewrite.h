@@ -12,8 +12,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_CLANG_REWRITE_CORE_HTMLREWRITE_H
-#define LLVM_CLANG_REWRITE_CORE_HTMLREWRITE_H
+#ifndef LLVM_CLANG_HTMLREWRITER_H
+#define LLVM_CLANG_HTMLREWRITER_H
 
 #include "clang/Basic/SourceLocation.h"
 #include <string>
@@ -63,7 +63,7 @@ namespace html {
   void AddLineNumbers(Rewriter& R, FileID FID);
 
   void AddHeaderFooterInternalBuiltinCSS(Rewriter& R, FileID FID,
-                                         const char *title = nullptr);
+                                         const char *title = NULL);
 
   /// SyntaxHighlight - Relex the specified FileID and annotate the HTML with
   /// information about keywords, comments, etc.

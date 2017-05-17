@@ -1,4 +1,4 @@
-/*	$NetBSD: dirname.c,v 1.13 2014/07/16 10:52:26 christos Exp $	*/
+/*	$NetBSD: dirname.c,v 1.11 2009/11/24 13:34:20 tnozaki Exp $	*/
 
 /*-
  * Copyright (c) 1997, 2002 The NetBSD Foundation, Inc.
@@ -31,11 +31,10 @@
 
 #include <sys/cdefs.h>
 #if defined(LIBC_SCCS) && !defined(lint)
-__RCSID("$NetBSD: dirname.c,v 1.13 2014/07/16 10:52:26 christos Exp $");
+__RCSID("$NetBSD: dirname.c,v 1.11 2009/11/24 13:34:20 tnozaki Exp $");
 #endif /* !LIBC_SCCS && !lint */
 
 #include "namespace.h"
-#include <sys/param.h>
 #include <libgen.h>
 #include <limits.h>
 #include <string.h>
@@ -44,57 +43,51 @@ __RCSID("$NetBSD: dirname.c,v 1.13 2014/07/16 10:52:26 christos Exp $");
 __weak_alias(dirname,_dirname)
 #endif
 
-static size_t
-xdirname_r(const char *path, char *buf, size_t buflen)
+#if !HAVE_DIRNAME
+char *
+dirname(char *path)
 {
-	const char *endp;
+	static char result[PATH_MAX];
+	const char *lastp;
 	size_t len;
 
 	/*
 	 * If `path' is a null pointer or points to an empty string,
 	 * return a pointer to the string ".".
 	 */
-	if (path == NULL || *path == '\0') {
-		path = ".";
-		len = 1;
-		goto out;
-	}
+	if ((path == NULL) || (*path == '\0'))
+		goto singledot;
+
 
 	/* Strip trailing slashes, if any. */
-	endp = path + strlen(path) - 1;
-	while (endp != path && *endp == '/')
-		endp--;
+	lastp = path + strlen(path) - 1;
+	while (lastp != path && *lastp == '/')
+		lastp--;
 
-	/* Find the start of the dir */
-	while (endp > path && *endp != '/')
-		endp--;
+	/* Terminate path at the last occurence of '/'. */
+	do {
+		if (*lastp == '/') {
+			/* Strip trailing slashes, if any. */
+			while (lastp != path && *lastp == '/')
+				lastp--;
 
-	if (endp == path) {
-		path = *endp == '/' ? "/" : ".";
-		len = 1;
-		goto out;
-	}
+			/* ...and copy the result into the result buffer. */
+			len = (lastp - path) + 1 /* last char */;
+			if (len > (PATH_MAX - 1))
+				len = PATH_MAX - 1;
 
-	do
-		endp--;
-	while (endp > path && *endp == '/');
+			memcpy(result, path, len);
+			result[len] = '\0';
 
-	len = endp - path + 1;
-out:
-	if (buf != NULL && buflen != 0) {
-		buflen = MIN(len, buflen - 1);
-		memcpy(buf, path, buflen);
-		buf[buflen] = '\0';
-	}
-	return len;
-}
+			return (result);
+		}
+	} while (--lastp >= path);
 
-#if !HAVE_DIRNAME
-char *
-dirname(char *path)
-{
-	static char result[PATH_MAX];
-	(void)xdirname_r(path, result, sizeof(result));
-	return result;
+	/* No /'s found, return a pointer to the string ".". */
+singledot:
+	result[0] = '.';
+	result[1] = '\0';
+
+	return (result);
 }
 #endif

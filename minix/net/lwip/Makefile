@@ -1,34 +1,27 @@
-# Makefile for the lwIP TCP/IP socket driver service (LWIP)
-
+# Makefile for lwip server.
 .include <bsd.own.mk>
 
 PROG=	lwip
-SRCS=	lwip.c mempool.c pchain.c addr.c addrpol.c tcpisn.c mcast.c ipsock.c \
-	pktsock.c tcpsock.c udpsock.c rawsock.c ifdev.c ifaddr.c loopif.c \
-	ethif.c ndev.c rttree.c route.c rtsock.c lnksock.c lldata.c mibtree.c \
-	ifconf.c bpfdev.c bpf_filter.c util.c
+SRCS=	lwip.c		\
+	driver.c	\
+	udp.c		\
+	tcp.c		\
+	raw_ip.c	\
+	inet_config.c	\
+	eth.c
 
-FILES=${PROG}.conf
-FILESNAME=${PROG}
-FILESDIR= /etc/system.conf.d
+.PATH:	${.CURDIR}/generic
 
-CPPFLAGS+=	-I${NETBSDSRCDIR}/minix/lib/liblwip/dist/src/include
-CPPFLAGS+=	-I${NETBSDSRCDIR}/minix/lib/liblwip/lib
+DPADD+=	${LIBCHARDRIVER} ${LIBSYS} ${LIBTIMERS} ${LIBLWIP} ${LIBNETSOCK}
+LDADD+=	-lchardriver -lsys -ltimers -llwip -lnetsock
 
-# Disabling USE_INET6 only superficially hides IPv6 support in the service.
-.if (${USE_INET6} != "no")
-CPPFLAGS+=	-DINET6
-.endif
+WARNS?=2
 
-# Some warnings are the result of usage of lwIP macros.  We must not generate
-# errors for those, but even producing the warnings is not helpful, so we
-# disable them altogether.
-CPPFLAGS+=	-Wno-address
+CPPFLAGS+= -I${NETBSDSRCDIR}/minix/lib/liblwip/include
+CPPFLAGS+= -I${NETBSDSRCDIR}/minix/lib/liblwip/include/ipv4
+CPPFLAGS+= -I${NETBSDSRCDIR}/minix/lib/liblwip/include/ipv6
+CPPFLAGS+= -D_SYSTEM=1
 
-DPADD+=	${LIBLWIP} ${LIBSOCKEVENT} ${LIBSOCKDRIVER} ${LIBCHARDRIVER} \
-	${LIBSYS} ${LIBTIMERS}
-LDADD+=	-llwip -lsockevent -lsockdriver -lchardriver -lsys -ltimers
-
-WARNS?=	5
+CFLAGS+= -std=c99
 
 .include <minix.service.mk>

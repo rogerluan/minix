@@ -1,21 +1,21 @@
-#	$NetBSD: Makefile,v 1.271 2015/08/17 06:42:46 knakahara Exp $
+#	$NetBSD: Makefile,v 1.268 2013/11/28 22:34:44 christos Exp $
 #	from: @(#)Makefile	5.20 (Berkeley) 6/12/93
 
 .include <bsd.own.mk>
 
-SUBDIR= arp \
+SUBDIR= \
 	\
 	chroot \
-	dev_mkdb \
 	\
 	\
 	\
 	\
-	i2cscan inetd installboot \
+	\
+	i2cscan installboot \
 	\
 	\
 	link \
-	makefs \
+	\
 	mtree \
 	\
 	\
@@ -24,14 +24,13 @@ SUBDIR= arp \
 	\
 	rdate \
 	\
-	service services_mkdb \
-	\
-	syslogd \
 	traceroute \
+	\
+	\
 	unlink user \
 	vipw vnconfig \
 	\
-	zdump zic
+	zic
 
 .if !defined(__MINIX)
 .if ${MKMAKEMANDB} != "no"
@@ -52,20 +51,20 @@ SUBDIR+= mdsetimage
 .endif
 
 .if (${MKINET6} != "no")
-SUBDIR+= ndp
+SUBDIR+=faithd ifmcstat ndp rip6query rtsold
 .endif
 .if (${USE_INET6} != "no")
-SUBDIR+= rtadvd traceroute6
+SUBDIR+=mld6query route6d rtadvd traceroute6 
 .endif
 
 .if !defined(__MINIX)
 # ATM PVC
 SUBDIR+=pvcsif pvctxctl
+.endif
 
 .if (${MKCRYPTO} != "no")
 SUBDIR+= racoon racoonctl
 .endif
-.endif # !defined(__MINIX)
 
 # NPF
 .if (${MKNPF} != "no")

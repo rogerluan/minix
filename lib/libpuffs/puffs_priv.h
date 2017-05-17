@@ -37,14 +37,31 @@
 #include <puffs.h>
 #include <ucontext.h>
 
-#if !defined(__minix)
+#if defined(__minix)
+
+/* XXX: MINIX */
+#define IGN_PERM            0
+#define CHK_PERM            1
+#define SU_UID          ((uid_t) 0)     /* super_user's uid_t */
+
+/* XXX: MINIX */
+#define ATIME            002    /* set if atime field needs updating */
+#define CTIME            004    /* set if ctime field needs updating */
+#define MTIME            010    /* set if mtime field needs updating */
+
+#define REQ_READ_SUPER   28
+
+#define NUL(str,l,m) mfs_nul_f(__FILE__,__LINE__,(str), (l), (m))
+
+#else
 extern pthread_mutex_t pu_lock;
 #define PU_LOCK() pthread_mutex_lock(&pu_lock)
 #define PU_UNLOCK() pthread_mutex_unlock(&pu_lock)
-#else
+#endif /* defined(__minix) */
+#if defined(__minix)
 #define PU_LOCK() /* nothing */
 #define PU_UNLOCK()  /* nothing */
-#endif /* !defined(__minix) */
+#endif /* defined(__minix) */
 
 #define PU_CMAP(pu, c) (pu->pu_cmap ? pu->pu_cmap(pu,c) : (struct puffs_node*)c)
 
@@ -127,7 +144,7 @@ struct puffs_usermount {
 	struct puffs_node	*pu_pn_root;
 
 	LIST_HEAD(, puffs_node)	pu_pnodelst;
-#if defined(__minix)
+#if defined(__minix) // LSC TO KEEP??
 	LIST_HEAD(, puffs_node)	pu_pnode_removed_lst;
 #endif /* defined(__minix) */
 
@@ -263,15 +280,6 @@ int	puffs__fsframe_cmp(struct puffs_usermount *, struct puffs_framebuf *,
 			   struct puffs_framebuf *, int *);
 void	puffs__fsframe_gotframe(struct puffs_usermount *,
 			        struct puffs_framebuf *);
-
-uint64_t	puffs__nextreq(struct puffs_usermount *pu);
-
-#if defined(__minix)
-int lpuffs_pump(void);
-void lpuffs_init(struct puffs_usermount *);
-void lpuffs_debug(const char *format, ...)
-	__attribute__((__format__(__printf__, 1, 2)));
-#endif /* defined(__minix) */
 
 __END_DECLS
 

@@ -16,7 +16,7 @@
 #include <map>
 #include <cassert>
 
-#include "min_allocator.h"
+#include "../../../min_allocator.h"
 
 int main()
 {
@@ -28,11 +28,6 @@ int main()
 #if __cplusplus >= 201103L
     {
     std::multimap<int, double, std::less<int>, min_allocator<std::pair<const int, double>>> m;
-    assert(m.empty());
-    assert(m.begin() == m.end());
-    }
-    {
-    std::multimap<int, double> m = {};
     assert(m.empty());
     assert(m.begin() == m.end());
     }

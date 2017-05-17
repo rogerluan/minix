@@ -12,16 +12,13 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/Linker/Linker.h"
+#include "llvm/Linker.h"
+#include "llvm/Analysis/Verifier.h"
 #include "llvm/Bitcode/ReaderWriter.h"
-#include "llvm/IR/DiagnosticInfo.h"
-#include "llvm/IR/DiagnosticPrinter.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
-#include "llvm/IR/Verifier.h"
 #include "llvm/IRReader/IRReader.h"
 #include "llvm/Support/CommandLine.h"
-#include "llvm/Support/FileSystem.h"
 #include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/PrettyStackTrace.h"
@@ -53,43 +50,20 @@ Verbose("v", cl::desc("Print information about actions taken"));
 static cl::opt<bool>
 DumpAsm("d", cl::desc("Print assembly as linked"), cl::Hidden);
 
-static cl::opt<bool>
-SuppressWarnings("suppress-warnings", cl::desc("Suppress all linking warnings"),
-                 cl::init(false));
-
-// Read the specified bitcode file in and return it. This routine searches the
-// link path for the specified file to try to find it...
+// LoadFile - Read the specified bitcode file in and return it.  This routine
+// searches the link path for the specified file to try to find it...
 //
-static std::unique_ptr<Module>
-loadFile(const char *argv0, const std::string &FN, LLVMContext &Context) {
+static inline Module *LoadFile(const char *argv0, const std::string &FN,
+                               LLVMContext& Context) {
   SMDiagnostic Err;
   if (Verbose) errs() << "Loading '" << FN << "'\n";
-  std::unique_ptr<Module> Result = getLazyIRFileModule(FN, Err, Context);
-  if (!Result)
-    Err.print(argv0, errs());
+  Module* Result = 0;
 
-  return Result;
-}
+  Result = ParseIRFile(FN, Err, Context);
+  if (Result) return Result;   // Load successful!
 
-static void diagnosticHandler(const DiagnosticInfo &DI) {
-  unsigned Severity = DI.getSeverity();
-  switch (Severity) {
-  case DS_Error:
-    errs() << "ERROR: ";
-    break;
-  case DS_Warning:
-    if (SuppressWarnings)
-      return;
-    errs() << "WARNING: ";
-    break;
-  case DS_Remark:
-  case DS_Note:
-    llvm_unreachable("Only expecting warnings and errors");
-  }
-
-  DiagnosticPrinterRawOStream DP(errs());
-  DI.print(DP);
-  errs() << '\n';
+  Err.print(argv0, errs());
+  return NULL;
 }
 
 int main(int argc, char **argv) {
@@ -101,28 +75,40 @@ int main(int argc, char **argv) {
   llvm_shutdown_obj Y;  // Call llvm_shutdown() on exit.
   cl::ParseCommandLineOptions(argc, argv, "llvm linker\n");
 
-  auto Composite = make_unique<Module>("llvm-link", Context);
-  Linker L(Composite.get(), diagnosticHandler);
+  unsigned BaseArg = 0;
+  std::string ErrorMessage;
 
-  for (unsigned i = 0; i < InputFilenames.size(); ++i) {
-    std::unique_ptr<Module> M = loadFile(argv[0], InputFilenames[i], Context);
-    if (!M.get()) {
+  OwningPtr<Module> Composite(LoadFile(argv[0],
+                                       InputFilenames[BaseArg], Context));
+  if (Composite.get() == 0) {
+    errs() << argv[0] << ": error loading file '"
+           << InputFilenames[BaseArg] << "'\n";
+    return 1;
+  }
+
+  Linker L(Composite.get());
+  for (unsigned i = BaseArg+1; i < InputFilenames.size(); ++i) {
+    OwningPtr<Module> M(LoadFile(argv[0], InputFilenames[i], Context));
+    if (M.get() == 0) {
       errs() << argv[0] << ": error loading file '" <<InputFilenames[i]<< "'\n";
       return 1;
     }
 
     if (Verbose) errs() << "Linking in '" << InputFilenames[i] << "'\n";
 
-    if (L.linkInModule(M.get()))
+    if (L.linkInModule(M.get(), &ErrorMessage)) {
+      errs() << argv[0] << ": link error in '" << InputFilenames[i]
+             << "': " << ErrorMessage << "\n";
       return 1;
+    }
   }
 
   if (DumpAsm) errs() << "Here's the assembly:\n" << *Composite;
 
-  std::error_code EC;
-  tool_output_file Out(OutputFilename, EC, sys::fs::F_None);
-  if (EC) {
-    errs() << EC.message() << '\n';
+  std::string ErrorInfo;
+  tool_output_file Out(OutputFilename.c_str(), ErrorInfo, sys::fs::F_Binary);
+  if (!ErrorInfo.empty()) {
+    errs() << ErrorInfo << '\n';
     return 1;
   }
 

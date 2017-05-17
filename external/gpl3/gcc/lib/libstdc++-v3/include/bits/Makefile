@@ -1,65 +1,49 @@
-#	$NetBSD: Makefile,v 1.16 2014/06/23 18:37:45 christos Exp $
+#	$NetBSD: Makefile,v 1.6 2013/08/22 16:03:31 matt Exp $
 
+.include <bsd.own.mk>
 .include <bsd.init.mk>
 
 .include "${.CURDIR}/../../arch/${GCC_MACHINE_ARCH}/defs.mk"
 
 .cc: # disable .cc->NULL transform
 
-GNUHOSTDIST=	${DIST}
+DIST=		${NETBSDSRCDIR}/external/gpl3/gcc/dist
+CONF=		${DIST}/libstdc++-v3/config
 
-BUILDINCS=	basic_file.h c++allocator.h c++io.h c++locale.h
-BUILDINCS+=	messages_members.h time_members.h opt_random.h gthr-default.h
-
-INCS=		${G_bits_headers} ${G_c_base_headers_extra} ${G_host_headers}
-INCS+=		gthr.h gthr-single.h gthr-posix.h
-INCS+=		${BUILDINCS}
-
-# libsupc++
-INCS+=		nested_exception.h hash_bytes.h atomic_lockfree_defines.h
-INCS+=		cxxabi_forced.h	exception_defines.h exception_ptr.h
-
-.if ${MKCOMPAT} != no && !empty(MACHINE_ARCH:M*64*)
-SUBDIR+=	arch
-.else
+INCS=		${G_bits_headers} ${G_c_base_headers_extra} ${G_thread_host_headers} ${G_host_headers_extra} ${G_host_headers}
 INCS+=		c++config.h
-.endif
-
 INCSDIR=	/usr/include/g++/bits
 
-.include "${.CURDIR}/../Makefile.includes"
+CLEANFILES+=	basic_file.h c++io.h c++locale.h
 
-CLEANFILES+=	{BUILDINCS}
+basic_file.h: ${CONF}/io/basic_file_stdio.h
+	cp $> ${.TARGET}
+c++io.h: ${CONF}/io/c_io_stdio.h
+	cp $> ${.TARGET}
+c++locale.h: ${CONF}/locale/generic/c_locale.h
+	cp $> ${.TARGET}
 
-CXXDIST=			${DIST}/libstdc++-v3
-COPYHEADERS= \
-	opt_random.h		${CXXDIST}/${G_CPU_OPT_BITS_RANDOM} \
-	basic_file.h		${CXXDIST}/${G_BASIC_FILE_H} \
-	c++allocator.h		${CXXDIST}/${G_ALLOCATOR_H} \
-	c++locale.h		${CXXDIST}/${G_CLOCALE_H} \
-	c++io.h			${CXXDIST}/${G_CSTDIO_H} \
-	messages_members.h	${CXXDIST}/${G_CMESSAGES_H} \
-	time_members.h		${CXXDIST}/${G_CTIME_H}
+# List of places to find cpu files; maybe do this differently from
+# mknative?
+BITS_CPUDIR.sparc64=sparc
 
-# gthr-default.h is a little special
-.for _src _dst in ${G_CONFIGLINKS}
-. if ${_dst} == "gthr-default.h"
-COPYHEADERS+=	${_dst} ${_src}
-. endif
-.endfor
+_DIR=${BITS_CPUDIR.${GCC_MACHINE_ARCH}}
+.if ${_DIR} != ""
+BITS_CPUDIR=${BITS_CPUDIR.${GCC_MACHINE_ARCH}}
+.else
+BITS_CPUDIR=${MACHINE_GNU_ARCH}
+.endif
 
-.for _h _s in ${COPYHEADERS}
-${_h}: ${_s}
-	cp -pf ${.ALLSRC} ${.TARGET}
-.endfor
+.PATH: ${.CURDIR}/../../arch/${GCC_MACHINE_ARCH} \
+	${DIST}/libstdc++-v3/include/bits \
+	${DIST}/libstdc++-v3/include/c_std \
+	${DIST}/libstdc++-v3/include/precompiled \
+	${CONF}/os/bsd/netbsd \
+	${CONF}/os/generic \
+	${CONF}/io \
+	${CONF}/cpu/${BITS_CPUDIR} \
+	${CONF}/cpu/generic \
+	${CONF}/locale/generic
 
 # Get default targets including <bsd.inc.mk>.
 .include <bsd.prog.mk>
-
-.PATH: ${.CURDIR}/../../arch/${GCC_MACHINE_ARCH} \
-	${DIST}/libstdc++-v3/include \
-	${DIST}/libstdc++-v3/config \
-	${DIST}/libstdc++-v3/ \
-	${DIST}/libstdc++-v3/libsupc++
-
-.include <bsd.subdir.mk>

@@ -12,8 +12,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_LIB_CODEGEN_SELECTIONDAG_SCHEDULEDAGSDNODES_H
-#define LLVM_LIB_CODEGEN_SELECTIONDAG_SCHEDULEDAGSDNODES_H
+#ifndef SCHEDULEDAGSDNODES_H
+#define SCHEDULEDAGSDNODES_H
 
 #include "llvm/CodeGen/MachineBasicBlock.h"
 #include "llvm/CodeGen/ScheduleDAG.h"
@@ -117,13 +117,13 @@ namespace llvm {
     virtual MachineBasicBlock*
     EmitSchedule(MachineBasicBlock::iterator &InsertPos);
 
-    void dumpNode(const SUnit *SU) const override;
+    virtual void dumpNode(const SUnit *SU) const;
 
     void dumpSchedule() const;
 
-    std::string getGraphNodeLabel(const SUnit *SU) const override;
+    virtual std::string getGraphNodeLabel(const SUnit *SU) const;
 
-    std::string getDAGName() const override;
+    virtual std::string getDAGName() const;
 
     virtual void getCustomGraphFeatures(GraphWriter<ScheduleDAG*> &GW) const;
 
@@ -139,7 +139,7 @@ namespace llvm {
     public:
       RegDefIter(const SUnit *SU, const ScheduleDAGSDNodes *SD);
 
-      bool IsValid() const { return Node != nullptr; }
+      bool IsValid() const { return Node != NULL; }
 
       MVT GetValue() const {
         assert(IsValid() && "bad iterator");

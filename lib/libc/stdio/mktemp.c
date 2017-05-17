@@ -1,4 +1,4 @@
-/*	$NetBSD: mktemp.c,v 1.21 2014/06/18 17:47:58 christos Exp $	*/
+/*	$NetBSD: mktemp.c,v 1.20 2012/03/15 18:22:30 christos Exp $	*/
 
 /*
  * Copyright (c) 1987, 1993
@@ -28,17 +28,22 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
-#include "gettemp.h"
 
 #include <sys/cdefs.h>
 #if defined(LIBC_SCCS) && !defined(lint)
 #if 0
 static char sccsid[] = "@(#)mktemp.c	8.1 (Berkeley) 6/4/93";
 #else
-__RCSID("$NetBSD: mktemp.c,v 1.21 2014/06/18 17:47:58 christos Exp $");
+__RCSID("$NetBSD: mktemp.c,v 1.20 2012/03/15 18:22:30 christos Exp $");
 #endif
 #endif /* LIBC_SCCS and not lint */
 
+#include <assert.h>
+#include <errno.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include "reentrant.h"
 #include "local.h"
 
 char *
@@ -47,7 +52,7 @@ _mktemp(char *path)
 
 	_DIAGASSERT(path != NULL);
 
-	return GETTEMP(path, NULL, 0, 0, 0) ? path : NULL;
+	return __gettemp(path, NULL, 0) ? path : NULL;
 }
 
 __warn_references(mktemp,
@@ -59,5 +64,5 @@ mktemp(char *path)
 
 	_DIAGASSERT(path != NULL);
 
-	return GETTEMP(path, NULL, 0, 0, 0) ? path : NULL;
+	return __gettemp(path, NULL, 0) ? path : NULL;
 }

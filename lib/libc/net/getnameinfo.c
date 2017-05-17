@@ -1,4 +1,4 @@
-/*	$NetBSD: getnameinfo.c,v 1.59 2015/09/22 16:15:08 christos Exp $	*/
+/*	$NetBSD: getnameinfo.c,v 1.54 2013/08/16 15:27:12 christos Exp $	*/
 /*	$KAME: getnameinfo.c,v 1.45 2000/09/25 22:43:56 itojun Exp $	*/
 
 /*
@@ -47,20 +47,20 @@
 
 #include <sys/cdefs.h>
 #if defined(LIBC_SCCS) && !defined(lint)
-__RCSID("$NetBSD: getnameinfo.c,v 1.59 2015/09/22 16:15:08 christos Exp $");
+__RCSID("$NetBSD: getnameinfo.c,v 1.54 2013/08/16 15:27:12 christos Exp $");
 #endif /* LIBC_SCCS and not lint */
 
-#ifndef RUMP_ACTION
 #include "namespace.h"
-#endif
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <net/if.h>
+#if !defined(__minix)
 #include <net/if_dl.h>
 #include <net/if_ieee1394.h>
 #include <net/if_types.h>
 #include <netatalk/at.h>
+#endif /* !defined(__minix) */
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <arpa/nameser.h>
@@ -74,10 +74,8 @@ __RCSID("$NetBSD: getnameinfo.c,v 1.59 2015/09/22 16:15:08 christos Exp $");
 #include "servent.h"
 #include "hostent.h"
 
-#ifndef RUMP_ACTION
 #ifdef __weak_alias
 __weak_alias(getnameinfo,_getnameinfo)
-#endif
 #endif
 
 static const struct afd {
@@ -108,6 +106,7 @@ static int ip6_parsenumeric(const struct sockaddr *, const char *, char *,
 				 socklen_t, int);
 static int ip6_sa2str(const struct sockaddr_in6 *, char *, size_t, int);
 #endif
+#if !defined(__minix)
 static int getnameinfo_atalk(const struct sockaddr *, socklen_t, char *,
     socklen_t, char *, socklen_t, int);
 static int getnameinfo_local(const struct sockaddr *, socklen_t, char *,
@@ -116,6 +115,7 @@ static int getnameinfo_local(const struct sockaddr *, socklen_t, char *,
 static int getnameinfo_link(const struct sockaddr *, socklen_t, char *,
     socklen_t, char *, socklen_t, int);
 static int hexname(const uint8_t *, size_t, char *, socklen_t);
+#endif /* !defined(__minix) */
 
 /*
  * Top-level getnameinfo() code.  Look at the address family, and pick an
@@ -129,24 +129,29 @@ getnameinfo(const struct sockaddr *sa, socklen_t salen,
 {
 
 	switch (sa->sa_family) {
+#if !defined(__minix)
 	case AF_APPLETALK:
 		return getnameinfo_atalk(sa, salen, host, hostlen,
 		    serv, servlen, flags);
+#endif /* !defined(__minix) */
 	case AF_INET:
 	case AF_INET6:
 		return getnameinfo_inet(sa, salen, host, hostlen,
 		    serv, servlen, flags);
+#if !defined(__minix)
 	case AF_LINK:
 		return getnameinfo_link(sa, salen, host, hostlen,
 		    serv, servlen, flags);
 	case AF_LOCAL:
 		return getnameinfo_local(sa, salen, host, hostlen,
 		    serv, servlen, flags);
+#endif /* !defined(__minix) */
 	default:
 		return EAI_FAMILY;
 	}
 }
 
+#if !defined(__minix)
 /*
  * getnameinfo_atalk():
  * Format an AppleTalk address into a printable format.
@@ -229,6 +234,7 @@ getnameinfo_local(const struct sockaddr *sa, socklen_t salen,
 
 	return 0;
 }
+#endif /* !defined(__minix) */
 
 /*
  * getnameinfo_inet():
@@ -404,21 +410,8 @@ getnameinfo_inet(const struct sockaddr *sa, socklen_t salen,
 			}
 			strlcpy(host, hp->h_name, hostlen);
 		} else {
-			switch (he) {
-			case NO_DATA:
-			case HOST_NOT_FOUND:
-				if (flags & NI_NAMEREQD)
-					return EAI_NONAME;
-				break;
-			case TRY_AGAIN:
-				return EAI_AGAIN;
-			case NETDB_SUCCESS:
-			case NETDB_INTERNAL:
-			case NO_RECOVERY:
-				/*FALLTHROUGH*/
-			default:
-				return EAI_SYSTEM;
-			}
+			if (flags & NI_NAMEREQD)
+				return EAI_NONAME;
 			switch(afd->a_af) {
 #ifdef INET6
 			case AF_INET6:
@@ -528,6 +521,7 @@ ip6_sa2str(const struct sockaddr_in6 *sa6, char *buf, size_t bufsiz, int flags)
 #endif /* INET6 */
 
 
+#if !defined(__minix)
 /*
  * getnameinfo_link():
  * Format a link-layer address into a printable format, paying attention to
@@ -549,7 +543,11 @@ getnameinfo_link(const struct sockaddr *sa, socklen_t salen,
 
 	if (sdl->sdl_nlen == 0 && sdl->sdl_alen == 0 && sdl->sdl_slen == 0) {
 		n = snprintf(host, hostlen, "link#%u", sdl->sdl_index);
-		goto out;
+		if (n < 0 || (socklen_t) n > hostlen) {
+			*host = '\0';
+			return EAI_MEMORY;
+		}
+		return 0;
 	}
 
 	switch (sdl->sdl_type) {
@@ -562,7 +560,11 @@ getnameinfo_link(const struct sockaddr *sa, socklen_t salen,
 		else
 			n = snprintf(host, hostlen, "%u.%u",
 			    CLLADDR(sdl)[1], CLLADDR(sdl)[0]);
-		goto out;
+		if (n < 0 || (socklen_t) n >= hostlen) {
+			*host = '\0';
+			return EAI_MEMORY;
+		} else
+			return 0;
 #endif
 	case IFT_IEEE1394:
 		if (sdl->sdl_alen < sizeof(iha->iha_uid))
@@ -596,12 +598,6 @@ getnameinfo_link(const struct sockaddr *sa, socklen_t salen,
 		return hexname((const uint8_t *)CLLADDR(sdl),
 		    (size_t)sdl->sdl_alen, host, hostlen);
 	}
-out:
-	if (n < 0 || (socklen_t) n >= hostlen) {
-		*host = '\0';
-		return EAI_MEMORY;
-	}
-	return 0;
 }
 
 static int
@@ -624,3 +620,4 @@ hexname(const uint8_t *cp, size_t len, char *host, socklen_t hostlen)
 	}
 	return 0;
 }
+#endif /* !defined(__minix) */

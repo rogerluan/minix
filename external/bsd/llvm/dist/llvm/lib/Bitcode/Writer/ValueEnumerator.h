@@ -11,14 +11,12 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_LIB_BITCODE_WRITER_VALUEENUMERATOR_H
-#define LLVM_LIB_BITCODE_WRITER_VALUEENUMERATOR_H
+#ifndef VALUE_ENUMERATOR_H
+#define VALUE_ENUMERATOR_H
 
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SmallVector.h"
-#include "llvm/ADT/UniqueVector.h"
 #include "llvm/IR/Attributes.h"
-#include "llvm/IR/UseListOrder.h"
 #include <vector>
 
 namespace llvm {
@@ -27,11 +25,8 @@ class Type;
 class Value;
 class Instruction;
 class BasicBlock;
-class Comdat;
 class Function;
 class Module;
-class Metadata;
-class LocalAsMetadata;
 class MDNode;
 class NamedMDNode;
 class AttributeSet;
@@ -45,9 +40,6 @@ public:
 
   // For each value, we remember its Value* and occurrence frequency.
   typedef std::vector<std::pair<const Value*, unsigned> > ValueList;
-
-  UseListOrderStack UseListOrders;
-
 private:
   typedef DenseMap<Type*, unsigned> TypeMapType;
   TypeMapType TypeMap;
@@ -56,16 +48,9 @@ private:
   typedef DenseMap<const Value*, unsigned> ValueMapType;
   ValueMapType ValueMap;
   ValueList Values;
-
-  typedef UniqueVector<const Comdat *> ComdatSetType;
-  ComdatSetType Comdats;
-
-  std::vector<const Metadata *> MDs;
-  SmallVector<const LocalAsMetadata *, 8> FunctionLocalMDs;
-  typedef DenseMap<const Metadata *, unsigned> MetadataMapType;
-  MetadataMapType MDValueMap;
-  bool HasMDString;
-  bool HasMDLocation;
+  ValueList MDValues;
+  SmallVector<const MDNode *, 8> FunctionLocalMDs;
+  ValueMapType MDValueMap;
 
   typedef DenseMap<AttributeSet, unsigned> AttributeGroupMapType;
   AttributeGroupMapType AttributeGroupMap;
@@ -93,7 +78,7 @@ private:
 
   /// When a function is incorporated, this is the size of the MDValues list
   /// before incorporation.
-  unsigned NumModuleMDs;
+  unsigned NumModuleMDValues;
 
   unsigned FirstFuncConstantID;
   unsigned FirstInstID;
@@ -101,18 +86,12 @@ private:
   ValueEnumerator(const ValueEnumerator &) LLVM_DELETED_FUNCTION;
   void operator=(const ValueEnumerator &) LLVM_DELETED_FUNCTION;
 public:
-  ValueEnumerator(const Module &M);
+  ValueEnumerator(const Module *M);
 
   void dump() const;
   void print(raw_ostream &OS, const ValueMapType &Map, const char *Name) const;
-  void print(raw_ostream &OS, const MetadataMapType &Map,
-             const char *Name) const;
 
   unsigned getValueID(const Value *V) const;
-  unsigned getMetadataID(const Metadata *V) const;
-
-  bool hasMDString() const { return HasMDString; }
-  bool hasMDLocation() const { return HasMDLocation; }
 
   unsigned getTypeID(Type *T) const {
     TypeMapType::const_iterator I = TypeMap.find(T);
@@ -145,8 +124,8 @@ public:
   }
 
   const ValueList &getValues() const { return Values; }
-  const std::vector<const Metadata *> &getMDs() const { return MDs; }
-  const SmallVectorImpl<const LocalAsMetadata *> &getFunctionLocalMDs() const {
+  const ValueList &getMDValues() const { return MDValues; }
+  const SmallVectorImpl<const MDNode *> &getFunctionLocalMDValues() const {
     return FunctionLocalMDs;
   }
   const TypeList &getTypes() const { return Types; }
@@ -159,9 +138,6 @@ public:
   const std::vector<AttributeSet> &getAttributeGroups() const {
     return AttributeGroups;
   }
-
-  const ComdatSetType &getComdats() const { return Comdats; }
-  unsigned getComdatID(const Comdat *C) const;
 
   /// getGlobalBasicBlockID - This returns the function-specific ID for the
   /// specified basic block.  This is relatively expensive information, so it
@@ -178,8 +154,8 @@ private:
   void OptimizeConstants(unsigned CstStart, unsigned CstEnd);
 
   void EnumerateMDNodeOperands(const MDNode *N);
-  void EnumerateMetadata(const Metadata *MD);
-  void EnumerateFunctionLocalMetadata(const LocalAsMetadata *Local);
+  void EnumerateMetadata(const Value *MD);
+  void EnumerateFunctionLocalMetadata(const MDNode *N);
   void EnumerateNamedMDNode(const NamedMDNode *NMD);
   void EnumerateValue(const Value *V);
   void EnumerateType(Type *T);
@@ -187,7 +163,7 @@ private:
   void EnumerateAttributes(AttributeSet PAL);
 
   void EnumerateValueSymbolTable(const ValueSymbolTable &ST);
-  void EnumerateNamedMetadata(const Module &M);
+  void EnumerateNamedMetadata(const Module *M);
 };
 
 } // End llvm namespace

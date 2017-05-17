@@ -7,9 +7,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-// REQUIRES: locale.en_US.UTF-8
-// REQUIRES: locale.fr_FR.UTF-8
-
 // <streambuf>
 
 // template <class charT, class traits = char_traits<charT> >

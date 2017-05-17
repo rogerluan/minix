@@ -6,7 +6,6 @@ LIBCXXRT_SRCDIR:=	${.PARSEDIR}/dist/libcxxrt
 LIBCXX_SRCDIR:=	${.PARSEDIR}/dist/libcxx
 
 .if defined(__MINIX)
-# Should I try -D_LIBCPP_HAS_NO_THREADS ?
-#LDADD+= -lmthread
-#DPADD+= ${LIBMTHREAD}
+LDADD+= -lmthread
+DPADD+= ${LIBMTHREAD}
 .endif # defined(__MINIX)

@@ -1,8 +1,5 @@
 // RUN: %clang_cc1 -fsyntax-only -verify -fblocks %s -Wno-error=non-pod-varargs
 
-// Check that the warning is still there under -fms-compatibility.
-// RUN: %clang_cc1 -fsyntax-only -verify -fblocks %s -Wno-error=non-pod-varargs -fms-compatibility
-
 extern char version[];
 
 class C {
@@ -103,7 +100,7 @@ Base &get_base(...);
 int eat_base(...);
 
 void test_typeid(Base &base) {
-  (void)typeid(get_base(base)); // expected-warning{{cannot pass object of non-POD type 'Base' through variadic function; call will abort at runtime}} expected-warning{{expression with side effects will be evaluated despite being used as an operand to 'typeid'}}
+  (void)typeid(get_base(base)); // expected-warning{{cannot pass object of non-POD type 'Base' through variadic function; call will abort at runtime}}
   (void)typeid(eat_base(base)); // okay
 }
 

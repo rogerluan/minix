@@ -28,10 +28,6 @@
  *   0x1400 - 0x14FF	Real Time Clock requests and responses
  *   0x1500 - 0x15FF	Input server messages
  *   0x1600 - 0x16FF	VirtualBox (VBOX) requests (see vboxif.h)
- *   0x1700 - 0x17FF	PTYFS requests
- *   0x1800 - 0x18FF	Management Information Base (MIB) requests
- *   0x1900 - 0x19FF	Socket device requests and responses
- *   0x1A00 - 0x1AFF	Network device requests and responses
  *
  * Zero and negative values are widely used for OK and error responses.
  */
@@ -63,11 +59,10 @@
 #define SCHED_PROC_NR ((endpoint_t) 4)	/* scheduler */
 #define TTY_PROC_NR  ((endpoint_t) 5)	/* terminal (TTY) driver */
 #define DS_PROC_NR   ((endpoint_t) 6)   /* data store server */
-#define MIB_PROC_NR  ((endpoint_t) 7)	/* management info base service */
+#define MFS_PROC_NR  ((endpoint_t) 7)   /* minix root filesystem */
 #define VM_PROC_NR   ((endpoint_t) 8)   /* memory server */
 #define PFS_PROC_NR  ((endpoint_t) 9)  /* pipe filesystem */
-#define MFS_PROC_NR  ((endpoint_t) 10)  /* minix root filesystem */
-#define LAST_SPECIAL_PROC_NR	11	/* An untyped version for
+#define LAST_SPECIAL_PROC_NR	10	/* An untyped version for
                                            computation in macros.*/
 #define INIT_PROC_NR ((endpoint_t) LAST_SPECIAL_PROC_NR)  /* init
                                                         -- goes multiuser */
@@ -226,7 +221,7 @@
 #  define SYS_VUMAP      (KERNEL_CALL + 18)	/* sys_vumap() */
 
 #  define SYS_IRQCTL     (KERNEL_CALL + 19)	/* sys_irqctl() */
-
+#  define SYS_INT86      (KERNEL_CALL + 20)	/* sys_int86() */
 #  define SYS_DEVIO      (KERNEL_CALL + 21)	/* sys_devio() */
 #  define SYS_SDEVIO     (KERNEL_CALL + 22)	/* sys_sdevio() */
 #  define SYS_VDEVIO     (KERNEL_CALL + 23)	/* sys_vdevio() */
@@ -243,6 +238,8 @@
 #  define SYS_READBIOS   (KERNEL_CALL + 35)	/* sys_readbios() */
 
 #  define SYS_SPROF      (KERNEL_CALL + 36)     /* sys_sprof() */ 
+#  define SYS_CPROF      (KERNEL_CALL + 37)     /* sys_cprof() */
+#  define SYS_PROFBUF    (KERNEL_CALL + 38)     /* sys_profbuf() */
 
 #  define SYS_STIME      (KERNEL_CALL + 39)	/* sys_stime() */
 #  define SYS_SETTIME    (KERNEL_CALL + 40)	/* sys_settime() */
@@ -275,7 +272,7 @@
 #define SYS_BASIC_CALLS \
     SYS_EXIT, SYS_SAFECOPYFROM, SYS_SAFECOPYTO, SYS_VSAFECOPY, SYS_GETINFO, \
     SYS_TIMES, SYS_SETALARM, SYS_SETGRANT, \
-    SYS_DIAGCTL, SYS_STATECTL, SYS_SAFEMEMSET
+    SYS_PROFBUF, SYS_DIAGCTL, SYS_STATECTL, SYS_SAFEMEMSET
 
 /* Field names for SYS_DEVIO, SYS_VDEVIO, SYS_SDEVIO. */
 #   define _DIO_INPUT		0x001
@@ -336,7 +333,7 @@
 #   define GET_IDLETSC	  21	/* get cumulative idle time stamp counter */
 #   define GET_CPUINFO    23    /* get information about cpus */
 #   define GET_REGS	  24	/* get general process registers */
-#   define GET_CPUTICKS	  25	/* get per-state ticks for a cpu */
+#   define GET_RUSAGE	  25	/* get resource usage */
 
 /* Subfunctions for SYS_PRIVCTL */
 #define SYS_PRIV_ALLOW		1	/* Allow process to run */
@@ -350,7 +347,6 @@
 #define SYS_PRIV_QUERY_MEM	8	/* Verify memory privilege. */
 #define SYS_PRIV_UPDATE_SYS	9	/* Update a sys privilege structure. */
 #define SYS_PRIV_YIELD	       10	/* Allow process to run and suspend */
-#define SYS_PRIV_CLEAR_IPC_REFS 11	/* Clear pending IPC for the process */
 
 /* Constants for exec. FIXME: these do not belong here. */
 #define PMEF_AUXVECTORS	20
@@ -434,16 +430,9 @@
 /* Field names for SYS_UPDATE. */
 #define SYS_UPD_SRC_ENDPT	m1_i1	/* source endpoint */
 #define SYS_UPD_DST_ENDPT	m1_i2	/* destination endpoint */
-#define SYS_UPD_FLAGS		m1_i3	/* update flags */
-#  define SYS_UPD_ROLLBACK        0x1	/* update is rollback */
-
 
 /* Subfunctions for SYS_STATECTL */
 #define SYS_STATE_CLEAR_IPC_REFS    1	/* clear IPC references */
-#define SYS_STATE_SET_STATE_TABLE   2	/* set state map */
-#define SYS_STATE_ADD_IPC_BL_FILTER 3	/* set IPC blacklist filter */
-#define SYS_STATE_ADD_IPC_WL_FILTER 4	/* set IPC whitelist filter */
-#define SYS_STATE_CLEAR_IPC_FILTERS 5	/* clear IPC filters */
 
 /* Subfunctions for SYS_SCHEDCTL */
 #  define SCHEDCTL_FLAG_KERNEL	1	/* mark kernel scheduler and remove 
@@ -469,7 +458,7 @@
 #define RS_SHUTDOWN	(RS_RQ_BASE + 4)	/* alert about shutdown */
 #define RS_UPDATE	(RS_RQ_BASE + 5)	/* update system service */
 #define RS_CLONE	(RS_RQ_BASE + 6)	/* clone system service */
-#define RS_UNCLONE	(RS_RQ_BASE + 7)	/* unclone system service */
+#define RS_EDIT		(RS_RQ_BASE + 7)	/* edit system service */
 
 #define RS_LOOKUP	(RS_RQ_BASE + 8)	/* lookup server name */
 
@@ -477,19 +466,6 @@
 
 #define RS_INIT 	(RS_RQ_BASE + 20)	/* service init message */
 #define RS_LU_PREPARE	(RS_RQ_BASE + 21)	/* prepare to update message */
-#define RS_EDIT		(RS_RQ_BASE + 22)	/* edit system service */
-#define RS_SYSCTL	(RS_RQ_BASE + 23)	/* perform system ctl action */
-#define RS_FI		(RS_RQ_BASE + 24)	/* inject fault into service */
-
-/* Subfunctions for RS_SYSCTL. */
-#define RS_SYSCTL_SRV_STATUS    1
-#define RS_SYSCTL_UPD_START     2
-#define RS_SYSCTL_UPD_RUN       3
-#define RS_SYSCTL_UPD_STOP      4
-#define RS_SYSCTL_UPD_STATUS    5
-
-/* Subfunctions for RS_FI. */
-#define RS_FI_CRASH             1
 
 /*===========================================================================*
  *                Messages for the Data Store Server			     *
@@ -595,7 +571,6 @@
  *===========================================================================*/
 
 #define COMMON_RQ_BASE		0xE00
-#define COMMON_RS_BASE		0xE80
 
 /* Field names for system signals (sent by a signal manager). */
 #define SIGS_SIGNAL_RECEIVED (COMMON_RQ_BASE+0)
@@ -605,21 +580,6 @@
 
 /* Common fault injection ctl request to all processes. */
 #define COMMON_REQ_FI_CTL (COMMON_RQ_BASE+2)
-
-/* Process event message from PM. */
-#define PROC_EVENT		(COMMON_RQ_BASE+3)
-
-/* MIB information request for the root node of a registered subtree. */
-#define COMMON_MIB_INFO		(COMMON_RQ_BASE+4)
-
-/* MIB sysctl request on a registered subtree. */
-#define COMMON_MIB_CALL		(COMMON_RQ_BASE+5)
-
-/* Reply to process event message to PM. */
-#define PROC_EVENT_REPLY	(COMMON_RS_BASE+0)
-
-/* Reply to MIB information or sysctl request. */
-#define COMMON_MIB_REPLY	(COMMON_RS_BASE+1)
 
 /*===========================================================================*
  *                Messages for VM server				     *
@@ -684,11 +644,8 @@
 /* To VM: identify cache block in FS */
 #define VM_SETCACHEPAGE		(VM_RQ_BASE+27)
 
-/* To VM: forget cache block in FS */
-#define VM_FORGETCACHEPAGE	(VM_RQ_BASE+28)
-
 /* To VM: clear all cache blocks for a device */
-#define VM_CLEARCACHE		(VM_RQ_BASE+29)
+#define VM_CLEARCACHE		(VM_RQ_BASE+28)
 
 /* To VFS: fields for request from VM. */
 #	define VFS_VMCALL_REQ		m10_i1
@@ -726,6 +683,12 @@
 #	define VM_RS_BUF		m2_l1
 #	define VM_RS_SYS		m2_i2
 
+#define VM_QUERY_EXIT		(VM_RQ_BASE+38)
+
+#define VM_NOTIFY_SIG		(VM_RQ_BASE+39)
+#	define VM_NOTIFY_SIG_ENDPOINT	m1_i1
+#	define VM_NOTIFY_SIG_IPC	m1_i2
+
 #define VM_INFO			(VM_RQ_BASE+40)
 
 /* VM_INFO 'what' values. */
@@ -740,11 +703,8 @@
 #	define VM_RS_CTL_REQ		m1_i2
 #		define VM_RS_MEM_PIN	    0	/* pin memory */
 #		define VM_RS_MEM_MAKE_VM    1	/* make VM instance */
-#		define VM_RS_MEM_HEAP_PREALLOC 2 /* preallocate heap regions */
-#		define VM_RS_MEM_MAP_PREALLOC  3 /* preallocate mmaped regions */
-#		define VM_RS_MEM_GET_PREALLOC_MAP  4 /* get preallocated mmaped regions */
-#	define VM_RS_CTL_ADDR		m2_p1
-#	define VM_RS_CTL_LEN		m2_i3
+
+#define VM_WATCH_EXIT		(VM_RQ_BASE+43)
 
 #define VM_REMAP_RO		(VM_RQ_BASE+44)
 /* same args as VM_REMAP */
@@ -763,10 +723,8 @@
 
 #define VM_GETRUSAGE		(VM_RQ_BASE+47)
 
-#define VM_RS_PREPARE		(VM_RQ_BASE+48)
-
 /* Total. */
-#define NR_VM_CALLS				49
+#define NR_VM_CALLS				48
 #define VM_CALL_MASK_SIZE			BITMAP_CHUNKS(NR_VM_CALLS)
 
 /* not handled as a normal VM call, thus at the end of the reserved rage */
@@ -777,7 +735,7 @@
 /* Basic vm calls allowed to every process. */
 #define VM_BASIC_CALLS \
     VM_BRK, VM_MMAP, VM_MUNMAP, VM_MAP_PHYS, VM_UNMAP_PHYS, VM_INFO, \
-    VM_GETRUSAGE /* VM_GETRUSAGE is to be removed from this list ASAP */
+    VM_GETRUSAGE
 
 /*===========================================================================*
  *                Messages for IPC server				     *
@@ -893,16 +851,6 @@
 #define INPUT_EVENT		(INPUT_RS_BASE + 0)	/* send input event */
 
 /*===========================================================================*
- *			Messages for PTYFS				     *
- *===========================================================================*/
-
-#define PTYFS_BASE 0x1700
-
-#define PTYFS_SET		(PTYFS_BASE + 0)	/* add/update node */
-#define PTYFS_CLEAR		(PTYFS_BASE + 1)	/* delete node */
-#define PTYFS_NAME		(PTYFS_BASE + 2)	/* get node name */
-
-/*===========================================================================*
  *			VFS-FS TRANSACTION IDs				     *
  *===========================================================================*/
 
@@ -1014,135 +962,6 @@
 #define RTCDEV_NOFLAGS	0x00	/* no flags are set */
 #define RTCDEV_Y2KBUG	0x01	/* Interpret 1980 as 2000 for RTC w/Y2K bug */
 #define RTCDEV_CMOSREG	0x02	/* Also set the CMOS clock register bits. */
-
-/*===========================================================================*
- *				Calls to MIB				     *
- *===========================================================================*/
-
-#define MIB_BASE		0x1800
-
-#define IS_MIB_CALL(type)	(((type) & ~0xff) == MIB_BASE)
-
-#define MIB_SYSCTL		(MIB_BASE + 0)		/* sysctl(2) */
-#define MIB_REGISTER		(MIB_BASE + 1)		/* mount subtree */
-#define MIB_DEREGISTER		(MIB_BASE + 2)		/* unmount subtree */
-
-#define NR_MIB_CALLS		3	/* highest number from base plus one */
-
-/*===========================================================================*
- *			Messages for socket devices			     *
- *===========================================================================*/
-
-/* Base type for socket device requests and responses. */
-#define SDEV_RQ_BASE		0x1900
-#define SDEV_RS_BASE		0x1980
-
-#define IS_SDEV_RQ(type)	(((type) & ~0x7f) == SDEV_RQ_BASE)
-#define IS_SDEV_RS(type)	(((type) & ~0x7f) == SDEV_RS_BASE)
-
-/* Message types for socket device requests. */
-#define SDEV_SOCKET		(SDEV_RQ_BASE + 0)	/* create socket */
-#define SDEV_SOCKETPAIR		(SDEV_RQ_BASE + 1)	/* make socket pair */
-#define SDEV_BIND		(SDEV_RQ_BASE + 2)	/* bind to address */
-#define SDEV_CONNECT		(SDEV_RQ_BASE + 3)	/* start connection */
-#define SDEV_LISTEN		(SDEV_RQ_BASE + 4)	/* enter listen mode */
-#define SDEV_ACCEPT		(SDEV_RQ_BASE + 5)	/* accept connection */
-#define SDEV_SEND		(SDEV_RQ_BASE + 6)	/* send data */
-#define SDEV_RECV		(SDEV_RQ_BASE + 7)	/* receive data */
-#define SDEV_IOCTL		(SDEV_RQ_BASE + 8)	/* I/O control */
-#define SDEV_SETSOCKOPT		(SDEV_RQ_BASE + 9)	/* set socket option */
-#define SDEV_GETSOCKOPT		(SDEV_RQ_BASE + 10)	/* get socket option */
-#define SDEV_GETSOCKNAME	(SDEV_RQ_BASE + 11)	/* get socket name */
-#define SDEV_GETPEERNAME	(SDEV_RQ_BASE + 12)	/* get peer name */
-#define SDEV_SHUTDOWN		(SDEV_RQ_BASE + 13)	/* shut down I/O */
-#define SDEV_CLOSE		(SDEV_RQ_BASE + 14)	/* close socket */
-#define SDEV_CANCEL		(SDEV_RQ_BASE + 15)	/* cancel request */
-#define SDEV_SELECT		(SDEV_RQ_BASE + 16)	/* select on socket */
-
-/* Message types for socket device responses. */
-#define SDEV_REPLY		(SDEV_RS_BASE + 0)	/* generic reply */
-#define SDEV_SOCKET_REPLY	(SDEV_RS_BASE + 1)	/* socket reply */
-#define SDEV_ACCEPT_REPLY	(SDEV_RS_BASE + 2)	/* accept reply */
-#define SDEV_RECV_REPLY		(SDEV_RS_BASE + 3)	/* receive reply */
-#define SDEV_SELECT1_REPLY	(SDEV_RS_BASE + 4)	/* select reply 1 */
-#define SDEV_SELECT2_REPLY	(SDEV_RS_BASE + 5)	/* select reply 2 */
-
-/* Bits in the 'sflags' field of socket device transfer requests. */
-#  define SDEV_NOFLAGS		0x00	/* no flags are set */
-#  define SDEV_NONBLOCK		0x01	/* do not suspend I/O request */
-
-/* Bits in the 'ops', 'status' fields of socket device select messages. */
-#  define SDEV_OP_RD		0x01	/* selected for read operation */
-#  define SDEV_OP_WR		0x02	/* selected for write operation */
-#  define SDEV_OP_ERR		0x04	/* selected for error operation */
-#  define SDEV_NOTIFY		0x08	/* notification requested */
-
-/*===========================================================================*
- *			Messages for network devices			     *
- *===========================================================================*/
-
-/* Base type for network device requests and responses. */
-#define NDEV_RQ_BASE		0x1A00		/* ndev -> netdriver */
-#define NDEV_RS_BASE		0x1A80		/* netdriver -> ndev */
-
-#define IS_NDEV_RQ(type)	(((type) & ~0x7f) == NDEV_RQ_BASE)
-#define IS_NDEV_RS(type)	(((type) & ~0x7f) == NDEV_RS_BASE)
-
-/*
- * Status requests and responses travel in the opposite direction, so we group
- * them with their sending party, so that the IS_NDEV_R[QS] macros can be used
- * by either side to see whether the message is indeed for them.
- */
-#define NDEV_INIT		(NDEV_RQ_BASE + 0)	/* initialize driver */
-#define NDEV_CONF		(NDEV_RQ_BASE + 1)	/* configure driver */
-#define NDEV_SEND		(NDEV_RQ_BASE + 2)	/* send a packet */
-#define NDEV_RECV		(NDEV_RQ_BASE + 3)	/* receive a packet */
-#define NDEV_IOCTL		(NDEV_RQ_BASE + 4)	/* (reserved) */
-#define NDEV_STATUS_REPLY	(NDEV_RQ_BASE + 5)	/* status reply */
-
-#define NDEV_INIT_REPLY		(NDEV_RS_BASE + 0)	/* initialize reply */
-#define NDEV_CONF_REPLY		(NDEV_RS_BASE + 1)	/* configure reply */
-#define NDEV_SEND_REPLY		(NDEV_RS_BASE + 2)	/* send reply */
-#define NDEV_RECV_REPLY		(NDEV_RS_BASE + 3)	/* receive reply */
-#define NDEV_IOCTL_REPLY	(NDEV_RS_BASE + 4)	/* (reserved) */
-#define NDEV_STATUS		(NDEV_RS_BASE + 5)	/* status report */
-
-/* Bits in the 'set' field of configuration requests. */
-#  define NDEV_SET_MODE		0x01	/* set I/O mode and multicast list */
-#  define NDEV_SET_CAPS		0x02	/* enable or disable capabilities */
-#  define NDEV_SET_FLAGS	0x04	/* set driver-specific flags */
-#  define NDEV_SET_MEDIA	0x08	/* set media type */
-#  define NDEV_SET_HWADDR	0x10	/* change the hardware address */
-
-/* Bits in the 'mode' field of configuration requests. */
-#  define NDEV_MODE_DOWN	0x00	/* transmission and receipt disabled */
-#  define NDEV_MODE_UP		0x01	/* receive unicast packets for me */
-#  define NDEV_MODE_BCAST	0x02	/* receive broadcast packets */
-#  define NDEV_MODE_MCAST_LIST	0x04	/* receive certain multicast packets */
-#  define NDEV_MODE_MCAST_ALL	0x08	/* receive all multicast packets */
-#  define NDEV_MODE_PROMISC	0x10	/* receive all packets */
-
-/* Bits in the 'caps' field of initialization and configuration requests. */
-#  define NDEV_CAP_CS_IP4_TX	0x01	/* IPv4 header checksum generation */
-#  define NDEV_CAP_CS_IP4_RX	0x02	/* IPv4 header checksum verification */
-#  define NDEV_CAP_CS_UDP_TX	0x04	/* UDP header checksum generation */
-#  define NDEV_CAP_CS_UDP_RX	0x08	/* UDP header checksum verification */
-#  define NDEV_CAP_CS_TCP_TX	0x10	/* TCP header checksum generation */
-#  define NDEV_CAP_CS_TCP_RX	0x20	/* TCP header checksum verification */
-#  define NDEV_CAP_MCAST	0x20000000	/* init only: mcast capable */
-#  define NDEV_CAP_BCAST	0x40000000	/* init only: bcast capable */
-#  define NDEV_CAP_HWADDR	0x80000000	/* init only: can set hwaddr */
-
-/* Values for the 'flags' field of configuration requests. */
-#  define NDEV_FLAG_DEBUG	0x01	/* enable driver-specific debug mode */
-#  define NDEV_FLAG_LINK0	0x02	/* enable driver-specific LINK0 flag */
-#  define NDEV_FLAG_LINK1	0x04	/* enable driver-specific LINK1 flag */
-#  define NDEV_FLAG_LINK2	0x08	/* enable driver-specific LINK2 flag */
-
-/* Values for the 'link' field of initialization and status replies. */
-#  define NDEV_LINK_UNKNOWN	0	/* link status is unknown, assume up */
-#  define NDEV_LINK_UP		1	/* link is up */
-#  define NDEV_LINK_DOWN	2	/* link is down */
 
 /*===========================================================================*
  *		Internal codes used by several services			     *

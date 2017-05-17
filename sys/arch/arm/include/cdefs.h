@@ -1,22 +1,11 @@
-/*	$NetBSD: cdefs.h,v 1.15 2014/06/23 03:40:57 christos Exp $	*/
+/*	$NetBSD: cdefs.h,v 1.9 2013/08/17 00:21:47 matt Exp $	*/
 
 #ifndef	_ARM_CDEFS_H_
 #define	_ARM_CDEFS_H_
 
-#ifndef __lint__
-#if (__GNUC__ == 4 && __GNUC_MINOR__ < 1) || __GNUC__ < 4
-#error GCC 4.1 or compatible required.
-#endif
-#endif
-
-#if defined (__ARM_ARCH_8A__)
-#define _ARM_ARCH_8		/* ARMv8 64-bit in AARCH32 */
-#endif
-
-#if defined (_ARM_ARCH_8) || defined (__ARM_ARCH_7__) || \
-    defined (__ARM_ARCH_7A__) || defined (__ARM_ARCH_7R__) || \
-    defined (__ARM_ARCH_7M__) || defined (__ARM_ARCH_7EM__)
-	/* 7R, 7M, 7EM are for non MMU arms */
+#if defined (__ARM_ARCH_7__) || defined (__ARM_ARCH_7A__) || \
+    defined (__ARM_ARCH_7R__) || defined (__ARM_ARCH_7M__) || \
+    defined (__ARM_ARCH_7EM__) /* 7R, 7M, 7EM are for non MMU arms */
 #define _ARM_ARCH_7
 #endif
 
@@ -51,10 +40,8 @@
 #define	_ARM_ARCH_DWORD_OK
 #endif
 
-#if defined(__ARM_PCS_AAPCS64)
-#define __ALIGNBYTES		(sizeof(__int128_t) - 1)
-#elif defined(__ARM_EABI__)
-#define __ALIGNBYTES		(sizeof(long long) - 1)
+#ifdef __ARM_EABI__
+#define __ALIGNBYTES		(8 - 1)
 #else
 #define __ALIGNBYTES		(sizeof(int) - 1)
 #endif

@@ -14,7 +14,6 @@
 #ifndef LLVM_ADT_SMALLSET_H
 #define LLVM_ADT_SMALLSET_H
 
-#include "llvm/ADT/None.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
 #include <set>
@@ -38,22 +37,18 @@ class SmallSet {
   typedef typename SmallVector<T, N>::const_iterator VIterator;
   typedef typename SmallVector<T, N>::iterator mutable_iterator;
 public:
-  typedef size_t size_type;
   SmallSet() {}
 
-  bool LLVM_ATTRIBUTE_UNUSED_RESULT empty() const {
-    return Vector.empty() && Set.empty();
-  }
-
-  size_type size() const {
+  bool empty() const { return Vector.empty() && Set.empty(); }
+  unsigned size() const {
     return isSmall() ? Vector.size() : Set.size();
   }
 
-  /// count - Return 1 if the element is in the set, 0 otherwise.
-  size_type count(const T &V) const {
+  /// count - Return true if the element is in the set.
+  bool count(const T &V) const {
     if (isSmall()) {
       // Since the collection is small, just do a linear search.
-      return vfind(V) == Vector.end() ? 0 : 1;
+      return vfind(V) != Vector.end();
     } else {
       return Set.count(V);
     }
@@ -61,21 +56,16 @@ public:
 
   /// insert - Insert an element into the set if it isn't already there.
   /// Returns true if the element is inserted (it was not in the set before).
-  /// The first value of the returned pair is unused and provided for
-  /// partial compatibility with the standard library self-associative container
-  /// concept.
-  // FIXME: Add iterators that abstract over the small and large form, and then
-  // return those here.
-  std::pair<NoneType, bool> insert(const T &V) {
+  bool insert(const T &V) {
     if (!isSmall())
-      return std::make_pair(None, Set.insert(V).second);
+      return Set.insert(V).second;
 
     VIterator I = vfind(V);
     if (I != Vector.end())    // Don't reinsert if it already exists.
-      return std::make_pair(None, false);
+      return false;
     if (Vector.size() < N) {
       Vector.push_back(V);
-      return std::make_pair(None, true);
+      return true;
     }
 
     // Otherwise, grow from vector to set.
@@ -84,7 +74,7 @@ public:
       Vector.pop_back();
     }
     Set.insert(V);
-    return std::make_pair(None, true);
+    return true;
   }
 
   template <typename IterT>

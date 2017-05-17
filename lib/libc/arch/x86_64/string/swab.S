@@ -6,7 +6,7 @@
 #include <machine/asm.h>
 
 #if defined(LIBC_SCCS)
-	RCSID("$NetBSD: swab.S,v 1.4 2014/05/22 15:01:57 uebayasi Exp $")
+	RCSID("$NetBSD: swab.S,v 1.3 2005/08/02 14:20:49 rpaulo Exp $")
 #endif
 
 #define LOAD_SWAP_STORE_WORD \
@@ -44,4 +44,3 @@ L3:
 	jnz	L3
 L4:
 	ret
-END(swab)

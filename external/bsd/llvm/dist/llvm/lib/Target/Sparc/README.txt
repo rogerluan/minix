@@ -56,4 +56,6 @@ int %t1(int %a, int %b) {
   leaf fns.
 * Fill delay slots
 
+* Implement JIT support
+
 * Use %g0 directly to materialize 0. No instruction is required.

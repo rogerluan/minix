@@ -1,4 +1,4 @@
-/*	$NetBSD: pipe.S,v 1.2 2014/08/23 02:24:22 matt Exp $	*/
+/*	$NetBSD: pipe.S,v 1.1 2006/07/01 16:37:20 ross Exp $	*/
 
 #include "SYS.h"
 
@@ -8,12 +8,12 @@ WEAK_ALIAS(pipe, _pipe)
 
 ENTRY(_pipe)
 	mr	%r5,%r3		# save pointer
-	_DOSYSCALL(pipe)	# assume, that r5 is kept
+	li	%r0,SYS_pipe
+	sc			# assume, that r5 is kept
 	bso	1f
-	stint	%r3,0(%r5)	# success, store fds
-	stint	%r4,4(%r5)
+	stw	%r3,0(%r5)	# success, store fds
+	stw	%r4,4(%r5)
 	li	%r3,0
 	blr			# and return 0
 1:
-	BRANCH_TO_CERROR()
-END(_pipe)
+	b	PIC_PLT(_C_LABEL(__cerror))

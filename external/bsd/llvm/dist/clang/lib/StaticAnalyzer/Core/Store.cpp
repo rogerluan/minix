@@ -48,6 +48,17 @@ const MemRegion *StoreManager::MakeElementRegion(const MemRegion *Base,
   return MRMgr.getElementRegion(EleTy, idx, Base, svalBuilder.getContext());
 }
 
+// FIXME: Merge with the implementation of the same method in MemRegion.cpp
+static bool IsCompleteType(ASTContext &Ctx, QualType Ty) {
+  if (const RecordType *RT = Ty->getAs<RecordType>()) {
+    const RecordDecl *D = RT->getDecl();
+    if (!D->getDefinition())
+      return false;
+  }
+
+  return true;
+}
+
 StoreRef StoreManager::BindDefault(Store store, const MemRegion *R, SVal V) {
   return StoreRef(store, *this);
 }
@@ -77,7 +88,7 @@ const MemRegion *StoreManager::castRegion(const MemRegion *R, QualType CastToTy)
 
     // We don't know what to make of it.  Return a NULL region, which
     // will be interpretted as UnknownVal.
-    return nullptr;
+    return NULL;
   }
 
   // Now assume we are casting from pointer to pointer. Other cases should
@@ -155,7 +166,7 @@ const MemRegion *StoreManager::castRegion(const MemRegion *R, QualType CastToTy)
       // If we cannot compute a raw offset, throw up our hands and return
       // a NULL MemRegion*.
       if (!baseR)
-        return nullptr;
+        return NULL;
 
       CharUnits off = rawOff.getOffset();
 
@@ -182,10 +193,10 @@ const MemRegion *StoreManager::castRegion(const MemRegion *R, QualType CastToTy)
 
       // Compute the index for the new ElementRegion.
       int64_t newIndex = 0;
-      const MemRegion *newSuperR = nullptr;
+      const MemRegion *newSuperR = 0;
 
       // We can only compute sizeof(PointeeTy) if it is a complete type.
-      if (!PointeeTy->isIncompleteType()) {
+      if (IsCompleteType(Ctx, PointeeTy)) {
         // Compute the size in **bytes**.
         CharUnits pointeeTySize = Ctx.getTypeSizeInChars(PointeeTy);
         if (!pointeeTySize.isZero()) {
@@ -289,7 +300,7 @@ static const CXXRecordDecl *getCXXRecordType(const MemRegion *MR) {
     return TVR->getValueType()->getAsCXXRecordDecl();
   if (const SymbolicRegion *SR = dyn_cast<SymbolicRegion>(MR))
     return SR->getSymbol()->getType()->getPointeeCXXRecordDecl();
-  return nullptr;
+  return 0;
 }
 
 SVal StoreManager::evalDynamicCast(SVal Base, QualType TargetType,
@@ -390,7 +401,7 @@ SVal StoreManager::getLValueFieldOrIvar(const Decl *D, SVal Base) {
     return Base;
 
   Loc BaseL = Base.castAs<Loc>();
-  const MemRegion* BaseR = nullptr;
+  const MemRegion* BaseR = 0;
 
   switch (BaseL.getSubKind()) {
   case loc::MemRegionKind:

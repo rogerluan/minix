@@ -81,6 +81,7 @@ struct DefinedTracker {
 /// EvaluateDefined - Process a 'defined(sym)' expression.
 static bool EvaluateDefined(PPValue &Result, Token &PeekTok, DefinedTracker &DT,
                             bool ValueLive, Preprocessor &PP) {
+  IdentifierInfo *II;
   SourceLocation beginLoc(PeekTok.getLocation());
   Result.setBegin(beginLoc);
 
@@ -101,17 +102,18 @@ static bool EvaluateDefined(PPValue &Result, Token &PeekTok, DefinedTracker &DT,
     PP.setCodeCompletionReached();
     PP.LexUnexpandedNonComment(PeekTok);
   }
-
+  
   // If we don't have a pp-identifier now, this is an error.
-  if (PP.CheckMacroName(PeekTok, MU_Other))
+  if ((II = PeekTok.getIdentifierInfo()) == 0) {
+    PP.Diag(PeekTok, diag::err_pp_defined_requires_identifier);
     return true;
+  }
 
   // Otherwise, we got an identifier, is it defined to something?
-  IdentifierInfo *II = PeekTok.getIdentifierInfo();
   Result.Val = II->hasMacroDefinition();
   Result.Val.setIsUnsigned(false);  // Result is signed intmax_t.
 
-  MacroDirective *Macro = nullptr;
+  MacroDirective *Macro = 0;
   // If there is a macro, mark it used.
   if (Result.Val != 0 && ValueLive) {
     Macro = PP.getMacroDirective(II);
@@ -128,9 +130,8 @@ static bool EvaluateDefined(PPValue &Result, Token &PeekTok, DefinedTracker &DT,
     PP.LexUnexpandedNonComment(PeekTok);
 
     if (PeekTok.isNot(tok::r_paren)) {
-      PP.Diag(PeekTok.getLocation(), diag::err_pp_expected_after)
-          << "'defined'" << tok::r_paren;
-      PP.Diag(LParenLoc, diag::note_matching) << tok::l_paren;
+      PP.Diag(PeekTok.getLocation(), diag::err_pp_missing_rparen) << "defined";
+      PP.Diag(LParenLoc, diag::note_matching) << "(";
       return true;
     }
     // Consume the ).
@@ -244,9 +245,7 @@ static bool EvaluateValue(PPValue &Result, Token &PeekTok, DefinedTracker &DT,
     // Parse the integer literal into Result.
     if (Literal.GetIntegerValue(Result.Val)) {
       // Overflow parsing integer literal.
-      if (ValueLive)
-        PP.Diag(PeekTok, diag::err_integer_literal_too_large)
-            << /* Unsigned */ 1;
+      if (ValueLive) PP.Diag(PeekTok, diag::err_integer_too_large);
       Result.Val.setIsUnsigned(true);
     } else {
       // Set the signedness of the result to match whether there was a U suffix
@@ -258,10 +257,9 @@ static bool EvaluateValue(PPValue &Result, Token &PeekTok, DefinedTracker &DT,
       // large that it is unsigned" e.g. on 12345678901234567890 where intmax_t
       // is 64-bits.
       if (!Literal.isUnsigned && Result.Val.isNegative()) {
-        // Octal, hexadecimal, and binary literals are implicitly unsigned if
-        // the value does not fit into a signed integer type.
+        // Don't warn for a hex or octal literal: 0x8000..0 shouldn't warn.
         if (ValueLive && Literal.getRadix() == 10)
-          PP.Diag(PeekTok, diag::ext_integer_literal_too_large_for_signed);
+          PP.Diag(PeekTok, diag::warn_integer_too_large_for_signed);
         Result.Val.setIsUnsigned(true);
       }
     }
@@ -273,7 +271,6 @@ static bool EvaluateValue(PPValue &Result, Token &PeekTok, DefinedTracker &DT,
   }
   case tok::char_constant:          // 'x'
   case tok::wide_char_constant:     // L'x'
-  case tok::utf8_char_constant:     // u8'x'
   case tok::utf16_char_constant:    // u'x'
   case tok::utf32_char_constant: {  // U'x'
     // Complain about, and drop, any ud-suffix.
@@ -345,7 +342,7 @@ static bool EvaluateValue(PPValue &Result, Token &PeekTok, DefinedTracker &DT,
       if (PeekTok.isNot(tok::r_paren)) {
         PP.Diag(PeekTok.getLocation(), diag::err_pp_expected_rparen)
           << Result.getRange();
-        PP.Diag(Start, diag::note_matching) << tok::l_paren;
+        PP.Diag(Start, diag::note_matching) << "(";
         return true;
       }
       DT.State = DefinedTracker::Unknown;
@@ -600,10 +597,15 @@ static bool EvaluateDirectiveSubExpr(PPValue &LHS, unsigned MinPrec,
       break;
     case tok::lessless: {
       // Determine whether overflow is about to happen.
-      if (LHS.isUnsigned())
-        Res = LHS.Val.ushl_ov(RHS.Val, Overflow);
-      else
-        Res = llvm::APSInt(LHS.Val.sshl_ov(RHS.Val, Overflow), false);
+      unsigned ShAmt = static_cast<unsigned>(RHS.Val.getLimitedValue());
+      if (LHS.isUnsigned()) {
+        Overflow = ShAmt >= LHS.Val.getBitWidth();
+        if (Overflow)
+          ShAmt = LHS.Val.getBitWidth()-1;
+        Res = LHS.Val << ShAmt;
+      } else {
+        Res = llvm::APSInt(LHS.Val.sshl_ov(ShAmt, Overflow), false);
+      }
       break;
     }
     case tok::greatergreater: {
@@ -678,9 +680,9 @@ static bool EvaluateDirectiveSubExpr(PPValue &LHS, unsigned MinPrec,
     case tok::question: {
       // Parse the : part of the expression.
       if (PeekTok.isNot(tok::colon)) {
-        PP.Diag(PeekTok.getLocation(), diag::err_expected)
-            << tok::colon << LHS.getRange() << RHS.getRange();
-        PP.Diag(OpLoc, diag::note_matching) << tok::question;
+        PP.Diag(PeekTok.getLocation(), diag::err_expected_colon)
+          << LHS.getRange(), RHS.getRange();
+        PP.Diag(OpLoc, diag::note_matching) << "?";
         return true;
       }
       // Consume the :.

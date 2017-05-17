@@ -47,7 +47,9 @@ quickly by utilizing the built-in features that are used to compile LLVM. LLVM
 compiles itself using the same features of the makefile system as used for
 projects.
 
-For further details, consult the `Projects <Projects.html>`_ page.
+For complete details on setting up your projects configuration, simply mimic the
+``llvm/projects/sample`` project. Or for further details, consult the
+`Projects <Projects.html>`_ page.
 
 Variable Values
 ---------------

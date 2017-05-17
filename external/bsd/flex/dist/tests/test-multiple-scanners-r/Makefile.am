@@ -43,7 +43,7 @@ scanner-2.c: $(srcdir)/scanner-2.l
 	$(FLEX) $(LFLAGS) --header=scanner-2.h $<
 
 $(testname)$(EXEEXT): $(OBJS)
-	$(CC) $(CFLAGS) -o $@ $(LDFLAGS) $(OBJS) $(LOADLIBES)
+	$(CC) -o $@ $(LDFLAGS) $(OBJS) $(LOADLIBES)
 
 test: $(testname)$(EXEEXT)
 	./$(testname)$(EXEEXT)

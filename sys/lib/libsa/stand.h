@@ -1,4 +1,4 @@
-/*	$NetBSD: stand.h,v 1.79 2014/08/10 07:40:49 isaki Exp $	*/
+/*	$NetBSD: stand.h,v 1.76 2012/05/21 21:34:16 dsl Exp $	*/
 
 /*
  * Copyright (c) 1999 Christopher G. Demetriou.  All rights reserved.
@@ -80,7 +80,9 @@
 #define gets		libsa_gets
 #define printf		libsa_printf
 #define putchar		libsa_putchar
+#define sprintf		libsa_sprintf
 #define vprintf		libsa_vprintf
+#define vsprintf	libsa_vsprintf
 #endif
 
 struct open_file;
@@ -96,17 +98,10 @@ struct open_file;
 	extern __compactcall int	__CONCAT(fs,_stat)(struct open_file *, struct stat *)
 
 #if defined(LIBSA_ENABLE_LS_OP)
-#  if defined(__minix) && LIBSA_ENABLE_LOAD_MODS_OP
 #define FS_DEF(fs) \
 	FS_DEF_BASE(fs);\
-	extern __compactcall void	__CONCAT(fs,_ls)(struct open_file *, const char *); \
-	extern __compactcall void	__CONCAT(fs,_load_mods)(struct open_file *, const char *, \
-								void (*)(char *), char *)
-#  else
-#define FS_DEF(fs) \
-	FS_DEF_BASE(fs);\
-	extern __compactcall void	__CONCAT(fs,_ls)(struct open_file *, const char *)
-#  endif /* defined(__minix) && LIBSA_ENABLE_LOAD_MODS_OP */
+	extern __compactcall void	__CONCAT(fs,_ls)(struct open_file *, const char *,\
+							void (*)(char* arg), char*)
 #else
 #define FS_DEF(fs) FS_DEF_BASE(fs)
 #endif
@@ -116,7 +111,8 @@ struct open_file;
  * This structure is used to define file system operations in a file system
  * independent way.
  */
-extern const char *fsmod;
+extern char *fsmod;
+extern char *fsmod2;
 
 #if !defined(LIBSA_SINGLE_FILESYSTEM)
 struct fs_ops {
@@ -127,11 +123,8 @@ struct fs_ops {
 	__compactcall off_t	(*seek)(struct open_file *, off_t, int);
 	__compactcall int	(*stat)(struct open_file *, struct stat *);
 #if defined(LIBSA_ENABLE_LS_OP)
-	__compactcall void	(*ls)(struct open_file *, const char *);
-# if defined(__minix) && LIBSA_ENABLE_LOAD_MODS_OP
-	__compactcall void	(*load_mods)(struct open_file *, const char *,
-		void (*)(char *), char *);
-# endif /* defined(__minix) && LIBSA_ENABLE_LOAD_MODS_OP */
+	__compactcall void	(*ls)(struct open_file *, const char *,
+					void (*)(char* arg), char*);
 #endif
 };
 
@@ -139,17 +132,6 @@ extern struct fs_ops file_system[];
 extern int nfsys;
 
 #if defined(LIBSA_ENABLE_LS_OP)
-# if defined(__minix) && LIBSA_ENABLE_LOAD_MODS_OP
-#define FS_OPS(fs) { \
-	__CONCAT(fs,_open), \
-	__CONCAT(fs,_close), \
-	__CONCAT(fs,_read), \
-	__CONCAT(fs,_write), \
-	__CONCAT(fs,_seek), \
-	__CONCAT(fs,_stat), \
-	__CONCAT(fs,_ls), \
-	__CONCAT(fs,_load_mods) }
-# else
 #define FS_OPS(fs) { \
 	__CONCAT(fs,_open), \
 	__CONCAT(fs,_close), \
@@ -158,7 +140,6 @@ extern int nfsys;
 	__CONCAT(fs,_seek), \
 	__CONCAT(fs,_stat), \
 	__CONCAT(fs,_ls) }
-# endif /* defined(__minix) && LIBSA_ENABLE_LOAD_MODS_OP */
 #else
 #define FS_OPS(fs) { \
 	__CONCAT(fs,_open), \
@@ -177,9 +158,6 @@ extern int nfsys;
 #define	FS_STAT(fs)		((fs)->stat)
 #if defined(LIBSA_ENABLE_LS_OP)
 #define	FS_LS(fs)		((fs)->ls)
-#if  defined(__minix) && defined(LIBSA_ENABLE_LOAD_MODS_OP)
-#define	FS_LOAD_MODS(fs)	((fs)->load_mods)
-#endif /* defined(__minix) && defined(LIBSA_ENABLE_LOAD_MODS_OP) */
 #endif
 
 #else
@@ -192,9 +170,6 @@ extern int nfsys;
 #define	FS_STAT(fs)		___CONCAT(LIBSA_SINGLE_FILESYSTEM,_stat)
 #if defined(LIBSA_ENABLE_LS_OP)
 #define	FS_LS(fs)		___CONCAT(LIBSA_SINGLE_FILESYSTEM,_ls)
-#if  defined(__minix) && defined(LIBSA_ENABLE_LOAD_MODS_OP)
-#define	FS_LOAD_MODS(fs)	___CONCAT(LIBSA_SINGLE_FILESYSTEM,_load_mods)
-#endif /* defined(__minix) && defined(LIBSA_ENABLE_LOAD_MODS_OP) */
 #endif
 
 FS_DEF(LIBSA_SINGLE_FILESYSTEM);
@@ -280,10 +255,14 @@ int	dkcksum(const struct disklabel *);
 
 void	printf(const char *, ...)
     __attribute__((__format__(__printf__, 1, 2)));
+int	sprintf(char *, const char *, ...)
+    __attribute__((__format__(__printf__, 2, 3)));
 int	snprintf(char *, size_t, const char *, ...)
     __attribute__((__format__(__printf__, 3, 4)));
 void	vprintf(const char *, va_list)
     __attribute__((__format__(__printf__, 1, 0)));
+int	vsprintf(char *, const char *, va_list)
+    __attribute__((__format__(__printf__, 2, 0)));
 int	vsnprintf(char *, size_t, const char *, va_list)
     __attribute__((__format__(__printf__, 3, 0)));
 void	twiddle(void);
@@ -309,10 +288,7 @@ int	ioctl(int, u_long, char *);
 int	stat(const char *, struct stat *);
 int	fstat(int, struct stat *);
 #if defined(LIBSA_ENABLE_LS_OP)
-void	ls(const char *);
-#if defined(__minix) && LIBSA_ENABLE_LOAD_MODS_OP
-void	load_mods(const char *, void (*)(char *));
-#endif /* defined(__minix) && LIBSA_ENABLE_LOAD_MODS_OP */
+void	ls(const char *, void (*funcp)(char* arg));
 #endif
 
 typedef int cmp_t(const void *, const void *);
@@ -351,7 +327,5 @@ int	fnmatch(const char *, const char *);
 /* XXX: These should be removed eventually. */
 void	bcopy(const void *, void *, size_t);
 void	bzero(void *, size_t);
-
-int	atoi(const char *);
 
 #endif /* _LIBSA_STAND_H_ */

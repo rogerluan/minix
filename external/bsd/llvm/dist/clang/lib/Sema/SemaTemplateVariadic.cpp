@@ -10,7 +10,6 @@
 //===----------------------------------------------------------------------===/
 
 #include "clang/Sema/Sema.h"
-#include "TypeLocBuilder.h"
 #include "clang/AST/Expr.h"
 #include "clang/AST/RecursiveASTVisitor.h"
 #include "clang/AST/TypeLoc.h"
@@ -19,6 +18,7 @@
 #include "clang/Sema/ScopeInfo.h"
 #include "clang/Sema/SemaInternal.h"
 #include "clang/Sema/Template.h"
+#include "TypeLocBuilder.h"
 
 using namespace clang;
 
@@ -197,20 +197,6 @@ namespace {
   };
 }
 
-/// \brief Determine whether it's possible for an unexpanded parameter pack to
-/// be valid in this location. This only happens when we're in a declaration
-/// that is nested within an expression that could be expanded, such as a
-/// lambda-expression within a function call.
-///
-/// This is conservatively correct, but may claim that some unexpanded packs are
-/// permitted when they are not.
-bool Sema::isUnexpandedParameterPackPermitted() {
-  for (auto *SI : FunctionScopes)
-    if (isa<sema::LambdaScopeInfo>(SI))
-      return true;
-  return false;
-}
-
 /// \brief Diagnose all of the unexpanded parameter packs in the given
 /// vector.
 bool
@@ -237,14 +223,14 @@ Sema::DiagnoseUnexpandedParameterPacks(SourceLocation Loc,
   llvm::SmallPtrSet<IdentifierInfo *, 4> NamesKnown;
 
   for (unsigned I = 0, N = Unexpanded.size(); I != N; ++I) {
-    IdentifierInfo *Name = nullptr;
+    IdentifierInfo *Name = 0;
     if (const TemplateTypeParmType *TTP
           = Unexpanded[I].first.dyn_cast<const TemplateTypeParmType *>())
       Name = TTP->getIdentifier();
     else
       Name = Unexpanded[I].first.get<NamedDecl *>()->getIdentifier();
 
-    if (Name && NamesKnown.insert(Name).second)
+    if (Name && NamesKnown.insert(Name))
       Names.push_back(Name);
 
     if (Unexpanded[I].second.isValid())
@@ -477,7 +463,7 @@ Sema::CheckPackExpansion(TypeSourceInfo *Pattern, SourceLocation EllipsisLoc,
                                        Pattern->getTypeLoc().getSourceRange(),
                                        EllipsisLoc, NumExpansions);
   if (Result.isNull())
-    return nullptr;
+    return 0;
 
   TypeLocBuilder TLB;
   TLB.pushFullCopy(Pattern->getTypeLoc());
@@ -523,8 +509,8 @@ ExprResult Sema::CheckPackExpansion(Expr *Pattern, SourceLocation EllipsisLoc,
   }
   
   // Create the pack expansion expression and source-location information.
-  return new (Context)
-    PackExpansionExpr(Context.DependentTy, Pattern, EllipsisLoc, NumExpansions);
+  return Owned(new (Context) PackExpansionExpr(Context.DependentTy, Pattern,
+                                               EllipsisLoc, NumExpansions));
 }
 
 /// \brief Retrieve the depth and index of a parameter pack.
@@ -568,8 +554,8 @@ bool Sema::CheckParameterPacksForExpansion(
       if (isa<ParmVarDecl>(ND))
         IsFunctionParameterPack = true;
       else
-        std::tie(Depth, Index) = getDepthAndIndex(ND);
-
+        llvm::tie(Depth, Index) = getDepthAndIndex(ND);        
+      
       Name = ND->getIdentifier();
     }
     
@@ -613,7 +599,7 @@ bool Sema::CheckParameterPacksForExpansion(
       if (NamedDecl *PartialPack 
                     = CurrentInstantiationScope->getPartiallySubstitutedPack()){
         unsigned PartialDepth, PartialIndex;
-        std::tie(PartialDepth, PartialIndex) = getDepthAndIndex(PartialPack);
+        llvm::tie(PartialDepth, PartialIndex) = getDepthAndIndex(PartialPack);
         if (PartialDepth == Depth && PartialIndex == Index)
           RetainExpansion = true;
       }
@@ -683,8 +669,8 @@ Optional<unsigned> Sema::getNumArgumentsInExpansion(QualType T,
         Result = Size;
         continue;
       }
-
-      std::tie(Depth, Index) = getDepthAndIndex(ND);
+      
+      llvm::tie(Depth, Index) = getDepthAndIndex(ND);        
     }
     if (Depth >= TemplateArgs.getNumLevels() ||
         !TemplateArgs.hasTemplateArgument(Depth, Index))
@@ -744,51 +730,35 @@ bool Sema::containsUnexpandedParameterPacks(Declarator &D) {
   case TST_auto:
   case TST_decltype_auto:
   case TST_unknown_anytype:
+  case TST_image1d_t:
+  case TST_image1d_array_t:
+  case TST_image1d_buffer_t:
+  case TST_image2d_t:
+  case TST_image2d_array_t:
+  case TST_image3d_t:
+  case TST_sampler_t:
+  case TST_event_t:
   case TST_error:
     break;
   }
-
+  
   for (unsigned I = 0, N = D.getNumTypeObjects(); I != N; ++I) {
     const DeclaratorChunk &Chunk = D.getTypeObject(I);
     switch (Chunk.Kind) {
     case DeclaratorChunk::Pointer:
     case DeclaratorChunk::Reference:
     case DeclaratorChunk::Paren:
-    case DeclaratorChunk::BlockPointer:
       // These declarator chunks cannot contain any parameter packs.
       break;
         
     case DeclaratorChunk::Array:
-      if (Chunk.Arr.NumElts &&
-          Chunk.Arr.NumElts->containsUnexpandedParameterPack())
-        return true;
-      break;
     case DeclaratorChunk::Function:
-      for (unsigned i = 0, e = Chunk.Fun.NumParams; i != e; ++i) {
-        ParmVarDecl *Param = cast<ParmVarDecl>(Chunk.Fun.Params[i].Param);
-        QualType ParamTy = Param->getType();
-        assert(!ParamTy.isNull() && "Couldn't parse type?");
-        if (ParamTy->containsUnexpandedParameterPack()) return true;
-      }
-
-      if (Chunk.Fun.getExceptionSpecType() == EST_Dynamic) {
-        for (unsigned i = 0; i != Chunk.Fun.NumExceptions; ++i) {
-          if (Chunk.Fun.Exceptions[i]
-                  .Ty.get()
-                  ->containsUnexpandedParameterPack())
-            return true;
-        }
-      } else if (Chunk.Fun.getExceptionSpecType() == EST_ComputedNoexcept &&
-                 Chunk.Fun.NoexceptExpr->containsUnexpandedParameterPack())
-        return true;
-
-      if (Chunk.Fun.hasTrailingReturnType()) {
-        QualType T = Chunk.Fun.getTrailingReturnType().get();
-	if (!T.isNull() && T->containsUnexpandedParameterPack())
-	  return true;
-      }
-      break;
-
+    case DeclaratorChunk::BlockPointer:
+      // Syntactically, these kinds of declarator chunks all come after the
+      // declarator-id (conceptually), so the parser should not invoke this
+      // routine at this time.
+      llvm_unreachable("Could not have seen this kind of declarator chunk");
+        
     case DeclaratorChunk::MemberPointer:
       if (Chunk.Mem.Scope().getScopeRep() &&
           Chunk.Mem.Scope().getScopeRep()->containsUnexpandedParameterPack())
@@ -805,7 +775,7 @@ namespace {
 // Callback to only accept typo corrections that refer to parameter packs.
 class ParameterPackValidatorCCC : public CorrectionCandidateCallback {
  public:
-  bool ValidateCandidate(const TypoCorrection &candidate) override {
+  virtual bool ValidateCandidate(const TypoCorrection &candidate) {
     NamedDecl *ND = candidate.getCorrectionDecl();
     return ND && ND->isParameterPack();
   }
@@ -836,8 +806,9 @@ ExprResult Sema::ActOnSizeofParameterPackExpr(Scope *S,
   //   The identifier in a sizeof... expression shall name a parameter pack.
   LookupResult R(*this, &Name, NameLoc, LookupOrdinaryName);
   LookupName(R, S);
-
-  NamedDecl *ParameterPack = nullptr;
+  
+  NamedDecl *ParameterPack = 0;
+  ParameterPackValidatorCCC Validator;
   switch (R.getResultKind()) {
   case LookupResult::Found:
     ParameterPack = R.getFoundDecl();
@@ -845,10 +816,9 @@ ExprResult Sema::ActOnSizeofParameterPackExpr(Scope *S,
     
   case LookupResult::NotFound:
   case LookupResult::NotFoundInCurrentInstantiation:
-    if (TypoCorrection Corrected =
-            CorrectTypo(R.getLookupNameInfo(), R.getLookupKind(), S, nullptr,
-                        llvm::make_unique<ParameterPackValidatorCCC>(),
-                        CTK_ErrorRecovery)) {
+    if (TypoCorrection Corrected = CorrectTypo(R.getLookupNameInfo(),
+                                               R.getLookupKind(), S, 0,
+                                               Validator)) {
       diagnoseTypo(Corrected,
                    PDiag(diag::err_sizeof_pack_no_pack_name_suggest) << &Name,
                    PDiag(diag::note_parameter_pack_here));
@@ -934,109 +904,4 @@ Sema::getTemplateArgumentPackExpansionPattern(
   }
 
   llvm_unreachable("Invalid TemplateArgument Kind!");
-}
-
-static void CheckFoldOperand(Sema &S, Expr *E) {
-  if (!E)
-    return;
-
-  E = E->IgnoreImpCasts();
-  if (isa<BinaryOperator>(E) || isa<AbstractConditionalOperator>(E)) {
-    S.Diag(E->getExprLoc(), diag::err_fold_expression_bad_operand)
-        << E->getSourceRange()
-        << FixItHint::CreateInsertion(E->getLocStart(), "(")
-        << FixItHint::CreateInsertion(E->getLocEnd(), ")");
-  }
-}
-
-ExprResult Sema::ActOnCXXFoldExpr(SourceLocation LParenLoc, Expr *LHS,
-                                  tok::TokenKind Operator,
-                                  SourceLocation EllipsisLoc, Expr *RHS,
-                                  SourceLocation RParenLoc) {
-  // LHS and RHS must be cast-expressions. We allow an arbitrary expression
-  // in the parser and reduce down to just cast-expressions here.
-  CheckFoldOperand(*this, LHS);
-  CheckFoldOperand(*this, RHS);
-
-  // [expr.prim.fold]p3:
-  //   In a binary fold, op1 and op2 shall be the same fold-operator, and
-  //   either e1 shall contain an unexpanded parameter pack or e2 shall contain
-  //   an unexpanded parameter pack, but not both.
-  if (LHS && RHS &&
-      LHS->containsUnexpandedParameterPack() ==
-          RHS->containsUnexpandedParameterPack()) {
-    return Diag(EllipsisLoc,
-                LHS->containsUnexpandedParameterPack()
-                    ? diag::err_fold_expression_packs_both_sides
-                    : diag::err_pack_expansion_without_parameter_packs)
-        << LHS->getSourceRange() << RHS->getSourceRange();
-  }
-
-  // [expr.prim.fold]p2:
-  //   In a unary fold, the cast-expression shall contain an unexpanded
-  //   parameter pack.
-  if (!LHS || !RHS) {
-    Expr *Pack = LHS ? LHS : RHS;
-    assert(Pack && "fold expression with neither LHS nor RHS");
-    if (!Pack->containsUnexpandedParameterPack())
-      return Diag(EllipsisLoc, diag::err_pack_expansion_without_parameter_packs)
-             << Pack->getSourceRange();
-  }
-
-  BinaryOperatorKind Opc = ConvertTokenKindToBinaryOpcode(Operator);
-  return BuildCXXFoldExpr(LParenLoc, LHS, Opc, EllipsisLoc, RHS, RParenLoc);
-}
-
-ExprResult Sema::BuildCXXFoldExpr(SourceLocation LParenLoc, Expr *LHS,
-                                  BinaryOperatorKind Operator,
-                                  SourceLocation EllipsisLoc, Expr *RHS,
-                                  SourceLocation RParenLoc) {
-  return new (Context) CXXFoldExpr(Context.DependentTy, LParenLoc, LHS,
-                                   Operator, EllipsisLoc, RHS, RParenLoc);
-}
-
-ExprResult Sema::BuildEmptyCXXFoldExpr(SourceLocation EllipsisLoc,
-                                       BinaryOperatorKind Operator) {
-  // [temp.variadic]p9:
-  //   If N is zero for a unary fold-expression, the value of the expression is
-  //       *   ->  1
-  //       +   ->  int()
-  //       &   ->  -1
-  //       |   ->  int()
-  //       &&  ->  true
-  //       ||  ->  false
-  //       ,   ->  void()
-  //   if the operator is not listed [above], the instantiation is ill-formed.
-  //
-  // Note that we need to use something like int() here, not merely 0, to
-  // prevent the result from being a null pointer constant.
-  QualType ScalarType;
-  switch (Operator) {
-  case BO_Add:
-    ScalarType = Context.IntTy;
-    break;
-  case BO_Mul:
-    return ActOnIntegerConstant(EllipsisLoc, 1);
-  case BO_Or:
-    ScalarType = Context.IntTy;
-    break;
-  case BO_And:
-    return CreateBuiltinUnaryOp(EllipsisLoc, UO_Minus,
-                                ActOnIntegerConstant(EllipsisLoc, 1).get());
-  case BO_LOr:
-    return ActOnCXXBoolLiteral(EllipsisLoc, tok::kw_false);
-  case BO_LAnd:
-    return ActOnCXXBoolLiteral(EllipsisLoc, tok::kw_true);
-  case BO_Comma:
-    ScalarType = Context.VoidTy;
-    break;
-
-  default:
-    return Diag(EllipsisLoc, diag::err_fold_expression_empty)
-        << BinaryOperator::getOpcodeStr(Operator);
-  }
-
-  return new (Context) CXXScalarValueInitExpr(
-      ScalarType, Context.getTrivialTypeSourceInfo(ScalarType, EllipsisLoc),
-      EllipsisLoc);
 }

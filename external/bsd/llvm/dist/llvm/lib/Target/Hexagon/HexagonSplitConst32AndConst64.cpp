@@ -17,10 +17,11 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "HexagonMachineFunctionInfo.h"
-#include "HexagonSubtarget.h"
+#define DEBUG_TYPE "xfer"
+
 #include "HexagonTargetMachine.h"
-#include "HexagonTargetObjectFile.h"
+#include "HexagonSubtarget.h"
+#include "HexagonMachineFunctionInfo.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/CodeGen/LatencyPriorityQueue.h"
 #include "llvm/CodeGen/MachineDominators.h"
@@ -32,33 +33,32 @@
 #include "llvm/CodeGen/ScheduleDAGInstrs.h"
 #include "llvm/CodeGen/ScheduleHazardRecognizer.h"
 #include "llvm/CodeGen/SchedulerRegistry.h"
-#include "llvm/Support/CommandLine.h"
+#include "llvm/Target/TargetMachine.h"
+#include "llvm/Target/TargetInstrInfo.h"
+#include "llvm/Target/TargetRegisterInfo.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/Debug.h"
+#include "llvm/Support/CommandLine.h"
 #include "llvm/Support/MathExtras.h"
-#include "llvm/Target/TargetInstrInfo.h"
-#include "llvm/Target/TargetMachine.h"
-#include "llvm/Target/TargetRegisterInfo.h"
 #include <map>
 
 using namespace llvm;
 
-#define DEBUG_TYPE "xfer"
-
 namespace {
 
 class HexagonSplitConst32AndConst64 : public MachineFunctionPass {
-  const HexagonTargetMachine &QTM;
+    const HexagonTargetMachine& QTM;
+    const HexagonSubtarget &QST;
 
  public:
     static char ID;
-    HexagonSplitConst32AndConst64(const HexagonTargetMachine &TM)
-        : MachineFunctionPass(ID), QTM(TM) {}
+    HexagonSplitConst32AndConst64(const HexagonTargetMachine& TM)
+      : MachineFunctionPass(ID), QTM(TM), QST(*TM.getSubtargetImpl()) {}
 
-    const char *getPassName() const override {
+    const char *getPassName() const {
       return "Hexagon Split Const32s and Const64s";
     }
-    bool runOnMachineFunction(MachineFunction &Fn) override;
+    bool runOnMachineFunction(MachineFunction &Fn);
 };
 
 
@@ -67,14 +67,7 @@ char HexagonSplitConst32AndConst64::ID = 0;
 
 bool HexagonSplitConst32AndConst64::runOnMachineFunction(MachineFunction &Fn) {
 
-  const HexagonTargetObjectFile &TLOF =
-      (const HexagonTargetObjectFile &)QTM.getSubtargetImpl()
-          ->getTargetLowering()
-          ->getObjFileLowering();
-  if (TLOF.IsSmallDataEnabled())
-    return true;
-
-  const TargetInstrInfo *TII = QTM.getSubtargetImpl()->getInstrInfo();
+  const TargetInstrInfo *TII = QTM.getInstrInfo();
 
   // Loop over all of the basic blocks
   for (MachineFunction::iterator MBBb = Fn.begin(), MBBe = Fn.end();
@@ -139,10 +132,10 @@ bool HexagonSplitConst32AndConst64::runOnMachineFunction(MachineFunction &Fn) {
       else if (Opc == Hexagon::CONST64_Int_Real) {
         int DestReg = MI->getOperand(0).getReg();
         int64_t ImmValue = MI->getOperand(1).getImm ();
-        unsigned DestLo = QTM.getSubtargetImpl()->getRegisterInfo()->getSubReg(
-            DestReg, Hexagon::subreg_loreg);
-        unsigned DestHi = QTM.getSubtargetImpl()->getRegisterInfo()->getSubReg(
-            DestReg, Hexagon::subreg_hireg);
+        unsigned DestLo =
+          QTM.getRegisterInfo()->getSubReg (DestReg, Hexagon::subreg_loreg);
+        unsigned DestHi =
+          QTM.getRegisterInfo()->getSubReg (DestReg, Hexagon::subreg_hireg);
 
         int32_t LowWord = (ImmValue & 0xFFFFFFFF);
         int32_t HighWord = (ImmValue >> 32) & 0xFFFFFFFF;

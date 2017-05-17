@@ -12,13 +12,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_LIB_IR_LEAKSCONTEXT_H
-#define LLVM_LIB_IR_LEAKSCONTEXT_H
-
 #include "llvm/ADT/SmallPtrSet.h"
-#include "llvm/IR/Metadata.h"
 #include "llvm/IR/Value.h"
-#include "llvm/Support/raw_ostream.h"
 
 namespace llvm {
 
@@ -32,17 +27,13 @@ struct PrinterTrait<Value> {
   static void print(const Value* P) { errs() << *P; }
 };
 
-template <> struct PrinterTrait<Metadata> {
-  static void print(const Metadata *P) { P->print(errs()); }
-};
-
 template <typename T>
 struct LeakDetectorImpl {
   explicit LeakDetectorImpl(const char* const name = "") : 
-    Cache(nullptr), Name(name) { }
+    Cache(0), Name(name) { }
 
   void clear() {
-    Cache = nullptr;
+    Cache = 0;
     Ts.clear();
   }
     
@@ -66,15 +57,15 @@ struct LeakDetectorImpl {
 
   void removeGarbage(const T* o) {
     if (o == Cache)
-      Cache = nullptr; // Cache hit
+      Cache = 0; // Cache hit
     else
       Ts.erase(o);
   }
 
   bool hasGarbage(const std::string& Message) {
-    addGarbage(nullptr); // Flush the Cache
+    addGarbage(0); // Flush the Cache
 
-    assert(!Cache && "No value should be cached anymore!");
+    assert(Cache == 0 && "No value should be cached anymore!");
 
     if (!Ts.empty()) {
       errs() << "Leaked " << Name << " objects found: " << Message << ":\n";
@@ -99,5 +90,3 @@ private:
 };
 
 }
-
-#endif

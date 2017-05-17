@@ -7,6 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+#define _LIBCPP_EXTERN_TEMPLATE(...) extern template __VA_ARGS__;
+
 // On Solaris, we need to define something to make the C99 parts of localeconv
 // visible.
 #ifdef __sun__
@@ -27,10 +29,10 @@
 #include "cwctype"
 #include "__sso_allocator"
 #if defined(_LIBCPP_MSVCRT) || defined(__MINGW32__)
-#include "support/win32/locale_win32.h"
-#elif !defined(__ANDROID__)
+#include <support/win32/locale_win32.h>
+#else // _LIBCPP_MSVCRT
 #include <langinfo.h>
-#endif
+#endif // !_LIBCPP_MSVCRT
 #include <stdlib.h>
 #include <stdio.h>
 
@@ -66,7 +68,7 @@ make(A0 a0)
 {
     static typename aligned_storage<sizeof(T)>::type buf;
     ::new (&buf) T(a0);
-    return *reinterpret_cast<T*>(&buf);
+    return *(T*)&buf;
 }
 
 template <class T, class A0, class A1>
@@ -76,7 +78,7 @@ make(A0 a0, A1 a1)
 {
     static typename aligned_storage<sizeof(T)>::type buf;
     ::new (&buf) T(a0, a1);
-    return *reinterpret_cast<T*>(&buf);
+    return *(T*)&buf;
 }
 
 template <class T, class A0, class A1, class A2>
@@ -86,7 +88,7 @@ make(A0 a0, A1 a1, A2 a2)
 {
     static typename aligned_storage<sizeof(T)>::type buf;
     ::new (&buf) T(a0, a1, a2);
-    return *reinterpret_cast<T*>(&buf);
+    return *(T*)&buf;
 }
 
 template <typename T, size_t N>
@@ -175,7 +177,7 @@ locale::__imp::__imp(size_t refs)
     facets_.clear();
     install(&make<_VSTD::collate<char> >(1u));
     install(&make<_VSTD::collate<wchar_t> >(1u));
-    install(&make<_VSTD::ctype<char> >(nullptr, false, 1u));
+    install(&make<_VSTD::ctype<char> >((ctype_base::mask*)0, false, 1u));
     install(&make<_VSTD::ctype<wchar_t> >(1u));
     install(&make<codecvt<char, char, mbstate_t> >(1u));
     install(&make<codecvt<wchar_t, char, mbstate_t> >(1u));
@@ -459,7 +461,7 @@ locale::__imp::make_classic()
 {
     // only one thread can get in here and it only gets in once
     static aligned_storage<sizeof(locale)>::type buf;
-    locale* c = reinterpret_cast<locale*>(&buf);
+    locale* c = (locale*)&buf;
     c->__locale_ = &make<__imp>(1u);
     return *c;
 }
@@ -477,7 +479,7 @@ locale::__imp::make_global()
     // only one thread can get in here and it only gets in once
     static aligned_storage<sizeof(locale)>::type buf;
     ::new (&buf) locale(locale::classic());
-    return *reinterpret_cast<locale*>(&buf);
+    return *(locale*)&buf;
 }
 
 locale&
@@ -575,10 +577,8 @@ locale::global(const locale& loc)
     locale& g = __global();
     locale r = g;
     g = loc;
-#ifndef __CloudABI__
     if (g.name() != "*")
         setlocale(LC_ALL, g.name().c_str());
-#endif
     return r;
 }
 
@@ -815,7 +815,7 @@ ctype<wchar_t>::do_toupper(char_type c) const
 #elif defined(__GLIBC__) || defined(__EMSCRIPTEN__) || defined(__NetBSD__) || defined(__minix)
     return isascii(c) ? ctype<char>::__classic_upper_table()[c] : c;
 #else
-    return (isascii(c) && iswlower_l(c, _LIBCPP_GET_C_LOCALE)) ? c-L'a'+L'A' : c;
+    return (isascii(c) && iswlower_l(c, __cloc())) ? c-L'a'+L'A' : c;
 #endif
 }
 
@@ -829,7 +829,7 @@ ctype<wchar_t>::do_toupper(char_type* low, const char_type* high) const
         *low = isascii(*low) ? ctype<char>::__classic_upper_table()[*low]
                              : *low;
 #else
-        *low = (isascii(*low) && islower_l(*low, _LIBCPP_GET_C_LOCALE)) ? (*low-L'a'+L'A') : *low;
+        *low = (isascii(*low) && islower_l(*low, __cloc())) ? (*low-L'a'+L'A') : *low;
 #endif
     return low;
 }
@@ -842,7 +842,7 @@ ctype<wchar_t>::do_tolower(char_type c) const
 #elif defined(__GLIBC__) || defined(__EMSCRIPTEN__) || defined(__NetBSD__) || defined(__minix)
     return isascii(c) ? ctype<char>::__classic_lower_table()[c] : c;
 #else
-    return (isascii(c) && isupper_l(c, _LIBCPP_GET_C_LOCALE)) ? c-L'A'+'a' : c;
+    return (isascii(c) && isupper_l(c, __cloc())) ? c-L'A'+'a' : c;
 #endif
 }
 
@@ -856,7 +856,7 @@ ctype<wchar_t>::do_tolower(char_type* low, const char_type* high) const
         *low = isascii(*low) ? ctype<char>::__classic_lower_table()[*low]
                              : *low;
 #else
-        *low = (isascii(*low) && isupper_l(*low, _LIBCPP_GET_C_LOCALE)) ? *low-L'A'+L'a' : *low;
+        *low = (isascii(*low) && isupper_l(*low, __cloc())) ? *low-L'A'+L'a' : *low;
 #endif
     return low;
 }
@@ -925,7 +925,7 @@ ctype<char>::do_toupper(char_type c) const
     return isascii(c) ? 
       static_cast<char>(__classic_upper_table()[static_cast<unsigned char>(c)]) : c;
 #else
-    return (isascii(c) && islower_l(c, _LIBCPP_GET_C_LOCALE)) ? c-'a'+'A' : c;
+    return (isascii(c) && islower_l(c, __cloc())) ? c-'a'+'A' : c;
 #endif
 }
 
@@ -936,13 +936,13 @@ ctype<char>::do_toupper(char_type* low, const char_type* high) const
 #ifdef _LIBCPP_HAS_DEFAULTRUNELOCALE
         *low = isascii(*low) ?
           static_cast<char>(_DefaultRuneLocale.__mapupper[static_cast<ptrdiff_t>(*low)]) : *low;
-#elif defined(__NetBSD__)
+#elif defined(__NetBSD__) || defined(__minix)
         *low = static_cast<char>(__classic_upper_table()[static_cast<unsigned char>(*low)]);
 #elif defined(__GLIBC__) || defined(__EMSCRIPTEN__)
         *low = isascii(*low) ?
           static_cast<char>(__classic_upper_table()[static_cast<size_t>(*low)]) : *low;
 #else
-        *low = (isascii(*low) && islower_l(*low, _LIBCPP_GET_C_LOCALE)) ? *low-'a'+'A' : *low;
+        *low = (isascii(*low) && islower_l(*low, __cloc())) ? *low-'a'+'A' : *low;
 #endif
     return low;
 }
@@ -959,7 +959,7 @@ ctype<char>::do_tolower(char_type c) const
     return isascii(c) ?
       static_cast<char>(__classic_lower_table()[static_cast<size_t>(c)]) : c;
 #else
-    return (isascii(c) && isupper_l(c, _LIBCPP_GET_C_LOCALE)) ? c-'A'+'a' : c;
+    return (isascii(c) && isupper_l(c, __cloc())) ? c-'A'+'a' : c;
 #endif
 }
 
@@ -974,7 +974,7 @@ ctype<char>::do_tolower(char_type* low, const char_type* high) const
 #elif defined(__GLIBC__) || defined(__EMSCRIPTEN__)
         *low = isascii(*low) ? static_cast<char>(__classic_lower_table()[static_cast<size_t>(*low)]) : *low;
 #else
-        *low = (isascii(*low) && isupper_l(*low, _LIBCPP_GET_C_LOCALE)) ? *low-'A'+'a' : *low;
+        *low = (isascii(*low) && isupper_l(*low, __cloc())) ? *low-'A'+'a' : *low;
 #endif
     return low;
 }
@@ -1018,87 +1018,6 @@ extern "C" const int ** __ctype_tolower_loc();
 extern "C" const int ** __ctype_toupper_loc();
 #endif
 
-#ifdef _LIBCPP_PROVIDES_DEFAULT_RUNE_TABLE
-const ctype<char>::mask*
-ctype<char>::classic_table()  _NOEXCEPT
-{
-    static _LIBCPP_CONSTEXPR const ctype<char>::mask builtin_table[table_size] = {
-        cntrl,                          cntrl,
-        cntrl,                          cntrl,
-        cntrl,                          cntrl,
-        cntrl,                          cntrl,
-        cntrl,                          cntrl | space | blank,
-        cntrl | space,                  cntrl | space,
-        cntrl | space,                  cntrl | space,
-        cntrl,                          cntrl,
-        cntrl,                          cntrl,
-        cntrl,                          cntrl,
-        cntrl,                          cntrl,
-        cntrl,                          cntrl,
-        cntrl,                          cntrl,
-        cntrl,                          cntrl,
-        cntrl,                          cntrl,
-        cntrl,                          cntrl,
-        space | blank | print,          punct | print,
-        punct | print,                  punct | print,
-        punct | print,                  punct | print,
-        punct | print,                  punct | print,
-        punct | print,                  punct | print,
-        punct | print,                  punct | print,
-        punct | print,                  punct | print,
-        punct | print,                  punct | print,
-        digit | print | xdigit,         digit | print | xdigit,
-        digit | print | xdigit,         digit | print | xdigit,
-        digit | print | xdigit,         digit | print | xdigit,
-        digit | print | xdigit,         digit | print | xdigit,
-        digit | print | xdigit,         digit | print | xdigit,
-        punct | print,                  punct | print,
-        punct | print,                  punct | print,
-        punct | print,                  punct | print,
-        punct | print,                  upper | xdigit | print | alpha,
-        upper | xdigit | print | alpha, upper | xdigit | print | alpha,
-        upper | xdigit | print | alpha, upper | xdigit | print | alpha,
-        upper | xdigit | print | alpha, upper | print | alpha,
-        upper | print | alpha,          upper | print | alpha,
-        upper | print | alpha,          upper | print | alpha,
-        upper | print | alpha,          upper | print | alpha,
-        upper | print | alpha,          upper | print | alpha,
-        upper | print | alpha,          upper | print | alpha,
-        upper | print | alpha,          upper | print | alpha,
-        upper | print | alpha,          upper | print | alpha,
-        upper | print | alpha,          upper | print | alpha,
-        upper | print | alpha,          upper | print | alpha,
-        upper | print | alpha,          punct | print,
-        punct | print,                  punct | print,
-        punct | print,                  punct | print,
-        punct | print,                  lower | xdigit | print | alpha,
-        lower | xdigit | print | alpha, lower | xdigit | print | alpha,
-        lower | xdigit | print | alpha, lower | xdigit | print | alpha,
-        lower | xdigit | print | alpha, lower | print | alpha,
-        lower | print | alpha,          lower | print | alpha,
-        lower | print | alpha,          lower | print | alpha,
-        lower | print | alpha,          lower | print | alpha,
-        lower | print | alpha,          lower | print | alpha,
-        lower | print | alpha,          lower | print | alpha,
-        lower | print | alpha,          lower | print | alpha,
-        lower | print | alpha,          lower | print | alpha,
-        lower | print | alpha,          lower | print | alpha,
-        lower | print | alpha,          lower | print | alpha,
-        lower | print | alpha,          punct | print,
-        punct | print,                  punct | print,
-        punct | print,                  cntrl,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-    };
-    return builtin_table;
-}
-#else
 const ctype<char>::mask*
 ctype<char>::classic_table()  _NOEXCEPT
 {
@@ -1107,7 +1026,7 @@ ctype<char>::classic_table()  _NOEXCEPT
 #elif defined(__NetBSD__) || defined(__minix)
     return _C_ctype_tab_ + 1;
 #elif defined(__GLIBC__)
-    return _LIBCPP_GET_C_LOCALE->__ctype_b;
+    return __cloc()->__ctype_b;
 #elif __sun__
     return __ctype_mask;
 #elif defined(_LIBCPP_MSVCRT) || defined(__MINGW32__)
@@ -1116,9 +1035,6 @@ ctype<char>::classic_table()  _NOEXCEPT
 // going to end up dereferencing it later...
 #elif defined(__EMSCRIPTEN__)
     return *__ctype_b_loc();
-#elif defined(_NEWLIB_VERSION)
-    // Newlib has a 257-entry table in ctype_.c, where (char)0 starts at [1].
-    return _ctype_ + 1;
 #elif defined(_AIX)
     return (const unsigned int *)__lc_ctype_ptr->obj->mask;
 #else
@@ -1130,19 +1046,18 @@ ctype<char>::classic_table()  _NOEXCEPT
     return NULL;
 #endif
 }
-#endif
 
 #if defined(__GLIBC__)
 const int*
 ctype<char>::__classic_lower_table() _NOEXCEPT
 {
-    return _LIBCPP_GET_C_LOCALE->__ctype_tolower;
+    return __cloc()->__ctype_tolower;
 }
 
 const int*
 ctype<char>::__classic_upper_table() _NOEXCEPT
 {
-    return _LIBCPP_GET_C_LOCALE->__ctype_toupper;
+    return __cloc()->__ctype_toupper;
 }
 #elif __NetBSD__ || defined(__minix)
 const short*
@@ -1265,16 +1180,16 @@ ctype_byname<wchar_t>::do_is(mask m, char_type c) const
 #else
     bool result = false;
     wint_t ch = static_cast<wint_t>(c);
-    if ((m & space) == space) result |= (iswspace_l(ch, __l) != 0);
-    if ((m & print) == print) result |= (iswprint_l(ch, __l) != 0);
-    if ((m & cntrl) == cntrl) result |= (iswcntrl_l(ch, __l) != 0);
-    if ((m & upper) == upper) result |= (iswupper_l(ch, __l) != 0);
-    if ((m & lower) == lower) result |= (iswlower_l(ch, __l) != 0);
-    if ((m & alpha) == alpha) result |= (iswalpha_l(ch, __l) != 0);
-    if ((m & digit) == digit) result |= (iswdigit_l(ch, __l) != 0);
-    if ((m & punct) == punct) result |= (iswpunct_l(ch, __l) != 0);
-    if ((m & xdigit) == xdigit) result |= (iswxdigit_l(ch, __l) != 0);
-    if ((m & blank) == blank) result |= (iswblank_l(ch, __l) != 0);
+    if (m & space) result |= (iswspace_l(ch, __l) != 0);
+    if (m & print) result |= (iswprint_l(ch, __l) != 0);
+    if (m & cntrl) result |= (iswcntrl_l(ch, __l) != 0);
+    if (m & upper) result |= (iswupper_l(ch, __l) != 0);
+    if (m & lower) result |= (iswlower_l(ch, __l) != 0);
+    if (m & alpha) result |= (iswalpha_l(ch, __l) != 0);
+    if (m & digit) result |= (iswdigit_l(ch, __l) != 0);
+    if (m & punct) result |= (iswpunct_l(ch, __l) != 0);
+    if (m & xdigit) result |= (iswxdigit_l(ch, __l) != 0);
+    if (m & blank) result |= (iswblank_l(ch, __l) != 0);
     return result;
 #endif
 }
@@ -1292,32 +1207,22 @@ ctype_byname<wchar_t>::do_is(const char_type* low, const char_type* high, mask* 
             wint_t ch = static_cast<wint_t>(*low);
             if (iswspace_l(ch, __l))
                 *vec |= space;
-#ifndef _LIBCPP_CTYPE_MASK_IS_COMPOSITE_PRINT
             if (iswprint_l(ch, __l))
                 *vec |= print;
-#endif
             if (iswcntrl_l(ch, __l))
                 *vec |= cntrl;
             if (iswupper_l(ch, __l))
                 *vec |= upper;
             if (iswlower_l(ch, __l))
                 *vec |= lower;
-#ifndef _LIBCPP_CTYPE_MASK_IS_COMPOSITE_ALPHA
             if (iswalpha_l(ch, __l))
                 *vec |= alpha;
-#endif
             if (iswdigit_l(ch, __l))
                 *vec |= digit;
             if (iswpunct_l(ch, __l))
                 *vec |= punct;
-#ifndef _LIBCPP_CTYPE_MASK_IS_COMPOSITE_XDIGIT
             if (iswxdigit_l(ch, __l))
                 *vec |= xdigit;
-#endif
-#if !defined(__sun__)
-            if (iswblank_l(ch, __l))
-                *vec |= blank;
-#endif
         }
     }
     return low;
@@ -1333,16 +1238,16 @@ ctype_byname<wchar_t>::do_scan_is(mask m, const char_type* low, const char_type*
             break;
 #else
         wint_t ch = static_cast<wint_t>(*low);
-        if ((m & space) == space && iswspace_l(ch, __l)) break;
-        if ((m & print) == print && iswprint_l(ch, __l)) break;
-        if ((m & cntrl) == cntrl && iswcntrl_l(ch, __l)) break;
-        if ((m & upper) == upper && iswupper_l(ch, __l)) break;
-        if ((m & lower) == lower && iswlower_l(ch, __l)) break;
-        if ((m & alpha) == alpha && iswalpha_l(ch, __l)) break;
-        if ((m & digit) == digit && iswdigit_l(ch, __l)) break;
-        if ((m & punct) == punct && iswpunct_l(ch, __l)) break;
-        if ((m & xdigit) == xdigit && iswxdigit_l(ch, __l)) break;
-        if ((m & blank) == blank && iswblank_l(ch, __l)) break;
+        if (m & space && iswspace_l(ch, __l)) break;
+        if (m & print && iswprint_l(ch, __l)) break;
+        if (m & cntrl && iswcntrl_l(ch, __l)) break;
+        if (m & upper && iswupper_l(ch, __l)) break;
+        if (m & lower && iswlower_l(ch, __l)) break;
+        if (m & alpha && iswalpha_l(ch, __l)) break;
+        if (m & digit && iswdigit_l(ch, __l)) break;
+        if (m & punct && iswpunct_l(ch, __l)) break;
+        if (m & xdigit && iswxdigit_l(ch, __l)) break;
+        if (m & blank && iswblank_l(ch, __l)) break;
 #endif
     }
     return low;
@@ -1358,16 +1263,16 @@ ctype_byname<wchar_t>::do_scan_not(mask m, const char_type* low, const char_type
             break;
 #else
         wint_t ch = static_cast<wint_t>(*low);
-        if ((m & space) == space && iswspace_l(ch, __l)) continue;
-        if ((m & print) == print && iswprint_l(ch, __l)) continue;
-        if ((m & cntrl) == cntrl && iswcntrl_l(ch, __l)) continue;
-        if ((m & upper) == upper && iswupper_l(ch, __l)) continue;
-        if ((m & lower) == lower && iswlower_l(ch, __l)) continue;
-        if ((m & alpha) == alpha && iswalpha_l(ch, __l)) continue;
-        if ((m & digit) == digit && iswdigit_l(ch, __l)) continue;
-        if ((m & punct) == punct && iswpunct_l(ch, __l)) continue;
-        if ((m & xdigit) == xdigit && iswxdigit_l(ch, __l)) continue;
-        if ((m & blank) == blank && iswblank_l(ch, __l)) continue;
+        if (m & space && iswspace_l(ch, __l)) continue;
+        if (m & print && iswprint_l(ch, __l)) continue;
+        if (m & cntrl && iswcntrl_l(ch, __l)) continue;
+        if (m & upper && iswupper_l(ch, __l)) continue;
+        if (m & lower && iswlower_l(ch, __l)) continue;
+        if (m & alpha && iswalpha_l(ch, __l)) continue;
+        if (m & digit && iswdigit_l(ch, __l)) continue;
+        if (m & punct && iswpunct_l(ch, __l)) continue;
+        if (m & xdigit && iswxdigit_l(ch, __l)) continue;
+        if (m & blank && iswblank_l(ch, __l)) continue;
         break;
 #endif
     }
@@ -1659,7 +1564,7 @@ codecvt<wchar_t, char, mbstate_t>::do_in(state_type& st,
             frm_nxt = frm;
             return frm_nxt == frm_end ? ok : partial;
         }
-        if (n == size_t(-1))
+        if (n == 0)
             return error;
         to_nxt += n;
         if (to_nxt == to_end)
@@ -1709,23 +1614,22 @@ codecvt<wchar_t, char, mbstate_t>::do_unshift(state_type& st,
 int
 codecvt<wchar_t, char, mbstate_t>::do_encoding() const  _NOEXCEPT
 {
-#ifndef __CloudABI__
 #ifdef _LIBCPP_LOCALE__L_EXTENSIONS
-    if (mbtowc_l(nullptr, nullptr, MB_LEN_MAX, __l) != 0)
+    if (mbtowc_l((wchar_t*) 0, (const char*) 0, MB_LEN_MAX, __l) == 0)
 #else
-    if (__mbtowc_l(nullptr, nullptr, MB_LEN_MAX, __l) != 0)
+    if (__mbtowc_l((wchar_t*) 0, (const char*) 0, MB_LEN_MAX, __l) == 0)
 #endif
-        return -1;
-#endif
-
-    // stateless encoding
+    {
+        // stateless encoding
 #ifdef _LIBCPP_LOCALE__L_EXTENSIONS
-    if (__l == 0 || MB_CUR_MAX_L(__l) == 1)  // there are no known constant length encodings
+        if (__l == 0 || MB_CUR_MAX_L(__l) == 1)  // there are no known constant length encodings
 #else
-    if (__l == 0 || __mb_cur_max_l(__l) == 1)  // there are no known constant length encodings
+        if (__l == 0 || __mb_cur_max_l(__l) == 1)  // there are no known constant length encodings
 #endif
-        return 1;                // which take more than 1 char to form a wchar_t
-    return 0;
+            return 1;                // which take more than 1 char to form a wchar_t
+         return 0;
+    }
+    return -1;
 }
 
 bool
@@ -1839,8 +1743,8 @@ utf16_to_utf8(const uint16_t* frm, const uint16_t* frm_end, const uint16_t*& frm
                 return codecvt_base::error;
             if (to_end-to_nxt < 4)
                 return codecvt_base::partial;
-            if (((((wc1 & 0x03C0UL) >> 6) + 1) << 16) +
-                ((wc1 & 0x003FUL) << 10) + (wc2 & 0x03FF) > Maxcode)
+            if ((((((unsigned long)wc1 & 0x03C0) >> 6) + 1) << 16) +
+                (((unsigned long)wc1 & 0x003F) << 10) + (wc2 & 0x03FF) > Maxcode)
                 return codecvt_base::error;
             ++frm_nxt;
             uint8_t z = ((wc1 & 0x03C0) >> 6) + 1;
@@ -1916,8 +1820,8 @@ utf16_to_utf8(const uint32_t* frm, const uint32_t* frm_end, const uint32_t*& frm
                 return codecvt_base::error;
             if (to_end-to_nxt < 4)
                 return codecvt_base::partial;
-            if (((((wc1 & 0x03C0UL) >> 6) + 1) << 16) +
-                ((wc1 & 0x003FUL) << 10) + (wc2 & 0x03FF) > Maxcode)
+            if ((((((unsigned long)wc1 & 0x03C0) >> 6) + 1) << 16) +
+                (((unsigned long)wc1 & 0x003F) << 10) + (wc2 & 0x03FF) > Maxcode)
                 return codecvt_base::error;
             ++frm_nxt;
             uint8_t z = ((wc1 & 0x03C0) >> 6) + 1;
@@ -2040,9 +1944,9 @@ utf8_to_utf16(const uint8_t* frm, const uint8_t* frm_end, const uint8_t*& frm_nx
                 return codecvt_base::error;
             if (to_end-to_nxt < 2)
                 return codecvt_base::partial;
-            if ((((c1 & 7UL) << 18) +
-                ((c2 & 0x3FUL) << 12) +
-                ((c3 & 0x3FUL) << 6) + (c4 & 0x3F)) > Maxcode)
+            if (((((unsigned long)c1 & 7) << 18) +
+                (((unsigned long)c2 & 0x3F) << 12) +
+                (((unsigned long)c3 & 0x3F) << 6) + (c4 & 0x3F)) > Maxcode)
                 return codecvt_base::error;
             *to_nxt = static_cast<uint16_t>(
                     0xD800
@@ -2161,9 +2065,9 @@ utf8_to_utf16(const uint8_t* frm, const uint8_t* frm_end, const uint8_t*& frm_nx
                 return codecvt_base::error;
             if (to_end-to_nxt < 2)
                 return codecvt_base::partial;
-            if ((((c1 & 7UL) << 18) +
-                ((c2 & 0x3FUL) << 12) +
-                ((c3 & 0x3FUL) << 6) + (c4 & 0x3F)) > Maxcode)
+            if (((((unsigned long)c1 & 7) << 18) +
+                (((unsigned long)c2 & 0x3F) << 12) +
+                (((unsigned long)c3 & 0x3F) << 6) + (c4 & 0x3F)) > Maxcode)
                 return codecvt_base::error;
             *to_nxt = static_cast<uint32_t>(
                     0xD800
@@ -2270,9 +2174,9 @@ utf8_to_utf16_length(const uint8_t* frm, const uint8_t* frm_end,
             }
             if ((c3 & 0xC0) != 0x80 || (c4 & 0xC0) != 0x80)
                 break;
-            if ((((c1 & 7UL) << 18) +
-                ((c2 & 0x3FUL) << 12) +
-                ((c3 & 0x3FUL) << 6) + (c4 & 0x3F)) > Maxcode)
+            if (((((unsigned long)c1 & 7) << 18) +
+                (((unsigned long)c2 & 0x3F) << 12) +
+                (((unsigned long)c3 & 0x3F) << 6) + (c4 & 0x3F)) > Maxcode)
                 break;
             ++nchar16_t;
             frm_nxt += 4;

@@ -1,4 +1,4 @@
-//===- MCInstPrinter.h - MCInst to target assembly syntax -------*- C++ -*-===//
+//===-- MCInstPrinter.h - Convert an MCInst to target assembly syntax -----===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -57,9 +57,8 @@ protected:
 public:
   MCInstPrinter(const MCAsmInfo &mai, const MCInstrInfo &mii,
                 const MCRegisterInfo &mri)
-    : CommentStream(nullptr), MAI(mai), MII(mii), MRI(mri),
-      AvailableFeatures(0), UseMarkup(0), PrintImmHex(0),
-      PrintHexStyle(HexStyle::C) {}
+    : CommentStream(0), MAI(mai), MII(mii), MRI(mri), AvailableFeatures(0),
+      UseMarkup(0), PrintImmHex(0), PrintHexStyle(HexStyle::C) {}
 
   virtual ~MCInstPrinter();
 

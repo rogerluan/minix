@@ -58,8 +58,8 @@ void Option::dump() const {
 
   if (Info->Prefixes) {
     llvm::errs() << " Prefixes:[";
-    for (const char * const *Pre = Info->Prefixes; *Pre != nullptr; ++Pre) {
-      llvm::errs() << '"' << *Pre << (*(Pre + 1) == nullptr ? "\"" : "\", ");
+    for (const char * const *Pre = Info->Prefixes; *Pre != 0; ++Pre) {
+      llvm::errs() << '"' << *Pre << (*(Pre + 1) == 0 ? "\"" : "\", ");
     }
     llvm::errs() << ']';
   }
@@ -116,7 +116,7 @@ Arg *Option::accept(const ArgList &Args,
   switch (getKind()) {
   case FlagClass: {
     if (ArgSize != strlen(Args.getArgString(Index)))
-      return nullptr;
+      return 0;
 
     Arg *A = new Arg(UnaliasedOption, Spelling, Index++);
     if (getAliasArgs()) {
@@ -166,12 +166,11 @@ Arg *Option::accept(const ArgList &Args,
     // Matches iff this is an exact match.
     // FIXME: Avoid strlen.
     if (ArgSize != strlen(Args.getArgString(Index)))
-      return nullptr;
+      return 0;
 
     Index += 2;
-    if (Index > Args.getNumInputArgStrings() ||
-        Args.getArgString(Index - 1) == nullptr)
-      return nullptr;
+    if (Index > Args.getNumInputArgStrings())
+      return 0;
 
     return new Arg(UnaliasedOption, Spelling,
                    Index - 2, Args.getArgString(Index - 1));
@@ -179,11 +178,11 @@ Arg *Option::accept(const ArgList &Args,
     // Matches iff this is an exact match.
     // FIXME: Avoid strlen.
     if (ArgSize != strlen(Args.getArgString(Index)))
-      return nullptr;
+      return 0;
 
     Index += 1 + getNumArgs();
     if (Index > Args.getNumInputArgStrings())
-      return nullptr;
+      return 0;
 
     Arg *A = new Arg(UnaliasedOption, Spelling, Index - 1 - getNumArgs(),
                       Args.getArgString(Index - getNumArgs()));
@@ -201,9 +200,8 @@ Arg *Option::accept(const ArgList &Args,
 
     // Otherwise it must be separate.
     Index += 2;
-    if (Index > Args.getNumInputArgStrings() ||
-        Args.getArgString(Index - 1) == nullptr)
-      return nullptr;
+    if (Index > Args.getNumInputArgStrings())
+      return 0;
 
     return new Arg(UnaliasedOption, Spelling,
                    Index - 2, Args.getArgString(Index - 1));
@@ -211,9 +209,8 @@ Arg *Option::accept(const ArgList &Args,
   case JoinedAndSeparateClass:
     // Always matches.
     Index += 2;
-    if (Index > Args.getNumInputArgStrings() ||
-        Args.getArgString(Index - 1) == nullptr)
-      return nullptr;
+    if (Index > Args.getNumInputArgStrings())
+      return 0;
 
     return new Arg(UnaliasedOption, Spelling, Index - 2,
                    Args.getArgString(Index - 2) + ArgSize,
@@ -222,10 +219,9 @@ Arg *Option::accept(const ArgList &Args,
     // Matches iff this is an exact match.
     // FIXME: Avoid strlen.
     if (ArgSize != strlen(Args.getArgString(Index)))
-      return nullptr;
+      return 0;
     Arg *A = new Arg(UnaliasedOption, Spelling, Index++);
-    while (Index < Args.getNumInputArgStrings() &&
-           Args.getArgString(Index) != nullptr)
+    while (Index < Args.getNumInputArgStrings())
       A->getValues().push_back(Args.getArgString(Index++));
     return A;
   }

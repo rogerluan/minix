@@ -8,7 +8,12 @@ Created:	March 15, 1994 by Philip Homburg <philip@f-mnx.phicoh.com>
 */
 
 #include <minix/drivers.h>
-#include <minix/netdriver.h>
+
+#include <net/gen/ether.h>
+#include <net/gen/eth_io.h>
+#if __minix_vmd
+#include "config.h"
+#endif
 
 #include "local.h"
 #include "dp8390.h"
@@ -139,11 +144,11 @@ dpeth_t *dep;
 		if (dep->de_16bit)
 		{
 			word= inw_ne(dep, NE_DATA);
-			dep->de_address.na_addr[i]= word;
+			dep->de_address.ea_addr[i]= word;
 		}
 		else
 		{
-			dep->de_address.na_addr[i] = inb_ne(dep, NE_DATA);
+			dep->de_address.ea_addr[i] = inb_ne(dep, NE_DATA);
 		}
 	}
 	dep->de_data_port= dep->de_base_port + NE_DATA;
@@ -180,14 +185,14 @@ dpeth_t *dep;
 	if (!debug)
 	{
 		printf("%s: NE%d000 at %X:%d\n",
-			netdriver_name(), dep->de_16bit ? 2 : 1,
+			dep->de_name, dep->de_16bit ? 2 : 1,
 			dep->de_base_port, dep->de_irq);
 	}
 	else
 	{
 		printf("%s: Novell NE%d000 ethernet card at I/O address "
 			"0x%X, memory size 0x%X, irq %d\n",
-			netdriver_name(), dep->de_16bit ? 2 : 1,
+			dep->de_name, dep->de_16bit ? 2 : 1,
 			dep->de_base_port, dep->de_ramsize, dep->de_irq);
 	}
 }
@@ -226,7 +231,7 @@ u8_t *pat;
 		if (debug)
 		{
 			printf("%s: NE1000 remote DMA test failed\n",
-				netdriver_name());
+				dep->de_name);
 		}
 		return 0;
 	}
@@ -280,7 +285,7 @@ u8_t *pat;
 		if (debug)
 		{
 			printf("%s: NE2000 remote DMA test failed\n",
-				netdriver_name());
+				dep->de_name);
 		}
 		return 0;
 	}

@@ -17,8 +17,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_CODEGEN_LIVEINTERVALANALYSIS_H
-#define LLVM_CODEGEN_LIVEINTERVALANALYSIS_H
+#ifndef LLVM_CODEGEN_LIVEINTERVAL_ANALYSIS_H
+#define LLVM_CODEGEN_LIVEINTERVAL_ANALYSIS_H
 
 #include "llvm/ADT/IndexedMap.h"
 #include "llvm/ADT/SmallVector.h"
@@ -45,11 +45,11 @@ namespace llvm {
   class TargetInstrInfo;
   class TargetRegisterClass;
   class VirtRegMap;
-  class MachineBlockFrequencyInfo;
 
   class LiveIntervals : public MachineFunctionPass {
     MachineFunction* MF;
     MachineRegisterInfo* MRI;
+    const TargetMachine* TM;
     const TargetRegisterInfo* TRI;
     const TargetInstrInfo* TII;
     AliasAnalysis *AA;
@@ -100,9 +100,7 @@ namespace llvm {
     virtual ~LiveIntervals();
 
     // Calculate the spill weight to assign to a single instruction.
-    static float getSpillWeight(bool isDef, bool isUse,
-                                const MachineBlockFrequencyInfo *MBFI,
-                                const MachineInstr *Instr);
+    static float getSpillWeight(bool isDef, bool isUse, BlockFrequency freq);
 
     LiveInterval &getInterval(unsigned Reg) {
       if (hasInterval(Reg))
@@ -136,7 +134,7 @@ namespace llvm {
     // Interval removal.
     void removeInterval(unsigned Reg) {
       delete VirtRegIntervals[Reg];
-      VirtRegIntervals[Reg] = nullptr;
+      VirtRegIntervals[Reg] = 0;
     }
 
     /// Given a register and an instruction, adds a live segment from that
@@ -152,13 +150,7 @@ namespace llvm {
     /// Return true if the interval may have been separated into multiple
     /// connected components.
     bool shrinkToUses(LiveInterval *li,
-                      SmallVectorImpl<MachineInstr*> *dead = nullptr);
-
-    /// Specialized version of
-    /// shrinkToUses(LiveInterval *li, SmallVectorImpl<MachineInstr*> *dead)
-    /// that works on a subregister live range and only looks at uses matching
-    /// the lane mask of the subregister range.
-    void shrinkToUses(LiveInterval::SubRange &SR, unsigned Reg);
+                      SmallVectorImpl<MachineInstr*> *dead = 0);
 
     /// extendToIndices - Extend the live range of LI to reach all points in
     /// Indices. The points in the Indices array must be jointly dominated by
@@ -170,21 +162,14 @@ namespace llvm {
     /// See also LiveRangeCalc::extend().
     void extendToIndices(LiveRange &LR, ArrayRef<SlotIndex> Indices);
 
-
-    /// If @p LR has a live value at @p Kill, prune its live range by removing
-    /// any liveness reachable from Kill. Add live range end points to
+    /// pruneValue - If an LI value is live at Kill, prune its live range by
+    /// removing any liveness reachable from Kill. Add live range end points to
     /// EndPoints such that extendToIndices(LI, EndPoints) will reconstruct the
     /// value's live range.
     ///
     /// Calling pruneValue() and extendToIndices() can be used to reconstruct
     /// SSA form after adding defs to a virtual register.
-    void pruneValue(LiveRange &LR, SlotIndex Kill,
-                    SmallVectorImpl<SlotIndex> *EndPoints);
-
-    /// Subregister aware variant of pruneValue(LiveRange &LR, SlotIndex Kill,
-    /// SmallVectorImpl<SlotIndex> &EndPoints). Prunes the value in the main
-    /// range and all sub ranges.
-    void pruneValue(LiveInterval &LI, SlotIndex Kill,
+    void pruneValue(LiveInterval *LI, SlotIndex Kill,
                     SmallVectorImpl<SlotIndex> *EndPoints);
 
     SlotIndexes *getSlotIndexes() const {
@@ -267,14 +252,14 @@ namespace llvm {
 
     VNInfo::Allocator& getVNInfoAllocator() { return VNInfoAllocator; }
 
-    void getAnalysisUsage(AnalysisUsage &AU) const override;
-    void releaseMemory() override;
+    virtual void getAnalysisUsage(AnalysisUsage &AU) const;
+    virtual void releaseMemory();
 
     /// runOnMachineFunction - pass entry point
-    bool runOnMachineFunction(MachineFunction&) override;
+    virtual bool runOnMachineFunction(MachineFunction&);
 
     /// print - Implement the dump method.
-    void print(raw_ostream &O, const Module* = nullptr) const override;
+    virtual void print(raw_ostream &O, const Module* = 0) const;
 
     /// intervalIsInOneMBB - If LI is confined to a single basic block, return
     /// a pointer to that block.  If LI is live in to or out of any block,
@@ -406,16 +391,6 @@ namespace llvm {
     /// Compute RegMaskSlots and RegMaskBits.
     void computeRegMasks();
 
-    /// Walk the values in @p LI and check for dead values:
-    /// - Dead PHIDef values are marked as unused.
-    /// - Dead operands are marked as such.
-    /// - Completely dead machine instructions are added to the @p dead vector
-    ///   if it is not nullptr.
-    /// Returns true if any PHI value numbers have been removed which may
-    /// have separated the interval into multiple connected components.
-    bool computeDeadValues(LiveInterval &LI,
-                           SmallVectorImpl<MachineInstr*> *dead);
-
     static LiveInterval* createInterval(unsigned Reg);
 
     void printInstrs(raw_ostream &O) const;
@@ -424,16 +399,6 @@ namespace llvm {
     void computeLiveInRegUnits();
     void computeRegUnitRange(LiveRange&, unsigned Unit);
     void computeVirtRegInterval(LiveInterval&);
-
-
-    /// Helper function for repairIntervalsInRange(), walks backwards and
-    /// creates/modifies live segments in @p LR to match the operands found.
-    /// Only full operands or operands with subregisters matching @p LaneMask
-    /// are considered.
-    void repairOldRegInRange(MachineBasicBlock::iterator Begin,
-                             MachineBasicBlock::iterator End,
-                             const SlotIndex endIdx, LiveRange &LR,
-                             unsigned Reg, unsigned LaneMask = ~0u);
 
     class HMEditor;
   };

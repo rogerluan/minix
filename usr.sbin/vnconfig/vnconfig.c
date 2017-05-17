@@ -1,4 +1,4 @@
-/*	$NetBSD: vnconfig.c,v 1.42 2014/05/23 20:50:16 dholland Exp $	*/
+/*	$NetBSD: vnconfig.c,v 1.41 2013/06/09 13:25:40 christos Exp $	*/
 
 /*-
  * Copyright (c) 1997 The NetBSD Foundation, Inc.
@@ -149,7 +149,7 @@ start_service(char *dev)
 
 	snprintf(cmd, sizeof(cmd),
 	    "%s up %s/vnd -label vnd%u -args instance=%u -dev %s",
-	    _PATH_MINIX_SERVICE, _PATH_DRIVERS, n, n, dev);
+	    _PATH_SERVICE, _PATH_DRIVERS, n, n, dev);
 
 	status = system(cmd);
 
@@ -183,8 +183,8 @@ stop_service(int fd, char *dev)
 		if (verbose)
 			printf("%s: stopping driver\n", dev);
 
-		snprintf(cmd, sizeof(cmd), "%s down vnd%u",
-		    _PATH_MINIX_SERVICE, vnu.vnu_unit);
+		snprintf(cmd, sizeof(cmd), "%s down vnd%u", _PATH_SERVICE,
+		    vnu.vnu_unit);
 
 		system(cmd);
 	}
@@ -445,7 +445,7 @@ config(char *dev, char *file, char *geom, int action)
 #if defined(__minix)
 		if (rv && stop)
 			stop_service(fd, rdev);
-#endif /* defined(__minix) */
+#endif /* !defined(__minix) */
 		if (rv != 0)
 			errx(1, "invalid geometry: %s", geom);
 		vndio.vnd_flags = VNDIOF_HASGEOM;
@@ -497,15 +497,14 @@ config(char *dev, char *file, char *geom, int action)
 		int	ffd;
 
 		ffd = open(file, readonly ? O_RDONLY : O_RDWR);
-		if (ffd < 0) {
+		if (ffd < 0)
 			warn("%s", file);
-			rv = -1;
-		} else {
+		else {
 #if !defined(__minix)
 			(void) close(ffd);
 #else
 			vndio.vnd_fildes = ffd;
-#endif /* !defined(__minix) */
+#endif /* defined(__minix) */
 
 			rv = ioctl(fd, VNDIOCSET, &vndio);
 #ifdef VNDIOOCSET

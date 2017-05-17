@@ -8,14 +8,4 @@ module StdDef {
     header "other.h"
     export *
   }
-
-  module PtrDiffT {
-    header "ptrdiff_t.h"
-    export *
-  }
-
-  module IncludeAgain {
-    header "include_again.h"
-    export *
-  }
 }

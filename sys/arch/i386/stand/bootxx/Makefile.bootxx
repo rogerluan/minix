@@ -1,10 +1,13 @@
-# $NetBSD: Makefile.bootxx,v 1.49 2015/08/20 11:38:27 uebayasi Exp $
+# $NetBSD: Makefile.bootxx,v 1.46 2013/11/01 00:18:24 christos Exp $
 
 S=	${.CURDIR}/../../../../..
 
 AFLAGS.bootxx.S= ${${ACTIVE_CC} == "clang":?-no-integrated-as:}
 AFLAGS.label.S= ${${ACTIVE_CC} == "clang":?-no-integrated-as:}
 AFLAGS.pbr.S= ${${ACTIVE_CC} == "clang":?-no-integrated-as:}
+.if defined(__MINIX)
+AFLAGS.bootxx.S+= -Wa,--divide
+.endif
 
 PIE_CFLAGS=
 PIE_LDFLAGS=
@@ -29,7 +32,6 @@ SRCS= pbr.S label.S bootxx.S boot1.c
 STRIPFLAG=	# nothing
 
 LIBCRT0=	# nothing
-LIBCRTI=	# nothing
 LIBCRTBEGIN=	# nothing
 LIBCRTEND=	# nothing
 LIBC=		# nothing
@@ -118,7 +120,7 @@ USE_BITCODE=no
 
 # use MINIX minc
 LIBKERN= ${DESTDIR}/usr/lib/libminc.a
-.endif # !defined(__MINIX)
+.endif
 
 LDSCRIPT ?= $S/arch/i386/conf/stand.ldscript
 
@@ -131,7 +133,7 @@ LIBLIST= ${LIBI386} ${LIBSA} ${LIBKERN} ${LIBI386} ${LIBSA}
 
 CLEANFILES+= ${PROG}.sym ${PROG}.map
 
-${PROG}: ${OBJS} ${LIBLIST} ${LDSCRIPT}
+${PROG}: ${OBJS} ${LIBLIST}
 	${_MKTARGET_LINK}
 .if defined(__MINIX)
 	${CC} -o ${PROG}.sym ${LDFLAGS} -Wl,--section-start=.text=${PRIMARY_LOAD_ADDRESS} \
@@ -139,7 +141,7 @@ ${PROG}: ${OBJS} ${LIBLIST} ${LDSCRIPT}
 .else
 	${CC} -o ${PROG}.sym ${LDFLAGS} -Wl,-Ttext,${PRIMARY_LOAD_ADDRESS} \
 		-T ${LDSCRIPT} -Wl,-Map,${PROG}.map -Wl,-cref ${OBJS} ${LIBLIST}
-.endif # defined(__MINIX)
+.endif
 	${OBJCOPY} -O binary ${PROG}.sym ${PROG}
 	@ sz=$$(${TOOL_STAT} -f '%z' ${PROG}); \
 	if [ "$$sz" -gt "${BOOTXX_MAXSIZE}" ]; then \

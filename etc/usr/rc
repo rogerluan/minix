@@ -1,7 +1,6 @@
 # /usr/etc/rc - continued system initialization.
 
 RANDOM_FILE=/usr/adm/random.dat
-TCPISN_FILE=/usr/adm/tcpisn.dat
 LOCAL_FILE=/usr/etc/rc.local
 
 ARCH="`sysenv arch`"
@@ -26,10 +25,13 @@ fi
 bootcd="`/bin/sysenv bootcd`"
 
 case "$#:$1" in
-1:start|1:stop)
+1:autoboot)
+    action=start
+    ;;
+1:start|1:stop|1:down)
     action=$1
     ;;
-*)  echo >&2 "Usage: $0 [start|stop]"
+*)  echo >&2 "Usage: $0 autoboot|start|stop|down"
     exit 1
 esac
 
@@ -57,6 +59,7 @@ daemonize()
     # Function to start a daemon, if it exists.
     local IFS=':'
     local name="$1"
+    test "$1" = tcpd && name="$2"
 
     for dir in $PATH
     do
@@ -94,7 +97,7 @@ up()
     for dir in $SERVICES_DIRS
     do	bin=$dir/$service
 	if [ -x $bin -a -z "$found" ]
-	then	minix-service $opt up $bin "$@" 
+	then	service $opt up $bin "$@" 
     		echo -n " $service"
 		found=yes
 	fi
@@ -104,74 +107,12 @@ up()
     fi
 }
 
-# Print a list of labels of detected PCI ethernet hardware devices.
-get_pci_eth_labels()
-{
-	# We need to match all PCI ethernet hardware devices against all
-	# drivers.  For performance reasons, we construct a lookup table on the
-	# fly here.  In order to do that, we need to give both a list of all
-	# available network drivers with PCI device IDs (part 1 of the code
-	# below) and a list of all actually present ethernet hardware devices
-	# (part 2) to an awk script (part 3).  The awk script can tell the
-	# difference between the list entries based on whether there is a
-	# leading space on the line.  For part 2, we grab only devices that are
-	# in PCI class 2 (network controller) subclass 0 (ethernet controller).
-
-	# Part 1: collect all network drivers with supported PCI IDs
-	(for dir in $SYSTEM_CONF_DIRS; do
-		for f in $dir/$SYSTEM_CONF_SUBDIR/*; do
-			if [ -f $f ]; then
-				printconfig $f | grep ',type net.*,pci device'
-			fi
-		done
-	done | sed 's/^service \([^,]*\),.*,pci device/ \1/g';
-	# Part 2: grab all PCI IDs of ethernet hardware devices (class 2/0)
-	cat /proc/pci | grep '^[^ ]* 2/0/' | cut -d' ' -f3) | awk '
-	# Part 3: first construct a PCI-ID-to-driver table based on the lines
-	# produced by part 1 (with leading space), which each contain one
-	# driver name followed by one or more PCI IDs; then, go through all
-	# the ethernet hardware devices found in part 2 (no leading space) and
-	# if if there is a hit in the table, print the driver label to use.
-	/^ / { for (i=2;i<=NF;i++) drivers[$(i)]=$1 }
-	/^[^ ]/ {
-		# There is a bit of a discrepancy between output formats of
-		# /proc/pci and printconfig: the former uses
-		# "vid:did:sub_vid:sub_did" whereas the latter uses
-		# "vid:did/sub_vid:sub_did".  No problem; in the common case
-		# (= no sub IDs used) we need to split the PCI ID anyway.
-		if (split($1,id,":") >= 4) {
-			# Try a full "vid:did:sub_vid:sub_did" match.
-			name=drivers[id[1]":"id[2]"/"id[3]":"id[4]]
-		}
-		# No sub IDs or no match found?  Try a "vid:did" match.
-		if (!name) name=drivers[id[1]":"id[2]]
-		# If found, print the resulting label (<name>_<instance>)
-		if (name) {
-			print name"_"(instance[name]+0)
-			instance[name]++
-		}
-	}
-	'
-}
-
-# Print a list of labels of ethernet hardware devices that have been detected
-# to be present on the system.  Each label has the format '<driver>_<instance>'
-# where <driver> is the file name of the driver (in /service) and <instance> is
-# a zero-based, per-driver instance number of the device.
 get_eth_labels() {
-	# For now, do autodetection only on platforms with (x86) PCI support.
-	# For (x86) ISA drivers, a custom network setting script is required;
-	# see below.  For ARM platforms, the driver (if any) is started based
-	# on the board; there is no device autodetection.
-	if [ -f /proc/pci ]; then
-		get_pci_eth_labels
-	fi
-
-	# Add any network drivers manually configured in /usr/etc/rc.local by
-	# the netconf(8) utility.
-	if [ -n "$netdriver" ]; then
-		echo "${netdriver}_0"
-	fi
+  # Filter out the non-vlan ethernet entries from inet.conf.
+  # Produce as output a list of "drivername_instancenr"-formatted labels.
+  sed 's/\008/ /g' /etc/inet.conf | \
+    sed -n 's/^ *eth[0-9][0-9]* *\([^ ][^ ]*\) *\([0-9][0-9]*\).*$/\1_\2/p' | \
+    grep -v '^vlan_'
 }
 
 # Detect expansion boards on the BeagleBone and load the proper drivers.
@@ -217,8 +158,10 @@ capemgr() {
     done
 }
 
+DAEMONS=/etc/rc.daemons
+
 case $action in
-start)
+start|autoboot)
     # Select console font.
     test -f /etc/font && loadfont /etc/font </dev/console
 
@@ -235,55 +178,27 @@ start)
     	cat < $RANDOM_FILE >/dev/random
     	# overwrite $RANDOM_FILE. We don't want to use this data again
     	dd if=/dev/random of=$RANDOM_FILE bs=1024 count=1 2> /dev/null
-    else
-	# We couldn't find the old state to restart from, so use a binary
-	# file and the current date instead, even if this is less than ideal.
-	cat /bin/sh >> /dev/urandom
-	date >> /dev/urandom
     fi
 
-    # start network driver instances for all detected ethernet devices
+    # start network driver instances for all configured ethernet devices
     for label in $(get_eth_labels); do
         driver=$(echo $label | sed 's/\(.*\)_.*/\1/')
         instance=$(echo $label | sed 's/.*_//')
-        eval arg=\$${driver}_arg
+        eval arg=\$${label}_arg
         if [ ! -z "$arg" ]; then arg=" $arg"; fi
         arg="-args \"instance=$instance$arg\""
         eval up $driver -label $label $arg -period 5HZ
     done
-
-    # pty needs to know the "tty" group ID
-    up pty -dev /dev/ptmx -args "gid=`stat -f '%g' /dev/ptmx`"
-
-    # Start the LWIP service.
-    up lwip -dev /dev/bpf -script /etc/rs.lwip
-
-    # Load stable seed for TCP Initial Sequence Number generation (RFC 6528).
-    # The idea here is that (especially) after a system crash, the seed stays
-    # the same, so as to make it unlikely that incoming packets for connections
-    # from before the crash are accepted on connections after the crash.
-    TCPISN_LEN=$(sysctl -n net.inet.tcp.isn_secret | awk '{print length/2}')
-    if [ ! -f $TCPISN_FILE ]; then
-	# If the /usr file system is read-only, we cannot create the file.  In
-	# that case, we draw a temporary secret from the random service.
-	if grep ' \/usr .*rw.*' /etc/mtab >/dev/null; then
-	    dd if=/dev/random of=$TCPISN_FILE bs=$TCPISN_LEN count=1 2>/dev/null
-	else
-	    TCPISN_FILE=/dev/random
-	fi
+    if [ X`/bin/sysenv lwip` = Xyes ]
+    then
+	up lwip -script /etc/rs.inet -dev /dev/ip
+    else
+	up inet -script /etc/rs.inet -dev /dev/ip
     fi
-    sysctl -qw net.inet.tcp.isn_secret=`dd if=$TCPISN_FILE bs=$TCPISN_LEN \
-	count=1 2>/dev/null | hexdump -v -e '/1 "%02x"'` 2>/dev/null
 
-    # LWIP does not block until all network drivers have fully initialized and
-    # reported back to LWIP.  That may prevent proper configuration of the
-    # corresponding interfaces a bit later.  Sleep up to five seconds waiting
-    # for all registered network drivers to initialize and report to LWIP.
-    for i in 1 2 3 4 5; do
-	[ $(sysctl -n minix.lwip.drivers.pending) -gt 0 ] && sleep 1
-    done
+    up pty -dev /dev/ptyp0
 
-    up uds
+    up uds -dev /dev/uds
 
     up -n ipc
 
@@ -293,12 +208,15 @@ start)
     then
 	up -n printer -dev /dev/lp -period 10HZ
 	# start VirtualBox time sync driver if the device is there
-	if grep '^[^ ]* [^ ]* 80EE:CAFE[^ ]* ' /proc/pci >/dev/null; then
+	if grep '^[^ ]* [^ ]* 80EE:CAFE ' /proc/pci >/dev/null; then
 		up -n vbox -period 10HZ
 	fi
     fi
 
     echo .
+
+    # Network initialization.
+    (: </dev/tcp) 2>/dev/null && net=t	# Is there a TCP/IP server?
 
     echo -n "Starting daemons:"
     daemonize update
@@ -312,7 +230,9 @@ start)
 		ln -s /tmp/log /var/log || true
 		. /etc/rc.cd
     fi
-
+    # syslogd has not been started yet
+    rm -f /var/run/syslogd.pid
+    daemonize syslogd
     echo .
 
     # i2c only supported on ARM at the moment
@@ -344,9 +264,6 @@ start)
 			# Start TPS65217 driver for power management.
 			up tps65217 -label tps65217.1.24 \
 			        -args 'bus=1 address=0x24'
-
-			# Start ethernet driver.
-			up lan8710a -label lan8710a_0 -args 'instance=0'
 
 			# check for the presence of a display
 			eepromread -f /dev/i2c-2 -n > /dev/null 2>&1
@@ -393,9 +310,6 @@ start)
 			# Start TDA19988 driver for reading EDID.
 			up tda19988 -label tda19988.1.3470 -args \
 				'cec_bus=1 cec_address=0x34 hdmi_bus=1 hdmi_address=0x70'
-
-			# Start ethernet driver.
-			up lan8710a -label lan8710a_0 -args 'instance=0'
 
 			# start frame buffer
 			#up fb -dev /dev/fb0 -args edid.0=tda19988.1.3470
@@ -444,8 +358,42 @@ start)
 	echo .
     fi
 
-    # Load the stored hostname into the sysctl database.
-    test -r /etc/hostname.file && hostname $(cat /etc/hostname.file)
+    if [ "$net" ]
+    then
+	if [ -f /etc/rc.net ]
+	then
+	    # Let a customized TCP/IP initialization script figure it out.
+	    . /etc/rc.net
+	else
+	    # Standard network daemons.
+    	    echo -n "Starting networking:"
+	    if grep -s 'psip0.*default' /etc/inet.conf >/dev/null
+	    then	ifconfig -h 10.0.0.1
+	    else
+		    if [ X`/bin/sysenv lwip` = Xyes ]
+		    then
+			dhcpd --lwip &
+			echo -n " dhcpd"
+		    else
+			daemonize dhcpd
+		    fi
+	    fi
+	    daemonize nonamed -L
+	    if [ -f "$DAEMONS" ]
+	    then	. "$DAEMONS"
+	    fi
+	    # The last daemon has been started, so close the list:
+	    echo .
+	fi
+    fi
+
+    if [ "$net" ]
+    then
+	# Get the nodename from the DNS and set it.
+	trap '' 2
+	intr -t 20 hostaddr -h
+	trap 2
+    fi
 
     # Recover files being edited when the system crashed.
     test -f /usr/bin/elvprsv && elvprsv /usr/tmp/elv*
@@ -453,7 +401,7 @@ start)
     # Run the daily cleanup on systems that are not on at night.
     test -f /usr/etc/daily && sh /usr/etc/daily boot &
 ;;
-stop)
+stop|down)
     	# Save random data, if /usr is mounted rw.
 	if grep ' \/usr .*rw.*' /etc/mtab >/dev/null
 	then
@@ -465,3 +413,24 @@ stop)
 	  fi
 	fi
 esac
+
+d=
+# Let packages run their own scripts
+for d in /usr/local/etc/rc.d /usr/pkg/etc/rc.d
+do
+if [ -d "$d" -a -z "$bootcd" ]
+then	( if cd $d
+	then
+		echo -n "Local packages ($action): "
+		for f in *
+		do
+			if [ -x "$f" ]
+			then	echo -n "$f "
+				sh "$f" "$action"
+			fi
+		done
+		echo " done."
+	fi
+	)
+fi
+done

@@ -1,4 +1,4 @@
-/*	$NetBSD: chfs_vnops.c,v 1.28 2015/04/20 23:03:09 riastradh Exp $	*/
+/*	$NetBSD: chfs_vnops.c,v 1.18 2013/10/20 17:18:38 christos Exp $	*/
 
 /*-
  * Copyright (c) 2010 Department of Software Engineering,
@@ -53,9 +53,9 @@
 int
 chfs_lookup(void *v)
 {
-	struct vnode *dvp = ((struct vop_lookup_v2_args *) v)->a_dvp;
-	struct vnode **vpp = ((struct vop_lookup_v2_args *) v)->a_vpp;
-	struct componentname *cnp = ((struct vop_lookup_v2_args *) v)->a_cnp;
+	struct vnode *dvp = ((struct vop_lookup_args *) v)->a_dvp;
+	struct vnode **vpp = ((struct vop_lookup_args *) v)->a_vpp;
+	struct componentname *cnp = ((struct vop_lookup_args *) v)->a_cnp;
 
 	int error;
 	struct chfs_inode* ip;
@@ -88,7 +88,8 @@ chfs_lookup(void *v)
 	 * directory/name couple is already in the cache. */
 	if (cache_lookup(dvp, cnp->cn_nameptr, cnp->cn_namelen,
 			 cnp->cn_nameiop, cnp->cn_flags, NULL, vpp)) {
-		return (*vpp == NULLVP ? ENOENT : 0);
+		error = *vpp == NULLVP ? ENOENT : 0;
+		goto out;
 	}
 
 	ip = VTOI(dvp);
@@ -160,15 +161,12 @@ chfs_lookup(void *v)
 	}
 
 out:
-	/* If there were no errors, *vpp cannot be NULL. */
-	KASSERT(IFF(error == 0, *vpp != NULL));
+	/* If there were no errors, *vpp cannot be null and it must be
+	 * locked. */
+	KASSERT(IFF(error == 0, *vpp != NULL && VOP_ISLOCKED(*vpp)));
 	KASSERT(VOP_ISLOCKED(dvp));
 
-	if (error)
-		return error;
-	if (*vpp != dvp)
-		VOP_UNLOCK(*vpp);
-	return 0;
+	return error;
 }
 
 /* --------------------------------------------------------------------- */
@@ -176,7 +174,7 @@ out:
 int
 chfs_create(void *v)
 {
-	struct vop_create_v3_args /* {
+	struct vop_create_args /* {
 				  struct vnode *a_dvp;
 				  struct vnode **a_vpp;
 				  struct componentname *a_cnp;
@@ -209,10 +207,10 @@ chfs_create(void *v)
 int
 chfs_mknod(void *v)
 {
-	struct vnode *dvp = ((struct vop_mknod_v3_args *) v)->a_dvp;
-	struct vnode **vpp = ((struct vop_mknod_v3_args *) v)->a_vpp;
-	struct componentname *cnp = ((struct vop_mknod_v3_args *) v)->a_cnp;
-	struct vattr *vap = ((struct vop_mknod_v3_args *) v)->a_vap;
+	struct vnode *dvp = ((struct vop_mknod_args *) v)->a_dvp;
+	struct vnode **vpp = ((struct vop_mknod_args *) v)->a_vpp;
+	struct componentname *cnp = ((struct vop_mknod_args *) v)->a_cnp;
+	struct vattr *vap = ((struct vop_mknod_args *) v)->a_vap;
 	int mode, err = 0;
 	struct chfs_inode *ip;
 	struct vnode *vp;
@@ -694,13 +692,13 @@ chfs_read(void *v)
 		    bytesinfile);
 
 		if (chfs_lblktosize(chmp, nextlbn) >= ip->size) {
-			error = bread(vp, lbn, size, 0, &bp);
+			error = bread(vp, lbn, size, NOCRED, 0, &bp);
 			dbg("after bread\n");
 		} else {
 			int nextsize = chfs_blksize(chmp, ip, nextlbn);
 			dbg("size: %ld\n", size);
 			error = breadn(vp, lbn,
-			    size, &nextlbn, &nextsize, 1, 0, &bp);
+			    size, &nextlbn, &nextsize, 1, NOCRED, 0, &bp);
 			dbg("after breadN\n");
 		}
 		if (error)
@@ -1075,9 +1073,9 @@ out:
 int
 chfs_link(void *v)
 {
-	struct vnode *dvp = ((struct vop_link_v2_args *) v)->a_dvp;
-	struct vnode *vp = ((struct vop_link_v2_args *) v)->a_vp;
-	struct componentname *cnp = ((struct vop_link_v2_args *) v)->a_cnp;
+	struct vnode *dvp = ((struct vop_link_args *) v)->a_dvp;
+	struct vnode *vp = ((struct vop_link_args *) v)->a_vp;
+	struct componentname *cnp = ((struct vop_link_args *) v)->a_cnp;
 
 	struct chfs_inode *ip, *parent;
 	int error = 0;
@@ -1106,6 +1104,7 @@ chfs_link(void *v)
 	if (dvp != vp)
 		VOP_UNLOCK(vp);
 out:
+	vput(dvp);
 	return error;
 }
 
@@ -1180,10 +1179,10 @@ out_unlocked:
 int
 chfs_mkdir(void *v)
 {
-	struct vnode *dvp = ((struct vop_mkdir_v3_args *) v)->a_dvp;
-	struct vnode **vpp = ((struct vop_mkdir_v3_args *)v)->a_vpp;
-	struct componentname *cnp = ((struct vop_mkdir_v3_args *) v)->a_cnp;
-	struct vattr *vap = ((struct vop_mkdir_v3_args *) v)->a_vap;
+	struct vnode *dvp = ((struct vop_mkdir_args *) v)->a_dvp;
+	struct vnode **vpp = ((struct vop_mkdir_args *)v)->a_vpp;
+	struct componentname *cnp = ((struct vop_mkdir_args *) v)->a_cnp;
+	struct vattr *vap = ((struct vop_mkdir_args *) v)->a_vap;
 	dbg("mkdir()\n");
 
 	int mode;
@@ -1245,11 +1244,11 @@ out:
 int
 chfs_symlink(void *v)
 {
-	struct vnode *dvp = ((struct vop_symlink_v3_args *) v)->a_dvp;
-	struct vnode **vpp = ((struct vop_symlink_v3_args *) v)->a_vpp;
-	struct componentname *cnp = ((struct vop_symlink_v3_args *) v)->a_cnp;
-	struct vattr *vap = ((struct vop_symlink_v3_args *) v)->a_vap;
-	char *target = ((struct vop_symlink_v3_args *) v)->a_target;
+	struct vnode *dvp = ((struct vop_symlink_args *) v)->a_dvp;
+	struct vnode **vpp = ((struct vop_symlink_args *) v)->a_vpp;
+	struct componentname *cnp = ((struct vop_symlink_args *) v)->a_cnp;
+	struct vattr *vap = ((struct vop_symlink_args *) v)->a_vap;
+	char *target = ((struct vop_symlink_args *) v)->a_target;
 
 	struct ufsmount *ump;
 	struct chfs_mount *chmp;
@@ -1309,13 +1308,14 @@ chfs_symlink(void *v)
 
 		uvm_vnp_setsize(vp, len);
 	} else {
-		err = ufs_bufio(UIO_WRITE, vp, target, len, (off_t)0,
-		    IO_NODELOCKED, cnp->cn_cred, (size_t *)0, NULL);
+		err = vn_rdwr(UIO_WRITE, vp, target, len, (off_t)0,
+		    UIO_SYSSPACE, IO_NODELOCKED, cnp->cn_cred,
+		    (size_t *)0, NULL);
 	}
 
 out:
 	if (err)
-		vrele(vp);
+		vput(vp);
 
 	return (err);
 }
@@ -1452,7 +1452,7 @@ chfs_readlink(void *v)
 		return (0);
 	}
 
-	return (UFS_BUFRD(vp, uio, 0, cred));
+	return (VOP_READ(vp, uio, 0, cred));
 }
 
 /* --------------------------------------------------------------------- */
@@ -1512,11 +1512,11 @@ chfs_reclaim(void *v)
 	}
 
 	cache_purge(vp);
-	vcache_remove(vp->v_mount, &ip->ino, sizeof(ip->ino));
 	if (ip->devvp) {
 		vrele(ip->devvp);
 		ip->devvp = 0;
 	}
+	chfs_ihashrem(ip);
 
 	genfs_node_destroy(vp);
 	pool_put(&chfs_inode_pool, vp->v_data);
@@ -1613,8 +1613,6 @@ const struct vnodeopv_entry_desc chfs_vnodeop_entries[] =
 		{ &vop_setattr_desc, chfs_setattr },
 		{ &vop_read_desc, chfs_read },
 		{ &vop_write_desc, chfs_write },
-		{ &vop_fallocate_desc, genfs_eopnotsupp },
-		{ &vop_fdiscard_desc, genfs_eopnotsupp },
 		{ &vop_ioctl_desc, genfs_enoioctl },
 		{ &vop_fcntl_desc, genfs_fcntl },
 		{ &vop_poll_desc, genfs_poll },
@@ -1671,8 +1669,6 @@ const struct vnodeopv_entry_desc chfs_specop_entries[] =
 		{ &vop_setattr_desc, chfs_setattr },
 		{ &vop_read_desc, chfs_read },
 		{ &vop_write_desc, chfs_write },
-		{ &vop_fallocate_desc, spec_fallocate },
-		{ &vop_fdiscard_desc, spec_fdiscard },
 		{ &vop_ioctl_desc, spec_ioctl },
 		{ &vop_fcntl_desc, genfs_fcntl },
 		{ &vop_poll_desc, spec_poll },
@@ -1727,8 +1723,6 @@ const struct vnodeopv_entry_desc chfs_fifoop_entries[] =
 		{ &vop_setattr_desc, chfs_setattr },
 		{ &vop_read_desc, ufsfifo_read },
 		{ &vop_write_desc, ufsfifo_write },
-		{ &vop_fallocate_desc, vn_fifo_bypass },
-		{ &vop_fdiscard_desc, vn_fifo_bypass },
 		{ &vop_ioctl_desc, vn_fifo_bypass },
 		{ &vop_fcntl_desc, genfs_fcntl },
 		{ &vop_poll_desc, vn_fifo_bypass },

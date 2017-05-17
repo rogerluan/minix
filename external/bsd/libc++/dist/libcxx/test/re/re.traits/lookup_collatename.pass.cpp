@@ -7,8 +7,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-// REQUIRES: locale.cs_CZ.ISO8859-2
-
 // <regex>
 
 // template <class charT> struct regex_traits;

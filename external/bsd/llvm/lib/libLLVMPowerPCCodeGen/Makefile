@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.10 2015/01/29 20:41:35 joerg Exp $
+#	$NetBSD: Makefile,v 1.8 2013/09/02 14:34:56 joerg Exp $
 
 LIB=	LLVMPowerPCCodeGen
 
@@ -9,12 +9,14 @@ LIB=	LLVMPowerPCCodeGen
 SRCS+=	PPCAsmPrinter.cpp \
 	PPCBranchSelector.cpp \
 	PPCCTRLoops.cpp \
+	PPCCodeEmitter.cpp \
 	PPCHazardRecognizers.cpp \
 	PPCInstrInfo.cpp \
 	PPCISelDAGToDAG.cpp \
 	PPCISelLowering.cpp \
 	PPCFastISel.cpp \
 	PPCFrameLowering.cpp \
+	PPCJITInfo.cpp \
 	PPCMachineFunctionInfo.cpp \
 	PPCMCInstLower.cpp \
 	PPCRegisterInfo.cpp \
@@ -27,16 +29,15 @@ SRCS+=	PPCAsmPrinter.cpp \
 TABLEGEN_SRC=		PPC.td
 TABLEGEN_INCLUDES=	-I${LLVM_SRCDIR}/lib/Target/PowerPC
 TABLEGEN_OUTPUT= \
-	PPCGenAsmMatcher.inc|-gen-asm-matcher \
 	PPCGenAsmWriter.inc|-gen-asm-writer \
-	PPCGenCallingConv.inc|-gen-callingconv \
+	PPCGenAsmMatcher.inc|-gen-asm-matcher \
 	PPCGenCodeEmitter.inc|-gen-emitter \
-	PPCGenDAGISel.inc|-gen-dag-isel \
-	PPCGenDisassemblerTables.inc|-gen-disassembler \
 	PPCGenFastISel.inc|-gen-fast-isel \
-	PPCGenInstrInfo.inc|-gen-instr-info \
-	PPCGenMCCodeEmitter.inc|-gen-emitter \
+	PPCGenMCCodeEmitter.inc|-gen-emitter^-mc-emitter \
 	PPCGenRegisterInfo.inc|-gen-register-info \
+	PPCGenInstrInfo.inc|-gen-instr-info \
+	PPCGenDAGISel.inc|-gen-dag-isel \
+	PPCGenCallingConv.inc|-gen-callingconv \
 	PPCGenSubtargetInfo.inc|-gen-subtarget
 
 .include "${.PARSEDIR}/../../tablegen.mk"

@@ -1,12 +1,10 @@
-#	$NetBSD: Makefile,v 1.2 2014/05/30 18:28:15 joerg Exp $
+#	$NetBSD: Makefile,v 1.1 2013/09/29 12:12:00 joerg Exp $
 
 LIB=	lldbCommands
 
 .include <bsd.init.mk>
 
 .PATH: ${LLDB_SRCDIR}/source/Commands
-
-CPPFLAGS.CommandObjectGUI.cpp+= -DLLDB_DISABLE_CURSES
 
 SRCS+=	CommandCompletions.cpp \
 	CommandObjectApropos.cpp \
@@ -17,7 +15,6 @@ SRCS+=	CommandCompletions.cpp \
 	CommandObjectDisassemble.cpp \
 	CommandObjectExpression.cpp \
 	CommandObjectFrame.cpp \
-	CommandObjectGUI.cpp \
 	CommandObjectHelp.cpp \
 	CommandObjectLog.cpp \
 	CommandObjectMemory.cpp \

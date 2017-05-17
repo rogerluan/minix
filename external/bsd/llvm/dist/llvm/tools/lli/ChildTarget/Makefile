@@ -12,8 +12,6 @@ TOOLNAME := lli-child-target
 
 include $(LEVEL)/Makefile.config
 
-LINK_COMPONENTS := support
-
-SOURCES := ChildTarget.cpp ../RemoteTarget.cpp
+LINK_COMPONENTS :=
 
 include $(LLVM_SRC_ROOT)/Makefile.rules

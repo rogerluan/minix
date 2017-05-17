@@ -13,8 +13,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_CLANG_LIB_INDEX_SIMPLEFORMATCONTEXT_H
-#define LLVM_CLANG_LIB_INDEX_SIMPLEFORMATCONTEXT_H
+#ifndef LLVM_CLANG_SIMPLE_FORM_CONTEXT_H
+#define LLVM_CLANG_SIMPLE_FORM_CONTEXT_H
 
 #include "clang/Basic/Diagnostic.h"
 #include "clang/Basic/DiagnosticOptions.h"
@@ -37,7 +37,7 @@ public:
   SimpleFormatContext(LangOptions Options)
       : DiagOpts(new DiagnosticOptions()),
         Diagnostics(new DiagnosticsEngine(new DiagnosticIDs,
-                                          DiagOpts.get())),
+                                          DiagOpts.getPtr())),
         Files((FileSystemOptions())),
         Sources(*Diagnostics, Files),
         Rewrite(Sources, Options) {
@@ -47,12 +47,12 @@ public:
   ~SimpleFormatContext() { }
 
   FileID createInMemoryFile(StringRef Name, StringRef Content) {
-    std::unique_ptr<llvm::MemoryBuffer> Source =
+    const llvm::MemoryBuffer *Source =
         llvm::MemoryBuffer::getMemBuffer(Content);
     const FileEntry *Entry =
         Files.getVirtualFile(Name, Source->getBufferSize(), 0);
-    Sources.overrideFileContents(Entry, std::move(Source));
-    assert(Entry != nullptr);
+    Sources.overrideFileContents(Entry, Source, true);
+    assert(Entry != NULL);
     return Sources.createFileID(Entry, SourceLocation(), SrcMgr::C_User);
   }
 

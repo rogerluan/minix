@@ -18,11 +18,11 @@
 #include "SystemZMCInstLower.h"
 #include "llvm/CodeGen/MachineModuleInfoImpls.h"
 #include "llvm/CodeGen/TargetLoweringObjectFileImpl.h"
-#include "llvm/IR/Mangler.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCInstBuilder.h"
 #include "llvm/MC/MCStreamer.h"
 #include "llvm/Support/TargetRegistry.h"
+#include "llvm/Target/Mangler.h"
 
 using namespace llvm;
 
@@ -151,20 +151,11 @@ void SystemZAsmPrinter::EmitInstruction(const MachineInstr *MI) {
 
 #undef LOWER_HIGH
 
-  case SystemZ::Serialize:
-    if (Subtarget->hasFastSerialization())
-      LoweredMI = MCInstBuilder(SystemZ::AsmBCR)
-        .addImm(14).addReg(SystemZ::R0D);
-    else
-      LoweredMI = MCInstBuilder(SystemZ::AsmBCR)
-        .addImm(15).addReg(SystemZ::R0D);
-    break;
-
   default:
     Lower.lower(MI, LoweredMI);
     break;
   }
-  EmitToStreamer(OutStreamer, LoweredMI);
+  OutStreamer.EmitInstruction(LoweredMI);
 }
 
 // Convert a SystemZ-specific constant pool modifier into the associated
@@ -179,14 +170,14 @@ getModifierVariantKind(SystemZCP::SystemZCPModifier Modifier) {
 
 void SystemZAsmPrinter::
 EmitMachineConstantPoolValue(MachineConstantPoolValue *MCPV) {
-  auto *ZCPV = static_cast<SystemZConstantPoolValue*>(MCPV);
+  SystemZConstantPoolValue *ZCPV =
+    static_cast<SystemZConstantPoolValue*>(MCPV);
 
   const MCExpr *Expr =
     MCSymbolRefExpr::Create(getSymbol(ZCPV->getGlobalValue()),
                             getModifierVariantKind(ZCPV->getModifier()),
                             OutContext);
-  uint64_t Size =
-      TM.getSubtargetImpl()->getDataLayout()->getTypeAllocSize(ZCPV->getType());
+  uint64_t Size = TM.getDataLayout()->getTypeAllocSize(ZCPV->getType());
 
   OutStreamer.EmitValue(Expr, Size);
 }
@@ -221,7 +212,7 @@ bool SystemZAsmPrinter::PrintAsmMemoryOperand(const MachineInstr *MI,
 
 void SystemZAsmPrinter::EmitEndOfAsmFile(Module &M) {
   if (Subtarget->isTargetELF()) {
-    auto &TLOFELF =
+    const TargetLoweringObjectFileELF &TLOFELF =
       static_cast<const TargetLoweringObjectFileELF &>(getObjFileLowering());
 
     MachineModuleInfoELF &MMIELF = MMI->getObjFileInfo<MachineModuleInfoELF>();
@@ -230,7 +221,7 @@ void SystemZAsmPrinter::EmitEndOfAsmFile(Module &M) {
     MachineModuleInfoELF::SymbolListTy Stubs = MMIELF.GetGVStubList();
     if (!Stubs.empty()) {
       OutStreamer.SwitchSection(TLOFELF.getDataRelSection());
-      const DataLayout *TD = TM.getSubtargetImpl()->getDataLayout();
+      const DataLayout *TD = TM.getDataLayout();
 
       for (unsigned i = 0, e = Stubs.size(); i != e; ++i) {
         OutStreamer.EmitLabel(Stubs[i].first);

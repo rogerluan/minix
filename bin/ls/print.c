@@ -1,4 +1,4 @@
-/*	$NetBSD: print.c,v 1.55 2014/05/10 09:39:18 martin Exp $	*/
+/*	$NetBSD: print.c,v 1.52 2013/05/02 22:43:55 zafer Exp $	*/
 
 /*
  * Copyright (c) 1989, 1993, 1994
@@ -37,7 +37,7 @@
 #if 0
 static char sccsid[] = "@(#)print.c	8.5 (Berkeley) 7/28/94";
 #else
-__RCSID("$NetBSD: print.c,v 1.55 2014/05/10 09:39:18 martin Exp $");
+__RCSID("$NetBSD: print.c,v 1.52 2013/05/02 22:43:55 zafer Exp $");
 #endif
 #endif /* not lint */
 
@@ -46,7 +46,6 @@ __RCSID("$NetBSD: print.c,v 1.55 2014/05/10 09:39:18 martin Exp $");
 
 #include <err.h>
 #include <errno.h>
-#include <inttypes.h>
 #include <fts.h>
 #include <grp.h>
 #include <pwd.h>
@@ -73,39 +72,6 @@ static time_t	now;
 
 #define	IS_NOPRINT(p)	((p)->fts_number == NO_PRINT)
 
-static int
-safe_printpath(const FTSENT *p) {
-	int chcnt;
-
-	if (f_fullpath) {
-		chcnt = safe_print(p->fts_path);
-		chcnt += safe_print("/");
-	} else
-		chcnt = 0;
-	return chcnt + safe_print(p->fts_name);
-}
-
-static int
-printescapedpath(const FTSENT *p) {
-	int chcnt;
-
-	if (f_fullpath) {
-		chcnt = printescaped(p->fts_path);
-		chcnt += printescaped("/");
-	} else
-		chcnt = 0;
-
-	return chcnt + printescaped(p->fts_name);
-}
-
-static int
-printpath(const FTSENT *p) {
-	if (f_fullpath)
-		return printf("%s/%s", p->fts_path, p->fts_name);
-	else
-		return printf("%s", p->fts_name);
-}
-
 void
 printscol(DISPLAY *dp)
 {
@@ -129,15 +95,15 @@ printlong(DISPLAY *dp)
 
 	now = time(NULL);
 
-	if (!f_leafonly)
-		printtotal(dp);		/* "total: %u\n" */
+	printtotal(dp);		/* "total: %u\n" */
 	
 	for (p = dp->list; p; p = p->fts_link) {
 		if (IS_NOPRINT(p))
 			continue;
 		sp = p->fts_statp;
 		if (f_inode)
-			(void)printf("%*"PRIu64" ", dp->s_inode, sp->st_ino);
+			(void)printf("%*lu ", dp->s_inode,
+			    (unsigned long)sp->st_ino);
 		if (f_size) {
 			if (f_humanize) {
 				if ((humanize_number(szbuf, sizeof(szbuf),
@@ -185,11 +151,11 @@ printlong(DISPLAY *dp)
 		else
 			printtime(sp->st_mtime);
 		if (f_octal || f_octal_escape)
-			(void)safe_printpath(p);
+			(void)safe_print(p->fts_name);
 		else if (f_nonprint)
-			(void)printescapedpath(p);
+			(void)printescaped(p->fts_name);
 		else
-			(void)printpath(p);
+			(void)printf("%s", p->fts_name);
 
 		if (f_type || (f_typedir && S_ISDIR(sp->st_mode)))
 			(void)printtype(sp->st_mode);
@@ -365,7 +331,7 @@ printaname(FTSENT *p, int inodefield, int sizefield)
 	sp = p->fts_statp;
 	chcnt = 0;
 	if (f_inode)
-		chcnt += printf("%*"PRIu64" ", inodefield, sp->st_ino);
+		chcnt += printf("%*lu ", inodefield, (unsigned long)sp->st_ino);
 	if (f_size) {
 		if (f_humanize) {
 			if ((humanize_number(szbuf, sizeof(szbuf), sp->st_size,
@@ -380,11 +346,11 @@ printaname(FTSENT *p, int inodefield, int sizefield)
 		}
 	}
 	if (f_octal || f_octal_escape)
-		chcnt += safe_printpath(p);
+		chcnt += safe_print(p->fts_name);
 	else if (f_nonprint)
-		chcnt += printescapedpath(p);
+		chcnt += printescaped(p->fts_name);
 	else
-		chcnt += printpath(p);
+		chcnt += printf("%s", p->fts_name);
 	if (f_type || (f_typedir && S_ISDIR(sp->st_mode)))
 		chcnt += printtype(sp->st_mode);
 	return (chcnt);

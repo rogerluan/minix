@@ -12,13 +12,13 @@
 //===----------------------------------------------------------------------===//
 
 #include "TableGenBackends.h" // Declares all backends.
+#include "SetTheory.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/PrettyStackTrace.h"
 #include "llvm/Support/Signals.h"
 #include "llvm/TableGen/Error.h"
 #include "llvm/TableGen/Main.h"
 #include "llvm/TableGen/Record.h"
-#include "llvm/TableGen/SetTheory.h"
 
 using namespace llvm;
 
@@ -143,8 +143,9 @@ bool LLVMTableGenMain(raw_ostream &OS, RecordKeeper &Records) {
     break;
   case PrintEnums:
   {
-    for (Record *Rec : Records.getAllDerivedDefinitions(Class))
-      OS << Rec->getName() << ", ";
+    std::vector<Record*> Recs = Records.getAllDerivedDefinitions(Class);
+    for (unsigned i = 0, e = Recs.size(); i != e; ++i)
+      OS << Recs[i]->getName() << ", ";
     OS << "\n";
     break;
   }
@@ -152,12 +153,13 @@ bool LLVMTableGenMain(raw_ostream &OS, RecordKeeper &Records) {
   {
     SetTheory Sets;
     Sets.addFieldExpander("Set", "Elements");
-    for (Record *Rec : Records.getAllDerivedDefinitions("Set")) {
-      OS << Rec->getName() << " = [";
-      const std::vector<Record*> *Elts = Sets.expand(Rec);
+    std::vector<Record*> Recs = Records.getAllDerivedDefinitions("Set");
+    for (unsigned i = 0, e = Recs.size(); i != e; ++i) {
+      OS << Recs[i]->getName() << " = [";
+      const std::vector<Record*> *Elts = Sets.expand(Recs[i]);
       assert(Elts && "Couldn't expand Set instance");
-      for (Record *Elt : *Elts)
-        OS << ' ' << Elt->getName();
+      for (unsigned ei = 0, ee = Elts->size(); ei != ee; ++ei)
+        OS << ' ' << (*Elts)[ei]->getName();
       OS << " ]\n";
     }
     break;
@@ -178,12 +180,3 @@ int main(int argc, char **argv) {
 
   return TableGenMain(argv[0], &LLVMTableGenMain);
 }
-
-#ifdef __has_feature
-#if __has_feature(address_sanitizer)
-#include <sanitizer/lsan_interface.h>
-// Disable LeakSanitizer for this binary as it has too many leaks that are not
-// very interesting to fix. See compiler-rt/include/sanitizer/lsan_interface.h .
-int __lsan_is_turned_off() { return 1; }
-#endif  // __has_feature(address_sanitizer)
-#endif  // defined(__has_feature)

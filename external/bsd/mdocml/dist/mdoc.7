@@ -1,7 +1,7 @@
-.\"	Id: mdoc.7,v 1.224 2013/12/31 23:29:41 schwarze Exp 
+.\"	$Vendor-Id: mdoc.7,v 1.214 2012/01/03 10:18:05 kristaps Exp $
 .\"
 .\" Copyright (c) 2009, 2010, 2011 Kristaps Dzonsons <kristaps@bsd.lv>
-.\" Copyright (c) 2010, 2011, 2013 Ingo Schwarze <schwarze@openbsd.org>
+.\" Copyright (c) 2010, 2011 Ingo Schwarze <schwarze@openbsd.org>
 .\"
 .\" Permission to use, copy, modify, and distribute this software for any
 .\" purpose with or without fee is hereby granted, provided that the above
@@ -15,7 +15,7 @@
 .\" ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 .\" OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\"
-.Dd December 31, 2013
+.Dd January 3, 2012
 .Dt MDOC 7
 .Os
 .Sh NAME
@@ -477,7 +477,6 @@ in the alphabetical
 .Bl -column "Brq, Bro, Brc" description
 .It Sx \&Lb Ta function library (one argument)
 .It Sx \&In Ta include file (one argument)
-.It Sx \&Fd Ta other preprocessor directive (>0 arguments)
 .It Sx \&Ft Ta function type (>0 arguments)
 .It Sx \&Fo , \&Fc Ta function block: Ar funcname
 .It Sx \&Fn Ta function name:
@@ -658,7 +657,7 @@ for all other author listings.
 .Pp
 Examples:
 .Dl \&.An -nosplit
-.Dl \&.An Kristaps Dzonsons \&Aq \&Mt kristaps@bsd.lv
+.Dl \&.An Kristaps Dzonsons \&Aq kristaps@bsd.lv
 .Ss \&Ao
 Begin a block enclosed by angle brackets.
 Does not have any head arguments.
@@ -712,9 +711,7 @@ for fixed strings to be passed verbatim as arguments, use
 or
 .Sx \&Cm .
 .Ss \&At
-Formats an
-.At
-version.
+Formats an AT&T version.
 Accepts one optional argument:
 .Pp
 .Bl -tag -width "v[1-7] | 32vX" -offset indent -compact
@@ -823,8 +820,8 @@ The most popular is the imaginary macro
 which resolves to
 .Sy 6n .
 .It
-A scaling width as described in
-.Xr roff 7 .
+A width using the syntax described in
+.Sx Scaling Widths .
 .It
 An arbitrary string, which indents by the length of this string.
 .El
@@ -929,8 +926,8 @@ The
 .Fl width
 and
 .Fl offset
-arguments accept scaling widths as described in
-.Xr roff 7
+arguments accept
+.Sx Scaling Widths
 or use the length of the given string.
 The
 .Fl offset
@@ -959,9 +956,9 @@ A columnated list.
 The
 .Fl width
 argument has no effect; instead, each argument specifies the width
-of one column, using either the scaling width syntax described in
-.Xr roff 7
-or the string length of the argument.
+of one column, using either the
+.Sx Scaling Widths
+syntax or the string length of the argument.
 If the first line of the body of a
 .Fl column
 list is not an
@@ -1092,9 +1089,7 @@ Examples:
 See also
 .Sx \&Bro .
 .Ss \&Bsx
-Format the
-.Bsx
-version provided as an argument, or a default value if
+Format the BSD/OS version provided as an argument, or a default value if
 no argument is provided.
 .Pp
 Examples:
@@ -1114,9 +1109,7 @@ and
 Prints
 .Dq is currently in beta test.
 .Ss \&Bx
-Format the
-.Bx
-version provided as an argument, or a default value if no
+Format the BSD version provided as an argument, or a default value if no
 argument is provided.
 .Pp
 Examples:
@@ -1408,16 +1401,11 @@ See also
 .Sx \&Er
 and
 .Sx \&Ev
-for special-purpose constants,
+for special-purpose constants and
 .Sx \&Va
-for variable symbols, and
-.Sx \&Fd
-for listing preprocessor variable definitions in the
-.Em SYNOPSIS .
+for variable symbols.
 .Ss \&Dx
-Format the
-.Dx
-version provided as an argument, or a default
+Format the DragonFly BSD version provided as an argument, or a default
 value if no argument is provided.
 .Pp
 Examples:
@@ -1574,32 +1562,15 @@ See also
 End a function context started by
 .Sx \&Fo .
 .Ss \&Fd
-Preprocessor directive, in particular for listing it in the
-.Em SYNOPSIS .
-Historically, it was also used to document include files.
-The latter usage has been deprecated in favour of
+Historically used to document include files.
+This usage has been deprecated in favour of
 .Sx \&In .
-.Pp
-Its syntax is as follows:
-.Bd -ragged -offset indent
-.Pf \. Sx \&Fd
-.Li # Ns Ar directive
-.Op Ar argument ...
-.Ed
-.Pp
-Examples:
-.Dl \&.Fd #define sa_handler __sigaction_u.__sa_handler
-.Dl \&.Fd #define SIO_MAXNFDS
-.Dl \&.Fd #ifdef FS_DEBUG
-.Dl \&.Ft void
-.Dl \&.Fn dbg_open \(dqconst char *\(dq
-.Dl \&.Fd #endif
+Do not use this macro.
 .Pp
 See also
-.Sx MANUAL STRUCTURE ,
-.Sx \&In ,
+.Sx MANUAL STRUCTURE
 and
-.Sx \&Dv .
+.Sx \&In .
 .Ss \&Fl
 Command-line flag or option.
 Used when listing arguments to command-line utilities.
@@ -1880,7 +1851,7 @@ section as described in
 .Pp
 Examples:
 .Dl \&.Lb libz
-.Dl \&.Lb libmandoc
+.Dl \&.Lb mdoc
 .Ss \&Li
 Denotes text that should be in a
 .Li literal
@@ -1931,7 +1902,6 @@ Its syntax is as follows:
 .Pp
 Examples:
 .Dl \&.Mt discuss@manpages.bsd.lv
-.Dl \&.An Kristaps Dzonsons \&Aq \&Mt kristaps@bsd.lv
 .Ss \&Nd
 A one line description of the manual's content.
 This may only be invoked in the
@@ -2113,7 +2083,7 @@ This macro is obsolete and not implemented in
 .Xr mandoc 1 .
 .Pp
 Historical
-.Nm
+.Xr mdoc 7
 packages described it as
 .Dq "old function type (FORTRAN)" .
 .Ss \&Ox
@@ -2369,8 +2339,6 @@ The following standards are recognised:
 .St -p1003.1-2004
 .It \-p1003.1-2008
 .St -p1003.1-2008
-.It \-p1003.1-2013
-.St -p1003.1-2013
 .It \-p1003.1
 .St -p1003.1
 .It \-p1003.1b
@@ -2379,26 +2347,20 @@ The following standards are recognised:
 .St -p1003.1b-93
 .It \-p1003.1c-95
 .St -p1003.1c-95
-.It \-p1003.1d-99
-.St -p1003.1d-99
 .It \-p1003.1g-2000
 .St -p1003.1g-2000
 .It \-p1003.1i-95
 .St -p1003.1i-95
-.It \-p1003.1j-2000
-.St -p1003.1j-2000
-.It \-p1003.1q-2000
-.St -p1003.1q-2000
-.It \-p1003.2
-.St -p1003.2
 .It \-p1003.2-92
 .St -p1003.2-92
 .It \-p1003.2a-92
 .St -p1003.2a-92
-.It \-p1387.2
-.St -p1387.2
 .It \-p1387.2-95
 .St -p1387.2-95
+.It \-p1003.2
+.St -p1003.2
+.It \-p1387.2
+.St -p1387.2
 .It \-isoC
 .St -isoC
 .It \-isoC-90
@@ -2445,8 +2407,6 @@ The following standards are recognised:
 .St -xbd5
 .It \-xcu5
 .St -xcu5
-.It \-xsh4.2
-.St -xsh4.2
 .It \-xsh5
 .St -xsh5
 .It \-xns5
@@ -2507,9 +2467,7 @@ Examples:
 Prints out
 .Dq currently under development.
 .Ss \&Ux
-Format the
-.Ux
-name.
+Format the UNIX name.
 Accepts no argument.
 .Pp
 Examples:
@@ -2574,14 +2532,20 @@ Link to another manual
 .Pq Qq cross-reference .
 Its syntax is as follows:
 .Pp
-.D1 Pf \. Sx \&Xr Ar name Op section
+.D1 Pf \. Sx \&Xr Ar name section
 .Pp
-Cross reference the
+The
 .Ar name
 and
 .Ar section
-number of another man page;
-omitting the section number is rarely useful.
+are the name and section of the linked manual.
+If
+.Ar section
+is followed by non-punctuation, an
+.Sx \&Ns
+is inserted into the token stream.
+This behaviour is for compatibility with
+GNU troff.
 .Pp
 Examples:
 .Dl \&.Xr mandoc 1
@@ -2605,8 +2569,8 @@ Its syntax is as follows:
 .Pp
 The
 .Ar height
-argument is a scaling width as described in
-.Xr roff 7 .
+argument must be formatted as described in
+.Sx Scaling Widths .
 If unspecified,
 .Sx \&sp
 asserts a single vertical space.
@@ -3000,7 +2964,7 @@ Manually switching the font using the
 .Ql \ef
 font escape sequences is never required.
 .Sh COMPATIBILITY
-This section documents compatibility between mandoc and other
+This section documents compatibility between mandoc and other other
 troff implementations, at this time limited to GNU troff
 .Pq Qq groff .
 The term
@@ -3204,4 +3168,5 @@ utility written by Kristaps Dzonsons appeared in
 The
 .Nm
 reference was written by
-.An Kristaps Dzonsons Aq Mt kristaps@bsd.lv .
+.An Kristaps Dzonsons ,
+.Mt kristaps@bsd.lv .

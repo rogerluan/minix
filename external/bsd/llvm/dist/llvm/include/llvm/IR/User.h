@@ -19,16 +19,14 @@
 #ifndef LLVM_IR_USER_H
 #define LLVM_IR_USER_H
 
-#include "llvm/ADT/iterator.h"
-#include "llvm/ADT/iterator_range.h"
 #include "llvm/IR/Value.h"
 #include "llvm/Support/ErrorHandling.h"
 
 namespace llvm {
 
-/// \brief Compile-time customization of User operands.
-///
-/// Customizes operand-related allocators and accessors.
+/// OperandTraits - Compile-time customization of
+/// operand-related allocators and accessors
+/// for use of the User class
 template <class>
 struct OperandTraits;
 
@@ -39,23 +37,24 @@ class User : public Value {
   friend struct HungoffOperandTraits;
   virtual void anchor();
 protected:
-  /// \brief This is a pointer to the array of Uses for this User.
-  ///
+  /// OperandList - This is a pointer to the array of Uses for this User.
   /// For nodes of fixed arity (e.g. a binary operator) this array will live
   /// prefixed to some derived class instance.  For nodes of resizable variable
   /// arity (e.g. PHINodes, SwitchInst etc.), this memory will be dynamically
   /// allocated and should be destroyed by the classes' virtual dtor.
   Use *OperandList;
 
+  /// NumOperands - The number of values used by this User.
+  ///
+  unsigned NumOperands;
+
   void *operator new(size_t s, unsigned Us);
   User(Type *ty, unsigned vty, Use *OpList, unsigned NumOps)
-      : Value(ty, vty), OperandList(OpList) {
-    NumOperands = NumOps;
-  }
+    : Value(ty, vty), OperandList(OpList), NumOperands(NumOps) {}
   Use *allocHungoffUses(unsigned) const;
   void dropHungoffUses() {
     Use::zap(OperandList, OperandList + NumOperands, true);
-    OperandList = nullptr;
+    OperandList = 0;
     // Reset NumOperands so User::operator delete() does the right thing.
     NumOperands = 0;
   }
@@ -63,13 +62,13 @@ public:
   ~User() {
     Use::zap(OperandList, OperandList + NumOperands);
   }
-  /// \brief Free memory allocated for User and Use objects.
+  /// operator delete - free memory allocated for User and Use objects
   void operator delete(void *Usr);
-  /// \brief Placement delete - required by std, but never called.
+  /// placement delete - required by std, but never called.
   void operator delete(void*, unsigned) {
     llvm_unreachable("Constructor throws?");
   }
-  /// \brief Placement delete - required by std, but never called.
+  /// placement delete - required by std, but never called.
   void operator delete(void*, unsigned, bool) {
     llvm_unreachable("Constructor throws?");
   }
@@ -113,28 +112,41 @@ public:
   //
   typedef Use*       op_iterator;
   typedef const Use* const_op_iterator;
-  typedef iterator_range<op_iterator> op_range;
-  typedef iterator_range<const_op_iterator> const_op_range;
 
   inline op_iterator       op_begin()       { return OperandList; }
   inline const_op_iterator op_begin() const { return OperandList; }
   inline op_iterator       op_end()         { return OperandList+NumOperands; }
   inline const_op_iterator op_end()   const { return OperandList+NumOperands; }
-  inline op_range operands() {
-    return op_range(op_begin(), op_end());
-  }
-  inline const_op_range operands() const {
-    return const_op_range(op_begin(), op_end());
-  }
 
-  /// \brief Iterator for directly iterating over the operand Values.
-  struct value_op_iterator
-      : iterator_adaptor_base<value_op_iterator, op_iterator,
-                              std::random_access_iterator_tag, Value *,
-                              ptrdiff_t, Value *, Value *> {
-    explicit value_op_iterator(Use *U = nullptr) : iterator_adaptor_base(U) {}
+  /// Convenience iterator for directly iterating over the Values in the
+  /// OperandList
+  class value_op_iterator : public std::iterator<std::forward_iterator_tag,
+                                                 Value*> {
+    op_iterator OI;
+  public:
+    explicit value_op_iterator(Use *U) : OI(U) {}
 
-    Value *operator*() const { return *I; }
+    bool operator==(const value_op_iterator &x) const {
+      return OI == x.OI;
+    }
+    bool operator!=(const value_op_iterator &x) const {
+      return !operator==(x);
+    }
+
+    /// Iterator traversal: forward iteration only
+    value_op_iterator &operator++() {          // Preincrement
+      ++OI;
+      return *this;
+    }
+    value_op_iterator operator++(int) {        // Postincrement
+      value_op_iterator tmp = *this; ++*this; return tmp;
+    }
+
+    /// Retrieve a pointer to the current Value.
+    Value *operator*() const {
+      return *OI;
+    }
+
     Value *operator->() const { return operator*(); }
   };
 
@@ -144,27 +156,23 @@ public:
   inline value_op_iterator value_op_end() {
     return value_op_iterator(op_end());
   }
-  inline iterator_range<value_op_iterator> operand_values() {
-    return iterator_range<value_op_iterator>(value_op_begin(), value_op_end());
-  }
 
-  /// \brief Drop all references to operands.
-  ///
-  /// This function is in charge of "letting go" of all objects that this User
-  /// refers to.  This allows one to 'delete' a whole class at a time, even
-  /// though there may be circular references...  First all references are
-  /// dropped, and all use counts go to zero.  Then everything is deleted for
-  /// real.  Note that no operations are valid on an object that has "dropped
-  /// all references", except operator delete.
+  // dropAllReferences() - This function is in charge of "letting go" of all
+  // objects that this User refers to.  This allows one to
+  // 'delete' a whole class at a time, even though there may be circular
+  // references...  First all references are dropped, and all use counts go to
+  // zero.  Then everything is deleted for real.  Note that no operations are
+  // valid on an object that has "dropped all references", except operator
+  // delete.
+  //
   void dropAllReferences() {
-    for (Use &U : operands())
-      U.set(nullptr);
+    for (op_iterator i = op_begin(), e = op_end(); i != e; ++i)
+      i->set(0);
   }
 
-  /// \brief Replace uses of one Value with another.
+  /// replaceUsesOfWith - Replaces all references to the "From" definition with
+  /// references to the "To" definition.
   ///
-  /// Replaces all references to the "From" definition with references to the
-  /// "To" definition.
   void replaceUsesOfWith(Value *From, Value *To);
 
   // Methods for support type inquiry through isa, cast, and dyn_cast:
@@ -185,6 +193,12 @@ template<> struct simplify_type<User::const_op_iterator> {
     return Val->get();
   }
 };
+
+// value_use_iterator::getOperandNo - Requires the definition of the User class.
+template<typename UserTy>
+unsigned value_use_iterator<UserTy>::getOperandNo() const {
+  return U - U->getUser()->op_begin();
+}
 
 } // End llvm namespace
 

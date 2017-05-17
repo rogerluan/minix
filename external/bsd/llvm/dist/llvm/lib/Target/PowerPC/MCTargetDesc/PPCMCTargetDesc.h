@@ -11,8 +11,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_LIB_TARGET_POWERPC_MCTARGETDESC_PPCMCTARGETDESC_H
-#define LLVM_LIB_TARGET_POWERPC_MCTARGETDESC_PPCMCTARGETDESC_H
+#ifndef PPCMCTARGETDESC_H
+#define PPCMCTARGETDESC_H
 
 // GCC #defines PPC on Linux but we use it as our namespace name
 #undef PPC
@@ -46,7 +46,6 @@ MCAsmBackend *createPPCAsmBackend(const Target &T, const MCRegisterInfo &MRI,
 /// createPPCELFObjectWriter - Construct an PPC ELF object writer.
 MCObjectWriter *createPPCELFObjectWriter(raw_ostream &OS,
                                          bool Is64Bit,
-                                         bool IsLittleEndian,
                                          uint8_t OSABI);
 /// createPPCELFObjectWriter - Construct a PPC Mach-O object writer.
 MCObjectWriter *createPPCMachObjectWriter(raw_ostream &OS, bool Is64Bit,

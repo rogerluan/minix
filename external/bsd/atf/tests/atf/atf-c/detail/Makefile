@@ -1,19 +1,20 @@
-# $NetBSD: Makefile,v 1.7 2014/02/12 04:08:32 jmmv Exp $
+# $NetBSD: Makefile,v 1.4 2013/02/15 17:08:35 jmmv Exp $
 
-.include <bsd.init.mk>
+.include <bsd.own.mk>
 
 TESTSDIR=	${TESTSBASE}/atf/atf-c/detail
+ATFFILE=	yes
 
+SRCDIR=		${NETBSDSRCDIR}/external/bsd/atf/dist
 .PATH:		${SRCDIR}/atf-c/detail
 
-PROGS=
-.for prog in	process_helpers \
-		version_helper
-PROGS+=		${prog}
-SRCS.${prog}=	${prog}.c
-MAN.${prog}=	# defined
-BINDIR.${prog}=	${TESTSDIR}
-.endfor
+CPPFLAGS+=	-DHAVE_CONFIG_H
+CPPFLAGS+=	-I${NETBSDSRCDIR}/external/bsd/atf/lib/libatf-c
+
+PROGS=			process_helpers
+SRCS.process_helpers=	process_helpers.c
+MAN.process_helpers=	# defined
+BINDIR.process_helpers=	${TESTSDIR}
 
 TESTS_C=
 .for test in	dynstr_test \

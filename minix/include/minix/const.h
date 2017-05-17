@@ -30,12 +30,6 @@
 #endif
 #endif
 
-#ifndef _MINIX_MAGIC
-#define __ALIGNED(X) __aligned(X)
-#else
-#define __ALIGNED(X)
-#endif
-
 #define EXTERN        extern	/* used in *.h files */
 
 #define TRUE               1	/* used for turning integers into Booleans */
@@ -166,20 +160,5 @@
 /* MINIX_KERNFLAGS flags */
 #define MKF_I386_INTEL_SYSENTER	(1L << 0) /* SYSENTER available and supported */
 #define MKF_I386_AMD_SYSCALL	(1L << 1) /* SYSCALL available and supported */
-
-/*
- * Number of per-CPU states for which time will be accounted.  This *must* be
- * the same value as NetBSD's CPUSTATES, which is defined in a rather
- * unfortunate location (sys/sched.h).  If the NetBSD value changes, our kernel
- * must be adapted accordingly.
- */
-#define MINIX_CPUSTATES	5
-
-/* Network device driver constants.  TODO: move to a better location. */
-#define NDEV_ETH_PACKET_MIN	60	/* min network packet size, in bytes */
-#define NDEV_ETH_PACKET_MAX	1514	/* max network packet size, in bytes */
-#define NDEV_ETH_PACKET_TAG	4	/* ethernet VLAN tag size, in bytes */
-#define NDEV_ETH_PACKET_CRC	4	/* ethernet CRC size, in bytes */
-#define NDEV_ETH_PACKET_MAX_TAGGED (NDEV_ETH_PACKET_MAX + NDEV_ETH_PACKET_TAG)
 
 #endif /* _MINIX_CONST_H */

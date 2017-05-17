@@ -60,18 +60,13 @@ and automatic location of the compilation database using source files paths.
 .. code-block:: c++
 
   #include "clang/Tooling/CommonOptionsParser.h"
-  #include "llvm/Support/CommandLine.h"
 
   using namespace clang::tooling;
-
-  // Apply a custom category to all command-line options so that they are the
-  // only ones displayed.
-  static llvm::cl::OptionCategory MyToolCategory("my-tool options");
 
   int main(int argc, const char **argv) {
     // CommonOptionsParser constructor will parse arguments and create a
     // CompilationDatabase.  In case of error it will terminate the program.
-    CommonOptionsParser OptionsParser(argc, argv, MyToolCategory);
+    CommonOptionsParser OptionsParser(argc, argv);
 
     // Use OptionsParser.getCompilations() and OptionsParser.getSourcePathList()
     // to retrieve CompilationDatabase and the list of input file paths.
@@ -99,13 +94,13 @@ our ``FrontendAction`` over some code.  For example, to run the
   // on.  Thus, it takes a FrontendActionFactory as parameter.  To create a
   // FrontendActionFactory from a given FrontendAction type, we call
   // newFrontendActionFactory<clang::SyntaxOnlyAction>().
-  int result = Tool.run(newFrontendActionFactory<clang::SyntaxOnlyAction>().get());
+  int result = Tool.run(newFrontendActionFactory<clang::SyntaxOnlyAction>());
 
 Putting it together --- the first tool
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Now we combine the two previous steps into our first real tool.  A more advanced
-version of this example tool is also checked into the clang tree at
+Now we combine the two previous steps into our first real tool.  This example
+tool is also checked into the clang tree at
 ``tools/clang-check/ClangCheck.cpp``.
 
 .. code-block:: c++
@@ -120,10 +115,6 @@ version of this example tool is also checked into the clang tree at
   using namespace clang::tooling;
   using namespace llvm;
 
-  // Apply a custom category to all command-line options so that they are the
-  // only ones displayed.
-  static cl::OptionCategory MyToolCategory("my-tool options");
-
   // CommonOptionsParser declares HelpMessage with a description of the common
   // command-line options related to the compilation database and input files.
   // It's nice to have this help message in all tools.
@@ -133,10 +124,10 @@ version of this example tool is also checked into the clang tree at
   static cl::extrahelp MoreHelp("\nMore help text...");
 
   int main(int argc, const char **argv) {
-    CommonOptionsParser OptionsParser(argc, argv, MyToolCategory);
+    CommonOptionsParser OptionsParser(argc, argv);
     ClangTool Tool(OptionsParser.getCompilations(),
-                   OptionsParser.getSourcePathList());
-    return Tool.run(newFrontendActionFactory<clang::SyntaxOnlyAction>().get());
+    OptionsParser.getSourcePathList());
+    return Tool.run(newFrontendActionFactory<clang::SyntaxOnlyAction>());
   }
 
 Running the tool on some code
@@ -185,7 +176,7 @@ Builtin includes
 
 Clang tools need their builtin headers and search for them the same way Clang
 does.  Thus, the default location to look for builtin headers is in a path
-``$(dirname /path/to/tool)/../lib/clang/3.3/include`` relative to the tool
+``$(dirname /path/to/tool)/../lib/clang/3.4/include`` relative to the tool
 binary.  This works out-of-the-box for tools running from llvm's toplevel
 binary directory after building clang-headers, or if the tool is running from
 the binary directory of a clang install next to the clang binary.

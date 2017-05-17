@@ -761,8 +761,7 @@ define void @bsel_s_v8i16(<8 x i16>* %d, <8 x i16>* %a, <8 x i16>* %b,
   %4 = icmp sgt <8 x i16> %1, %2
   ; CHECK-DAG: clt_s.h [[R4:\$w[0-9]+]], [[R2]], [[R1]]
   %5 = select <8 x i1> %4, <8 x i16> %1, <8 x i16> %3
-  ; Note that IfSet and IfClr are swapped since the condition is inverted
-  ; CHECK-DAG: bsel.v [[R4]], [[R3]], [[R1]]
+  ; CHECK-DAG: bsel.v [[R4]], [[R1]], [[R3]]
   store <8 x i16> %5, <8 x i16>* %d
   ; CHECK-DAG: st.h [[R4]], 0($4)
 
@@ -783,8 +782,7 @@ define void @bsel_s_v4i32(<4 x i32>* %d, <4 x i32>* %a, <4 x i32>* %b,
   %4 = icmp sgt <4 x i32> %1, %2
   ; CHECK-DAG: clt_s.w [[R4:\$w[0-9]+]], [[R2]], [[R1]]
   %5 = select <4 x i1> %4, <4 x i32> %1, <4 x i32> %3
-  ; Note that IfSet and IfClr are swapped since the condition is inverted
-  ; CHECK-DAG: bsel.v [[R4]], [[R3]], [[R1]]
+  ; CHECK-DAG: bsel.v [[R4]], [[R1]], [[R3]]
   store <4 x i32> %5, <4 x i32>* %d
   ; CHECK-DAG: st.w [[R4]], 0($4)
 
@@ -805,8 +803,7 @@ define void @bsel_s_v2i64(<2 x i64>* %d, <2 x i64>* %a, <2 x i64>* %b,
   %4 = icmp sgt <2 x i64> %1, %2
   ; CHECK-DAG: clt_s.d [[R4:\$w[0-9]+]], [[R2]], [[R1]]
   %5 = select <2 x i1> %4, <2 x i64> %1, <2 x i64> %3
-  ; Note that IfSet and IfClr are swapped since the condition is inverted
-  ; CHECK-DAG: bsel.v [[R4]], [[R3]], [[R1]]
+  ; CHECK-DAG: bsel.v [[R4]], [[R1]], [[R3]]
   store <2 x i64> %5, <2 x i64>* %d
   ; CHECK-DAG: st.d [[R4]], 0($4)
 
@@ -849,8 +846,7 @@ define void @bsel_u_v8i16(<8 x i16>* %d, <8 x i16>* %a, <8 x i16>* %b,
   %4 = icmp ugt <8 x i16> %1, %2
   ; CHECK-DAG: clt_u.h [[R4:\$w[0-9]+]], [[R2]], [[R1]]
   %5 = select <8 x i1> %4, <8 x i16> %1, <8 x i16> %3
-  ; Note that IfSet and IfClr are swapped since the condition is inverted
-  ; CHECK-DAG: bsel.v [[R4]], [[R3]], [[R1]]
+  ; CHECK-DAG: bsel.v [[R4]], [[R1]], [[R3]]
   store <8 x i16> %5, <8 x i16>* %d
   ; CHECK-DAG: st.h [[R4]], 0($4)
 
@@ -871,8 +867,7 @@ define void @bsel_u_v4i32(<4 x i32>* %d, <4 x i32>* %a, <4 x i32>* %b,
   %4 = icmp ugt <4 x i32> %1, %2
   ; CHECK-DAG: clt_u.w [[R4:\$w[0-9]+]], [[R2]], [[R1]]
   %5 = select <4 x i1> %4, <4 x i32> %1, <4 x i32> %3
-  ; Note that IfSet and IfClr are swapped since the condition is inverted
-  ; CHECK-DAG: bsel.v [[R4]], [[R3]], [[R1]]
+  ; CHECK-DAG: bsel.v [[R4]], [[R1]], [[R3]]
   store <4 x i32> %5, <4 x i32>* %d
   ; CHECK-DAG: st.w [[R4]], 0($4)
 
@@ -893,8 +888,7 @@ define void @bsel_u_v2i64(<2 x i64>* %d, <2 x i64>* %a, <2 x i64>* %b,
   %4 = icmp ugt <2 x i64> %1, %2
   ; CHECK-DAG: clt_u.d [[R4:\$w[0-9]+]], [[R2]], [[R1]]
   %5 = select <2 x i1> %4, <2 x i64> %1, <2 x i64> %3
-  ; Note that IfSet and IfClr are swapped since the condition is inverted
-  ; CHECK-DAG: bsel.v [[R4]], [[R3]], [[R1]]
+  ; CHECK-DAG: bsel.v [[R4]], [[R1]], [[R3]]
   store <2 x i64> %5, <2 x i64>* %d
   ; CHECK-DAG: st.d [[R4]], 0($4)
 
@@ -912,7 +906,7 @@ define void @bseli_s_v16i8(<16 x i8>* %d, <16 x i8>* %a, <16 x i8>* %b,
   ; CHECK-DAG: ld.b [[R2:\$w[0-9]+]], 0($6)
   %3 = icmp sgt <16 x i8> %1, %2
   ; CHECK-DAG: clt_s.b [[R4:\$w[0-9]+]], [[R2]], [[R1]]
-  %4 = select <16 x i1> %3, <16 x i8> <i8 1, i8 1, i8 1, i8 1, i8 1, i8 1, i8 1, i8 1, i8 1, i8 1, i8 1, i8 1, i8 1, i8 1, i8 1, i8 1>, <16 x i8> %1
+  %4 = select <16 x i1> %3, <16 x i8> %1, <16 x i8> <i8 1, i8 1, i8 1, i8 1, i8 1, i8 1, i8 1, i8 1, i8 1, i8 1, i8 1, i8 1, i8 1, i8 1, i8 1, i8 1>
   ; CHECK-DAG: bseli.b [[R4]], [[R1]], 1
   store <16 x i8> %4, <16 x i8>* %d
   ; CHECK-DAG: st.b [[R4]], 0($4)
@@ -931,7 +925,7 @@ define void @bseli_s_v8i16(<8 x i16>* %d, <8 x i16>* %a, <8 x i16>* %b,
   ; CHECK-DAG: ld.h [[R2:\$w[0-9]+]], 0($6)
   %3 = icmp sgt <8 x i16> %1, %2
   ; CHECK-DAG: clt_s.h [[R4:\$w[0-9]+]], [[R2]], [[R1]]
-  %4 = select <8 x i1> %3, <8 x i16> <i16 1, i16 1, i16 1, i16 1, i16 1, i16 1, i16 1, i16 1>, <8 x i16> %1
+  %4 = select <8 x i1> %3, <8 x i16> %1, <8 x i16> <i16 1, i16 1, i16 1, i16 1, i16 1, i16 1, i16 1, i16 1>
   ; CHECK-DAG: ldi.h [[R3:\$w[0-9]+]], 1
   ; CHECK-DAG: bsel.v [[R4]], [[R1]], [[R3]]
   store <8 x i16> %4, <8 x i16>* %d
@@ -951,7 +945,7 @@ define void @bseli_s_v4i32(<4 x i32>* %d, <4 x i32>* %a, <4 x i32>* %b,
   ; CHECK-DAG: ld.w [[R2:\$w[0-9]+]], 0($6)
   %3 = icmp sgt <4 x i32> %1, %2
   ; CHECK-DAG: clt_s.w [[R4:\$w[0-9]+]], [[R2]], [[R1]]
-  %4 = select <4 x i1> %3, <4 x i32> <i32 1, i32 1, i32 1, i32 1>, <4 x i32> %1
+  %4 = select <4 x i1> %3, <4 x i32> %1, <4 x i32> <i32 1, i32 1, i32 1, i32 1>
   ; CHECK-DAG: ldi.w [[R3:\$w[0-9]+]], 1
   ; CHECK-DAG: bsel.v [[R4]], [[R1]], [[R3]]
   store <4 x i32> %4, <4 x i32>* %d
@@ -971,7 +965,7 @@ define void @bseli_s_v2i64(<2 x i64>* %d, <2 x i64>* %a, <2 x i64>* %b,
   ; CHECK-DAG: ld.d [[R2:\$w[0-9]+]], 0($6)
   %3 = icmp sgt <2 x i64> %1, %2
   ; CHECK-DAG: clt_s.d [[R4:\$w[0-9]+]], [[R2]], [[R1]]
-  %4 = select <2 x i1> %3, <2 x i64> <i64 1, i64 1>, <2 x i64> %1
+  %4 = select <2 x i1> %3, <2 x i64> %1, <2 x i64> <i64 1, i64 1>
   ; CHECK-DAG: ldi.d [[R3:\$w[0-9]+]], 1
   ; CHECK-DAG: bsel.v [[R4]], [[R1]], [[R3]]
   store <2 x i64> %4, <2 x i64>* %d
@@ -991,7 +985,7 @@ define void @bseli_u_v16i8(<16 x i8>* %d, <16 x i8>* %a, <16 x i8>* %b,
   ; CHECK-DAG: ld.b [[R2:\$w[0-9]+]], 0($6)
   %3 = icmp ugt <16 x i8> %1, %2
   ; CHECK-DAG: clt_u.b [[R4:\$w[0-9]+]], [[R2]], [[R1]]
-  %4 = select <16 x i1> %3, <16 x i8> <i8 1, i8 1, i8 1, i8 1, i8 1, i8 1, i8 1, i8 1, i8 1, i8 1, i8 1, i8 1, i8 1, i8 1, i8 1, i8 1>, <16 x i8> %1
+  %4 = select <16 x i1> %3, <16 x i8> %1, <16 x i8> <i8 1, i8 1, i8 1, i8 1, i8 1, i8 1, i8 1, i8 1, i8 1, i8 1, i8 1, i8 1, i8 1, i8 1, i8 1, i8 1>
   ; CHECK-DAG: bseli.b [[R4]], [[R1]], 1
   store <16 x i8> %4, <16 x i8>* %d
   ; CHECK-DAG: st.b [[R4]], 0($4)
@@ -1010,7 +1004,7 @@ define void @bseli_u_v8i16(<8 x i16>* %d, <8 x i16>* %a, <8 x i16>* %b,
   ; CHECK-DAG: ld.h [[R2:\$w[0-9]+]], 0($6)
   %3 = icmp ugt <8 x i16> %1, %2
   ; CHECK-DAG: clt_u.h [[R4:\$w[0-9]+]], [[R2]], [[R1]]
-  %4 = select <8 x i1> %3, <8 x i16> <i16 1, i16 1, i16 1, i16 1, i16 1, i16 1, i16 1, i16 1>, <8 x i16> %1
+  %4 = select <8 x i1> %3, <8 x i16> %1, <8 x i16> <i16 1, i16 1, i16 1, i16 1, i16 1, i16 1, i16 1, i16 1>
   ; CHECK-DAG: ldi.h [[R3:\$w[0-9]+]], 1
   ; CHECK-DAG: bsel.v [[R4]], [[R1]], [[R3]]
   store <8 x i16> %4, <8 x i16>* %d
@@ -1030,7 +1024,7 @@ define void @bseli_u_v4i32(<4 x i32>* %d, <4 x i32>* %a, <4 x i32>* %b,
   ; CHECK-DAG: ld.w [[R2:\$w[0-9]+]], 0($6)
   %3 = icmp ugt <4 x i32> %1, %2
   ; CHECK-DAG: clt_u.w [[R4:\$w[0-9]+]], [[R2]], [[R1]]
-  %4 = select <4 x i1> %3, <4 x i32> <i32 1, i32 1, i32 1, i32 1>, <4 x i32> %1
+  %4 = select <4 x i1> %3, <4 x i32> %1, <4 x i32> <i32 1, i32 1, i32 1, i32 1>
   ; CHECK-DAG: ldi.w [[R3:\$w[0-9]+]], 1
   ; CHECK-DAG: bsel.v [[R4]], [[R1]], [[R3]]
   store <4 x i32> %4, <4 x i32>* %d
@@ -1050,7 +1044,7 @@ define void @bseli_u_v2i64(<2 x i64>* %d, <2 x i64>* %a, <2 x i64>* %b,
   ; CHECK-DAG: ld.d [[R2:\$w[0-9]+]], 0($6)
   %3 = icmp ugt <2 x i64> %1, %2
   ; CHECK-DAG: clt_u.d [[R4:\$w[0-9]+]], [[R2]], [[R1]]
-  %4 = select <2 x i1> %3, <2 x i64> <i64 1, i64 1>, <2 x i64> %1
+  %4 = select <2 x i1> %3, <2 x i64> %1, <2 x i64> <i64 1, i64 1>
   ; CHECK-DAG: ldi.d [[R3:\$w[0-9]+]], 1
   ; CHECK-DAG: bsel.v [[R4]], [[R1]], [[R3]]
   store <2 x i64> %4, <2 x i64>* %d

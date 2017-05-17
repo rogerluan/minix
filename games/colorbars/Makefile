@@ -1,5 +1,6 @@
-# $NetBSD: Makefile,v 1.4 2013/12/07 02:24:12 dholland Exp $
+# $NetBSD: Makefile,v 1.3 2012/06/09 09:22:21 martin Exp $
 
+WARNS?=	4
 PROG=  colorbars
 MAN=   colorbars.6
 DPADD=	${LIBCURSES} ${LIBTERMINFO}

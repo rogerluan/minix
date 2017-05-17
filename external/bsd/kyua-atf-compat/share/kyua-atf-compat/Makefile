@@ -2,10 +2,6 @@
 
 .include <bsd.init.mk>
 
-.if defined(__MINIX)
-.PATH:		${SRCDIR}
-.endif # defined(__MINIX)
-
 FILES=		lib.subr tests_lib.subr
 FILESDIR=	/usr/share/kyua-atf-compat
 FILESMODE=	444

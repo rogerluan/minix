@@ -1,4 +1,4 @@
-/*	$NetBSD: who.c,v 1.24 2014/06/08 09:53:43 mlelstv Exp $	*/
+/*	$NetBSD: who.c,v 1.23 2008/07/24 15:35:41 christos Exp $	*/
 
 /*
  * Copyright (c) 1989, 1993
@@ -42,7 +42,7 @@ __COPYRIGHT("@(#) Copyright (c) 1989, 1993\
 #if 0
 static char sccsid[] = "@(#)who.c	8.1 (Berkeley) 6/6/93";
 #endif
-__RCSID("$NetBSD: who.c,v 1.24 2014/06/08 09:53:43 mlelstv Exp $");
+__RCSID("$NetBSD: who.c,v 1.23 2008/07/24 15:35:41 christos Exp $");
 #endif /* not lint */
 
 #include <sys/types.h>
@@ -285,7 +285,6 @@ print(const char *name, const char *line, time_t t, const char *host,
 	time_t idle;
 	const char *types = NULL;
 	size_t i;
-	char *tstr;
 
 	state = '?';
 	idle = 0;
@@ -313,8 +312,7 @@ print(const char *name, const char *line, time_t t, const char *host,
 		(void)printf("%c ", state);
 
 	(void)printf("%-*.*s ", maxline, maxline, line);
-	tstr = ctime(&t);
-	(void)printf("%.12s ", tstr ? tstr + 4 : "?");
+	(void)printf("%.12s ", ctime(&t) + 4);
 
 	if (show_idle) {
 		if (idle < 60) 

@@ -13,6 +13,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#define DEBUG_TYPE "partially-inline-libcalls"
 #include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Intrinsics.h"
@@ -24,8 +25,6 @@
 
 using namespace llvm;
 
-#define DEBUG_TYPE "partially-inline-libcalls"
-
 namespace {
   class PartiallyInlineLibCalls : public FunctionPass {
   public:
@@ -36,8 +35,8 @@ namespace {
       initializePartiallyInlineLibCallsPass(*PassRegistry::getPassRegistry());
     }
 
-    void getAnalysisUsage(AnalysisUsage &AU) const override;
-    bool runOnFunction(Function &F) override;
+    virtual void getAnalysisUsage(AnalysisUsage &AU) const;
+    virtual bool runOnFunction(Function &F);
 
   private:
     /// Optimize calls to sqrt.
@@ -106,10 +105,6 @@ bool PartiallyInlineLibCalls::optimizeSQRT(CallInst *Call,
   // There is no need to change the IR, since backend will emit sqrt
   // instruction if the call has already been marked read-only.
   if (Call->onlyReadsMemory())
-    return false;
-
-  // The call must have the expected result type.
-  if (!Call->getType()->isFloatingPointTy())
     return false;
 
   // Do the following transformation:

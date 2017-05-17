@@ -15,12 +15,13 @@
 #define LLVM_ANALYSIS_MEMORYDEPENDENCEANALYSIS_H
 
 #include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/OwningPtr.h"
 #include "llvm/ADT/PointerIntPair.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/IR/BasicBlock.h"
-#include "llvm/IR/ValueHandle.h"
 #include "llvm/Pass.h"
+#include "llvm/Support/ValueHandle.h"
 
 namespace llvm {
   class Function;
@@ -28,7 +29,6 @@ namespace llvm {
   class Instruction;
   class CallSite;
   class AliasAnalysis;
-  class AssumptionCache;
   class DataLayout;
   class MemoryDependenceAnalysis;
   class PredIteratorCache;
@@ -98,7 +98,7 @@ namespace llvm {
     PairTy Value;
     explicit MemDepResult(PairTy V) : Value(V) {}
   public:
-    MemDepResult() : Value(nullptr, Invalid) {}
+    MemDepResult() : Value(0, Invalid) {}
 
     /// get methods: These are static ctor methods for creating various
     /// MemDepResult kinds.
@@ -156,7 +156,7 @@ namespace llvm {
     /// getInst() - If this is a normal dependency, return the instruction that
     /// is depended on.  Otherwise, return null.
     Instruction *getInst() const {
-      if (Value.getInt() == Other) return nullptr;
+      if (Value.getInt() == Other) return NULL;
       return Value.getPointer();
     }
 
@@ -282,12 +282,11 @@ namespace llvm {
       /// Size - The maximum size of the dereferences of the
       /// pointer. May be UnknownSize if the sizes are unknown.
       uint64_t Size;
-      /// AATags - The AA tags associated with dereferences of the
-      /// pointer. The members may be null if there are no tags or
-      /// conflicting tags.
-      AAMDNodes AATags;
+      /// TBAATag - The TBAA tag associated with dereferences of the
+      /// pointer. May be null if there are no tags or conflicting tags.
+      const MDNode *TBAATag;
 
-      NonLocalPointerInfo() : Size(AliasAnalysis::UnknownSize) {}
+      NonLocalPointerInfo() : Size(AliasAnalysis::UnknownSize), TBAATag(0) {}
     };
 
     /// CachedNonLocalPointerInfo - This map stores the cached results of doing
@@ -324,26 +323,24 @@ namespace llvm {
 
     /// Current AA implementation, just a cache.
     AliasAnalysis *AA;
-    const DataLayout *DL;
+    DataLayout *TD;
     DominatorTree *DT;
-    AssumptionCache *AC;
-    std::unique_ptr<PredIteratorCache> PredCache;
-
+    OwningPtr<PredIteratorCache> PredCache;
   public:
     MemoryDependenceAnalysis();
     ~MemoryDependenceAnalysis();
     static char ID;
 
     /// Pass Implementation stuff.  This doesn't do any analysis eagerly.
-    bool runOnFunction(Function &) override;
+    bool runOnFunction(Function &);
 
     /// Clean up memory in between runs
-    void releaseMemory() override;
+    void releaseMemory();
 
     /// getAnalysisUsage - Does not modify anything.  It uses Value Numbering
     /// and Alias Analysis.
     ///
-    void getAnalysisUsage(AnalysisUsage &AU) const override;
+    virtual void getAnalysisUsage(AnalysisUsage &AU) const;
 
     /// getDependency - Return the instruction on which a memory operation
     /// depends.  See the class comment for more details.  It is illegal to call
@@ -366,16 +363,12 @@ namespace llvm {
 
 
     /// getNonLocalPointerDependency - Perform a full dependency query for an
-    /// access to the QueryInst's specified memory location, returning the set
-    /// of instructions that either define or clobber the value.
+    /// access to the specified (non-volatile) memory location, returning the
+    /// set of instructions that either define or clobber the value.
     ///
-    /// Warning: For a volatile query instruction, the dependencies will be
-    /// accurate, and thus usable for reordering, but it is never legal to
-    /// remove the query instruction.  
-    ///
-    /// This method assumes the pointer has a "NonLocal" dependency within
-    /// QueryInst's parent basic block.
-    void getNonLocalPointerDependency(Instruction *QueryInst,
+    /// This method assumes the pointer has a "NonLocal" dependency within BB.
+    void getNonLocalPointerDependency(const AliasAnalysis::Location &Loc,
+                                      bool isLoad, BasicBlock *BB,
                                     SmallVectorImpl<NonLocalDepResult> &Result);
 
     /// removeInstruction - Remove an instruction from the dependence analysis,
@@ -408,7 +401,7 @@ namespace llvm {
                                           bool isLoad,
                                           BasicBlock::iterator ScanIt,
                                           BasicBlock *BB,
-                                          Instruction *QueryInst = nullptr);
+                                          Instruction *QueryInst = 0);
 
 
     /// getLoadLoadClobberFullWidthSize - This is a little bit of analysis that
@@ -422,7 +415,7 @@ namespace llvm {
                                                     int64_t MemLocOffs,
                                                     unsigned MemLocSize,
                                                     const LoadInst *LI,
-                                                    const DataLayout &DL);
+                                                    const DataLayout &TD);
 
   private:
     MemDepResult getCallSiteDependencyFrom(CallSite C, bool isReadOnlyCall,

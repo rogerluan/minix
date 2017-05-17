@@ -19,18 +19,14 @@
 /* Define to 1 if you have the `setenv' function. */
 #define HAVE_SETENV 1
 
-#if !defined(__minix)
 /* Define to 1 if you have the `unmount' function. */
-#define HAVE_UNMOUNT 1
-#endif /* !defined(__minix) */
+/* #undef HAVE_UNMOUNT */
 
 /* Define to 1 if you have the `unsetenv' function. */
 #define HAVE_UNSETENV 1
 
-#if !defined(__minix)
 /* Define to 1 if your lchmod works */
-#define HAVE_WORKING_LCHMOD 1
-#endif /* !defined(__minix) */
+/* #undef HAVE_WORKING_LCHMOD */
 
 /* Define to the last valid signal number */
 #define LAST_SIGNO 63

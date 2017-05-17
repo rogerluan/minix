@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.2 2015/01/29 20:41:38 joerg Exp $
+#	$NetBSD: Makefile,v 1.1 2013/09/29 12:12:02 joerg Exp $
 
 LIB=	lldbSymbol
 
@@ -13,7 +13,6 @@ SRCS+=	Block.cpp \
 	ClangExternalASTSourceCallbacks.cpp \
 	ClangExternalASTSourceCommon.cpp \
 	ClangNamespaceDecl.cpp \
-	CompactUnwindInfo.cpp \
 	CompileUnit.cpp \
 	Declaration.cpp \
 	DWARFCallFrameInfo.cpp \

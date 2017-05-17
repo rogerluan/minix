@@ -1,9 +1,7 @@
-#	$NetBSD: Makefile.inc,v 1.5 2014/01/17 20:24:20 martin Exp $
+#	$NetBSD: Makefile.inc,v 1.3 2009/05/08 23:36:42 christos Exp $
 
+DIST=${.CURDIR}/../dist
 WARNS=4
-DIST=${NETBSDSRCDIR}/external/bsd/file/dist
-
-.include <bsd.own.mk>
 
 BINDIR?= /usr/bin
 USE_FORT?= yes	# data-driven bugs?
@@ -14,14 +12,9 @@ MFILESDIR?=	/usr/share/misc
 MFILES?=	magic.mgc
 MAGIC?=		${MFILESDIR}/magic
 
-VERSION != ${TOOL_SED} -ne "s/^PACKAGE_VERSION='\([^']*\)'/\1/p" ${DIST}/configure
-
-CPPFLAGS+=	-DMAGIC='"${MAGIC}"' -DHAVE_CONFIG_H -DQUICK -DBUILTIN_ELF \
-		-DELFCORE -DVERSION='"${VERSION}"'
+#this is still required (will not compile without removing it): -DQUICK
+CPPFLAGS+=	-DMAGIC='"${MAGIC}"' -DHAVE_CONFIG_H -DBUILTIN_ELF \
+		-DELFCORE
 CPPFLAGS+=	-I${.CURDIR}/../include -I${DIST}/src
-
-.if ${ACTIVE_CC}=="gcc" && ${HAVE_GCC}=="48"
-CPPFLAGS.readelf.c	+= -Wno-error=maybe-uninitialized
-.endif
 
 .PATH:		${DIST}/src ${DIST}/doc

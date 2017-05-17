@@ -1,15 +1,17 @@
-#	$NetBSD: Makefile,v 1.26 2015/02/10 19:11:52 rjs Exp $
+#	$NetBSD: Makefile,v 1.25 2012/09/15 17:41:59 plunky Exp $
 
 INCSDIR= /usr/include/netinet
 
-INCS=	icmp6.h icmp_var.h if_ether.h if_inarp.h igmp.h \
-	igmp_var.h in.h in_pcb.h in_pcb_hdr.h \
+INCS=	\
+	in.h \
 	in_systm.h \
-	in_var.h ip.h ip_carp.h ip6.h \
-	ip_icmp.h ip_mroute.h ip_var.h pim_var.h \
-	tcp.h tcp_debug.h tcp_fsm.h tcp_seq.h tcp_timer.h tcp_var.h \
-	tcpip.h udp.h udp_var.h \
-	tcp_vtw.h
+	\
+	ip.h \
+	ip_icmp.h \
+	ip_var.h \
+	tcp.h \
+	udp.h udp_var.h \
+	
 
 .if !defined(__MINIX)
 # ipfilter headers
@@ -27,4 +29,6 @@ INCS+=	ip_auth.h ip_fil.h ip_frag.h ip_htable.h ip_nat.h \
 
 .include <bsd.kinc.mk>
 
+.if !defined(__MINIX)
 .PATH: ${NETBSDSRCDIR}/sys/external/bsd/ipf/netinet
+.endif # !defined(__MINIX)

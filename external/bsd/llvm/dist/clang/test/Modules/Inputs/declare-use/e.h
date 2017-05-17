@@ -1,7 +1,6 @@
 #ifndef E_H
 #define E_H
-#define HEADER "a.h"
-#include HEADER
+#include "a.h"
 #include "b.h"
 const int e = a*b;
 #endif

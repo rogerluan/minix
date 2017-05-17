@@ -1,4 +1,4 @@
-/*	$NetBSD: map_object.c,v 1.53 2014/10/30 07:53:41 martin Exp $	 */
+/*	$NetBSD: map_object.c,v 1.52 2013/08/03 13:17:05 skrll Exp $	 */
 
 /*
  * Copyright 1996 John D. Polstra.
@@ -34,7 +34,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: map_object.c,v 1.53 2014/10/30 07:53:41 martin Exp $");
+__RCSID("$NetBSD: map_object.c,v 1.52 2013/08/03 13:17:05 skrll Exp $");
 #endif /* not lint */
 
 #include <errno.h>
@@ -48,6 +48,15 @@ __RCSID("$NetBSD: map_object.c,v 1.53 2014/10/30 07:53:41 martin Exp $");
 
 #include "debug.h"
 #include "rtld.h"
+
+#if defined(__minix)
+#define MINIXVERBOSE 0
+
+#if MINIXVERBOSE
+#include <stdio.h>
+#endif
+
+#endif /* defined(__minix) */
 
 static int protflags(int);	/* Elf flags -> mmap protection */
 
@@ -95,16 +104,19 @@ _rtld_map_object(const char *path, int fd, const struct stat *sb)
 #endif
 	Elf_Addr	 phdr_vaddr;
 	size_t		 phdr_memsz;
-#if defined(__minix) && (defined(__HAVE_TLS_VARIANT_I) || defined(__HAVE_TLS_VARIANT_II))
+#if defined(__HAVE_TLS_VARIANT_I) || defined(__HAVE_TLS_VARIANT_II)
 	caddr_t		 gap_addr;
 	size_t		 gap_size;
-#endif /* defined(__minix) */
+#endif
 	int i;
 #ifdef RTLD_LOADER
 	Elf_Addr	 clear_vaddr;
 	caddr_t		 clear_addr;
 	size_t		 nclear;
 #endif
+#if defined(__minix)
+	Elf_Addr bsslen;
+#endif /* defined(__minix) */
 
 	if (sb != NULL && sb->st_size < (off_t)sizeof (Elf_Ehdr)) {
 		_rtld_error("%s: not ELF file (too short)", path);
@@ -123,8 +135,12 @@ _rtld_map_object(const char *path, int fd, const struct stat *sb)
 	    (off_t)0);
 	obj->ehdr = ehdr;
 	if (ehdr == MAP_FAILED) {
+#if defined(__minix)
+		return _rtld_map_object_fallback(path, fd, sb);
+#else
 		_rtld_error("%s: read error: %s", path, xstrerror(errno));
 		goto bad;
+#endif
 	}
 	/* Make sure the file is valid */
 	if (memcmp(ELFMAG, ehdr->e_ident, SELFMAG) != 0) {
@@ -357,10 +373,12 @@ _rtld_map_object(const char *path, int fd, const struct stat *sb)
 
 	/* Overlay the bss segment onto the proper region. */
 #if defined(__minix)
-	/* MINIX's mmap is strict and refuses 0-bytes mappings. */
-	if (0 < base_vlimit - data_vlimit)
-#endif /*defined(__minix) */
+	bsslen = base_vlimit - data_vlimit;
+	if (bsslen > 0 &&
+		mmap(mapbase + data_vlimit - base_vaddr, bsslen,
+#else
 	if (mmap(mapbase + data_vlimit - base_vaddr, base_vlimit - data_vlimit,
+#endif /* defined(__minix) */
 	    data_flags, MAP_ANON | MAP_PRIVATE | MAP_FIXED, -1, 0) ==
 	    MAP_FAILED) {
 		_rtld_error("mmap of bss failed: %s", xstrerror(errno));
@@ -450,10 +468,10 @@ _rtld_obj_free(Obj_Entry *obj)
 	}
 	if (!obj->phdr_loaded)
 		xfree((void *)(uintptr_t)obj->phdr);
+	xfree(obj);
 #ifdef COMBRELOC
 	_rtld_combreloc_reset(obj);
 #endif
-	xfree(obj);
 }
 
 Obj_Entry *

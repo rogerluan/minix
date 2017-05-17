@@ -43,7 +43,6 @@ define i32 @test1() {
 ; DarwinPIC: LPC0_0:
 ; DarwinPIC:    ldr r0, [pc, r0]
 ; DarwinPIC:    ldr r0, [r0]
-; DarwinPIC-NOT: ldr
 ; DarwinPIC:    bx lr
 
 ; DarwinPIC: 	.align	2

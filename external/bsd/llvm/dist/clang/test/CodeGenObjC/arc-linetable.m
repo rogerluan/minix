@@ -32,13 +32,6 @@
 // CHECK: @objc_msgSend{{.*}} !dbg ![[MSG7:[0-9]+]]
 // CHECK: ret {{.*}} !dbg ![[RET7:[0-9]+]]
 
-// CHECK: define {{.*}}testCleanupVoid
-// CHECK: icmp ne {{.*}}!dbg ![[SKIP1:[0-9]+]]
-// CHECK: store i32 0, i32* {{.*}}, !dbg ![[RET8:[0-9]+]]
-// CHECK: @objc_storeStrong{{.*}}, !dbg ![[ARC8:[0-9]+]]
-// CHECK: ret {{.*}} !dbg ![[RET8]]
-
-typedef signed char BOOL;
 
 @interface NSObject
 + (id)alloc;
@@ -54,66 +47,48 @@ typedef signed char BOOL;
 
 @implementation AppDelegate : NSObject
 
-// CHECK: ![[TESTNOSIDEEFFECT:.*]] = {{.*}}[ DW_TAG_subprogram ] [line [[@LINE+1]]] [local] [def] [-[AppDelegate testNoSideEffect:]]
 - (int)testNoSideEffect:(NSString *)foo {
-  int x = 1;
-  // CHECK: ![[ARC1]] = !MDLocation(line: [[@LINE+1]], scope: ![[TESTNOSIDEEFFECT]])
+  // CHECK: ![[ARC1]] = metadata !{i32 [[@LINE+1]], i32 0, metadata !{{.*}}, null}
   return 1; // Return expression
-  // CHECK: ![[RET1]] = !MDLocation(line: [[@LINE+1]], scope: !{{.*}})
+  // CHECK: ![[RET1]] = metadata !{i32 [[@LINE+1]], i32 0, metadata !{{.*}}, null}
 }           // Cleanup + Ret
 
 - (int)testNoCleanup {
-  // CHECK: ![[RET2]] = !MDLocation(line: [[@LINE+1]], scope: !{{.*}})
+  // CHECK: ![[RET2]] = metadata !{i32 [[@LINE+1]], i32 0, metadata !{{.*}}, null}
   return 1;
 }
 
 - (int)testSideEffect:(NSString *)foo {
-  // CHECK: ![[MSG3]] = !MDLocation(line: [[@LINE+1]], scope: !{{.*}})
+  // CHECK: ![[MSG3]] = metadata !{i32 [[@LINE+1]], i32 0, metadata !{{.*}}, null}
   return [self testNoSideEffect :foo];
-  // CHECK: ![[RET3]] = !MDLocation(line: [[@LINE+1]], scope: !{{.*}})
+  // CHECK: ![[RET3]] = metadata !{i32 [[@LINE+1]], i32 0, metadata !{{.*}}, null}
 }
 
 - (int)testMultiline:(NSString *)foo {
-  // CHECK: ![[MSG4]] = !MDLocation(line: [[@LINE+1]], scope: !{{.*}})
+  // CHECK: ![[MSG4]] = metadata !{i32 [[@LINE+1]], i32 0, metadata !{{.*}}, null}
   int r = [self testSideEffect :foo];
-  // CHECK: ![[EXP4]] = !MDLocation(line: [[@LINE+1]], scope: !{{.*}})
+  // CHECK: ![[EXP4]] = metadata !{i32 [[@LINE+1]], i32 0, metadata !{{.*}}, null}
   return r;
-  // CHECK: ![[RET4]] = !MDLocation(line: [[@LINE+1]], scope: !{{.*}})
+  // CHECK: ![[RET4]] = metadata !{i32 [[@LINE+1]], i32 0, metadata !{{.*}}, null}
 }
 
 - (void)testVoid:(NSString *)foo {
-  // CHECK: ![[ARC5]] = !MDLocation(line: [[@LINE+1]], scope: !{{.*}})
+  // CHECK: ![[ARC5]] = metadata !{i32 [[@LINE+1]], i32 0, metadata !{{.*}}, null}
   return;
-  // CHECK: ![[RET5]] = !MDLocation(line: [[@LINE+1]], scope: !{{.*}})
+  // CHECK: ![[RET5]] = metadata !{i32 [[@LINE+1]], i32 0, metadata !{{.*}}, null}
 }
 
 - (void)testVoidNoReturn:(NSString *)foo {
-  // CHECK: ![[MSG6]] = !MDLocation(line: [[@LINE+1]], scope: !{{.*}})
+  // CHECK: ![[MSG6]] = metadata !{i32 [[@LINE+1]], i32 0, metadata !{{.*}}, null}
   [self testVoid :foo];
-  // CHECK: ![[RET6]] = !MDLocation(line: [[@LINE+1]], scope: !{{.*}})
+  // CHECK: ![[RET6]] = metadata !{i32 [[@LINE+1]], i32 0, metadata !{{.*}}, null}
 }
 
 - (int)testNoCleanupSideEffect {
-  // CHECK: ![[MSG7]] = !MDLocation(line: [[@LINE+1]], scope: !{{.*}})
+  // CHECK: ![[MSG7]] = metadata !{i32 [[@LINE+1]], i32 0, metadata !{{.*}}, null}
   [self testVoid :@"foo"];
-  // CHECK: ![[RET7]] = !MDLocation(line: [[@LINE+1]], scope: !{{.*}})
+  // CHECK: ![[RET7]] = metadata !{i32 [[@LINE+1]], i32 0, metadata !{{.*}}, null}
   return 1;
-}
-
-- (void)testCleanupVoid:(BOOL)skip withDelegate: (AppDelegate *) delegate {
-  static BOOL skip_all;
-  // CHECK: ![[SKIP1]] = !MDLocation(line: [[@LINE+1]], scope:
-  if (!skip_all) {
-    if (!skip) {
-      return;
-    }
-    NSString *s = @"bar";
-    if (!skip) {
-      [delegate testVoid :s];
-    }
-  }
-  // CHECK: ![[RET8]] = !MDLocation(line: [[@LINE+2]], scope:
-  // CHECK: ![[ARC8]] = !MDLocation(line: [[@LINE+1]], scope:
 }
 
 

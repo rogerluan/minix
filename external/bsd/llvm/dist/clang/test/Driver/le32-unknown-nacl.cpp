@@ -4,9 +4,9 @@
 
 // ECHO: {{.*}} "-cc1" {{.*}}le32-unknown-nacl.c
 
-typedef __builtin_va_list va_list;
-typedef __SIZE_TYPE__ size_t;
-typedef __PTRDIFF_TYPE__ ptrdiff_t;
+// Check platform defines
+#include <stdarg.h>
+#include <stddef.h>
 
 extern "C" {
 

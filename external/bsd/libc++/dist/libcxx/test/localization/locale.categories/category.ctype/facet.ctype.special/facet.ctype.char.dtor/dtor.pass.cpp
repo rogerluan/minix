@@ -19,7 +19,7 @@
 
 unsigned delete_called = 0;
 
-void* operator new[](size_t sz) throw(std::bad_alloc)
+void* operator new[](size_t sz)
 {
     return operator new(sz);
 }

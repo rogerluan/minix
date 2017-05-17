@@ -1,4 +1,4 @@
-/*	$NetBSD: pattern.c,v 1.7 2014/10/02 21:36:37 ast Exp $	*/
+/*	$NetBSD: pattern.c,v 1.6 2003/08/07 09:37:33 agc Exp $	*/
 
 /*
  * Copyright (c) 1989, 1993
@@ -32,20 +32,21 @@
  * SUCH DAMAGE.
  */
 
-#include <sys/types.h>
-
+#include <sys/cdefs.h>
 #ifndef lint
 #if 0
 static char sccsid[] = "@(#)pattern.c	8.1 (Berkeley) 5/31/93";
 #else
-__RCSID("$NetBSD: pattern.c,v 1.7 2014/10/02 21:36:37 ast Exp $");
+__RCSID("$NetBSD: pattern.c,v 1.6 2003/08/07 09:37:33 agc Exp $");
 #endif
 #endif /* not lint */
 
 /*
  * pattern - the Eratosthenes sieve on odd numbers for 3,5,7,11 and 13
  *
- * By Landon Curt Noll, http://www.isthe.com/chongo/index.html /\oo/\
+ * By: Landon Curt Noll                             chongo@toad.com
+ *
+ *   chongo <for a good prime call: 391581 * 2^216193 - 1> /\oo/\
  *
  * To avoid excessive sieves for small factors, we use the table below to 
  * setup our sieve blocks.  Each element represents a odd number starting 
@@ -439,4 +440,4 @@ const char pattern[] = {
 0,0,1,1,0,0,0,0,1,1,0,0,1,0,1,0,0,0,0,0,0,1,0,1,1,0,1,1,0,1,0,0,0,1,0,0,1,0,1,
 0,0,1,1,0,1,0,0,1,1,0,0,1,0,0,1,0,1,1,0,1,0,0,1,1,0,0,1,0,1,1,0,0,0,0,0,0,0,1
 };
-const size_t pattern_size = (sizeof(pattern)/sizeof(pattern[0]));
+const int pattern_size = (sizeof(pattern)/sizeof(pattern[0]));

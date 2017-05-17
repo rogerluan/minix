@@ -12,10 +12,12 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_LIB_TARGET_ARM_THUMB2REGISTERINFO_H
-#define LLVM_LIB_TARGET_ARM_THUMB2REGISTERINFO_H
+#ifndef THUMB2REGISTERINFO_H
+#define THUMB2REGISTERINFO_H
 
+#include "ARM.h"
 #include "ARMBaseRegisterInfo.h"
+#include "llvm/Target/TargetRegisterInfo.h"
 
 namespace llvm {
 
@@ -27,12 +29,14 @@ public:
 
   /// emitLoadConstPool - Emits a load from constpool to materialize the
   /// specified immediate.
-  void
-  emitLoadConstPool(MachineBasicBlock &MBB, MachineBasicBlock::iterator &MBBI,
-                    DebugLoc dl, unsigned DestReg, unsigned SubIdx, int Val,
-                    ARMCC::CondCodes Pred = ARMCC::AL, unsigned PredReg = 0,
-                    unsigned MIFlags = MachineInstr::NoFlags) const override;
+  void emitLoadConstPool(MachineBasicBlock &MBB,
+                         MachineBasicBlock::iterator &MBBI,
+                         DebugLoc dl,
+                         unsigned DestReg, unsigned SubIdx, int Val,
+                         ARMCC::CondCodes Pred = ARMCC::AL,
+                         unsigned PredReg = 0,
+                         unsigned MIFlags = MachineInstr::NoFlags) const;
 };
 }
 
-#endif
+#endif // THUMB2REGISTERINFO_H

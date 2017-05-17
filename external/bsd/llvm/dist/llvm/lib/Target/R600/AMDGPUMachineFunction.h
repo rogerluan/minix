@@ -10,8 +10,8 @@
 /// \file
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_LIB_TARGET_R600_AMDGPUMACHINEFUNCTION_H
-#define LLVM_LIB_TARGET_R600_AMDGPUMACHINEFUNCTION_H
+#ifndef AMDGPUMACHINEFUNCTION_H
+#define AMDGPUMACHINEFUNCTION_H
 
 #include "llvm/CodeGen/MachineFunction.h"
 #include <map>
@@ -20,26 +20,15 @@ namespace llvm {
 
 class AMDGPUMachineFunction : public MachineFunctionInfo {
   virtual void anchor();
-  unsigned ShaderType;
-
 public:
   AMDGPUMachineFunction(const MachineFunction &MF);
+  unsigned ShaderType;
   /// A map to keep track of local memory objects and their offsets within
   /// the local memory space.
   std::map<const GlobalValue *, unsigned> LocalMemoryObjects;
   /// Number of bytes in the LDS that are being used.
   unsigned LDSSize;
-
-  /// Start of implicit kernel args
-  unsigned ABIArgOffset;
-
-  unsigned getShaderType() const {
-    return ShaderType;
-  }
-
-  unsigned ScratchSize;
-  bool IsKernel;
 };
 
 }
-#endif
+#endif // AMDGPUMACHINEFUNCTION_H

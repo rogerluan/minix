@@ -154,7 +154,7 @@ namespace Unevaluated {
       constexpr S2() {}
       constexpr operator int() const { return 123456; }
     };
-    int k2 = sizeof(short{S2(S2())}); // expected-error {{cannot be narrowed}} expected-note {{insert an explicit cast to silence this issue}}
+    int k2 = sizeof(short{S2(S2())}); // expected-error {{cannot be narrowed}} expected-note {{override}}
   }
 
   namespace PR12288 {

@@ -1,15 +1,5 @@
-set(LLVM_LINK_COMPONENTS
-  Analysis
-  Core
-  ExecutionEngine
-  InstCombine
-  MC
-  ScalarOpts
-  Support
-  native
-  mcjit
-  )
+set(LLVM_LINK_COMPONENTS core jit interpreter native)
 
-add_kaleidoscope_chapter(Kaleidoscope-Ch5
+add_llvm_example(Kaleidoscope-Ch5
   toy.cpp
   )

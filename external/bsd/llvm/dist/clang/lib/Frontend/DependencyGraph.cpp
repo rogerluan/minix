@@ -46,13 +46,17 @@ public:
                           StringRef SysRoot)
     : PP(_PP), OutputFile(OutputFile.str()), SysRoot(SysRoot.str()) { }
 
-  void InclusionDirective(SourceLocation HashLoc, const Token &IncludeTok,
-                          StringRef FileName, bool IsAngled,
-                          CharSourceRange FilenameRange, const FileEntry *File,
-                          StringRef SearchPath, StringRef RelativePath,
-                          const Module *Imported) override;
+  virtual void InclusionDirective(SourceLocation HashLoc,
+                                  const Token &IncludeTok,
+                                  StringRef FileName,
+                                  bool IsAngled,
+                                  CharSourceRange FilenameRange,
+                                  const FileEntry *File,
+                                  StringRef SearchPath,
+                                  StringRef RelativePath,
+                                  const Module *Imported);
 
-  void EndOfMainFile() override {
+  virtual void EndOfMainFile() {
     OutputGraphFile();
   }
   
@@ -61,8 +65,7 @@ public:
 
 void clang::AttachDependencyGraphGen(Preprocessor &PP, StringRef OutputFile,
                                      StringRef SysRoot) {
-  PP.addPPCallbacks(llvm::make_unique<DependencyGraphCallback>(&PP, OutputFile,
-                                                               SysRoot));
+  PP.addPPCallbacks(new DependencyGraphCallback(&PP, OutputFile, SysRoot));
 }
 
 void DependencyGraphCallback::InclusionDirective(SourceLocation HashLoc,
@@ -80,7 +83,7 @@ void DependencyGraphCallback::InclusionDirective(SourceLocation HashLoc,
   SourceManager &SM = PP->getSourceManager();
   const FileEntry *FromFile
     = SM.getFileEntryForID(SM.getFileID(SM.getExpansionLoc(HashLoc)));
-  if (!FromFile)
+  if (FromFile == 0) 
     return;
 
   Dependencies[FromFile].push_back(File);
@@ -97,11 +100,11 @@ DependencyGraphCallback::writeNodeReference(raw_ostream &OS,
 }
 
 void DependencyGraphCallback::OutputGraphFile() {
-  std::error_code EC;
-  llvm::raw_fd_ostream OS(OutputFile, EC, llvm::sys::fs::F_Text);
-  if (EC) {
-    PP->getDiagnostics().Report(diag::err_fe_error_opening) << OutputFile
-                                                            << EC.message();
+  std::string Err;
+  llvm::raw_fd_ostream OS(OutputFile.c_str(), Err);
+  if (!Err.empty()) {
+    PP->getDiagnostics().Report(diag::err_fe_error_opening)
+      << OutputFile << Err;
     return;
   }
 

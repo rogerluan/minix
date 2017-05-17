@@ -12,7 +12,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "ASTCommon.h"
-#include "clang/AST/DeclCXX.h"
 #include "clang/AST/DeclObjC.h"
 #include "clang/Basic/IdentifierTable.h"
 #include "clang/Serialization/ASTDeserializationListener.h"
@@ -96,21 +95,21 @@ serialization::getDefinitiveDeclContext(const DeclContext *DC) {
   case Decl::TranslationUnit:
   case Decl::Namespace:
   case Decl::LinkageSpec:
-    return nullptr;
+    return 0;
 
   // C/C++ tag types can only be defined in one place.
   case Decl::Enum:
   case Decl::Record:
     if (const TagDecl *Def = cast<TagDecl>(DC)->getDefinition())
       return Def;
-    return nullptr;
+    return 0;
 
   // FIXME: These can be defined in one place... except special member
   // functions and out-of-line definitions.
   case Decl::CXXRecord:
   case Decl::ClassTemplateSpecialization:
   case Decl::ClassTemplatePartialSpecialization:
-    return nullptr;
+    return 0;
 
   // Each function, method, and block declaration is its own DeclContext.
   case Decl::Function:
@@ -132,14 +131,14 @@ serialization::getDefinitiveDeclContext(const DeclContext *DC) {
     if (const ObjCProtocolDecl *Def
           = cast<ObjCProtocolDecl>(DC)->getDefinition())
       return Def;
-    return nullptr;
+    return 0;
 
   // FIXME: These are defined in one place, but properties in class extensions
   // end up being back-patched into the main interface. See
   // Sema::HandlePropertyInClassExtension for the offending code.
   case Decl::ObjCInterface:
-    return nullptr;
-
+    return 0;
+    
   default:
     llvm_unreachable("Unhandled DeclContext in AST reader");
   }
@@ -151,7 +150,7 @@ bool serialization::isRedeclarableDeclKind(unsigned Kind) {
   switch (static_cast<Decl::Kind>(Kind)) {
   case Decl::TranslationUnit: // Special case of a "merged" declaration.
   case Decl::Namespace:
-  case Decl::NamespaceAlias:
+  case Decl::NamespaceAlias: // FIXME: Not yet redeclarable, but will be.
   case Decl::Typedef:
   case Decl::TypeAlias:
   case Decl::Enum:
@@ -189,6 +188,8 @@ bool serialization::isRedeclarableDeclKind(unsigned Kind) {
   case Decl::MSProperty:
   case Decl::ObjCIvar:
   case Decl::ObjCAtDefsField:
+  case Decl::ImplicitParam:
+  case Decl::ParmVar:
   case Decl::NonTypeTemplateParm:
   case Decl::TemplateTemplateParm:
   case Decl::Using:
@@ -211,20 +212,7 @@ bool serialization::isRedeclarableDeclKind(unsigned Kind) {
   case Decl::Import:
   case Decl::OMPThreadPrivate:
     return false;
-
-  // These indirectly derive from Redeclarable<T> but are not actually
-  // redeclarable.
-  case Decl::ImplicitParam:
-  case Decl::ParmVar:
-    return false;
   }
 
   llvm_unreachable("Unhandled declaration kind");
 }
-
-bool serialization::needsAnonymousDeclarationNumber(const NamedDecl *D) {
-  if (D->getDeclName() || !isa<CXXRecordDecl>(D->getLexicalDeclContext()))
-    return false;
-  return isa<TagDecl>(D) || isa<FieldDecl>(D);
-}
-

@@ -7,17 +7,17 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_LIB_TARGET_SYSTEMZ_SYSTEMZCALLINGCONV_H
-#define LLVM_LIB_TARGET_SYSTEMZ_SYSTEMZCALLINGCONV_H
+#ifndef SYSTEMZCALLINGCONV_H
+#define SYSTEMZCALLINGCONV_H
 
 namespace llvm {
-namespace SystemZ {
-  const unsigned NumArgGPRs = 5;
-  extern const unsigned ArgGPRs[NumArgGPRs];
+  namespace SystemZ {
+    const unsigned NumArgGPRs = 5;
+    extern const unsigned ArgGPRs[NumArgGPRs];
 
-  const unsigned NumArgFPRs = 4;
-  extern const unsigned ArgFPRs[NumArgFPRs];
-} // end namespace SystemZ
-} // end namespace llvm
+    const unsigned NumArgFPRs = 4;
+    extern const unsigned ArgFPRs[NumArgFPRs];
+  }
+}
 
 #endif

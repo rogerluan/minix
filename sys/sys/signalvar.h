@@ -1,4 +1,4 @@
-/*	$NetBSD: signalvar.h,v 1.86 2014/05/15 07:11:30 uebayasi Exp $	*/
+/*	$NetBSD: signalvar.h,v 1.84 2013/11/22 21:04:11 christos Exp $	*/
 
 /*
  * Copyright (c) 1991, 1993
@@ -116,12 +116,11 @@ struct sigctx {
 extern sigset_t contsigmask, sigcantmask;
 
 struct vnode;
-struct coredump_iostate;
 
 /*
  * Machine-independent functions:
  */
-int	coredump_netbsd(struct lwp *, struct coredump_iostate *);
+int	coredump_netbsd(struct lwp *, void *);
 void	execsigs(struct proc *);
 int	issignal(struct lwp *);
 void	pgsignal(struct pgrp *, int, int);
@@ -132,7 +131,7 @@ void	kpsignal(struct proc *, struct ksiginfo *, void *);
 void	child_psignal(struct proc *, int);
 void	siginit(struct proc *);
 void	trapsignal(struct lwp *, struct ksiginfo *);
-void	sigexit(struct lwp *, int) __dead;
+void	sigexit(struct lwp *, int);
 void	killproc(struct proc *, const char *);
 void	setsigvec(struct proc *, int, struct sigaction *);
 int	killpg1(struct lwp *, struct ksiginfo *, int, int);

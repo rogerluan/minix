@@ -1,4 +1,4 @@
-/* $NetBSD: compident.S,v 1.3 2014/05/14 14:59:14 joerg Exp $ */
+/* $NetBSD: compident.S,v 1.1 2013/11/14 12:19:34 martin Exp $ */
 
 /*-
  * Copyright (c) 2002, 2008 The NetBSD Foundation, Inc.
@@ -55,7 +55,7 @@
 
 #include "sysident_assym.h"
 
-	.section .note.netbsd.mcmodel,"aM",@note,3*4+CONTENTLENGTH+ELF_NOTE_MCMODEL_NAMESZ+1
+	.section ".note.netbsd.mcmodel", "a"
 	.p2align 2
 
 	.long	ELF_NOTE_MCMODEL_NAMESZ
@@ -63,4 +63,3 @@
 	.long	ELF_NOTE_TYPE_MCMODEL_TAG
 	.ascii	"NetBSD\0\0"
 	.ascii	CONTENT
-	.p2align 2

@@ -1,4 +1,4 @@
-/*	$NetBSD: divsi3.S,v 1.7 2014/05/23 02:34:19 uebayasi Exp $	*/
+/*	$NetBSD: divsi3.S,v 1.6 2003/08/07 16:42:07 agc Exp $	*/
 
 /*-
  * Copyright (c) 1990 The Regents of the University of California.
@@ -36,7 +36,7 @@
 
 #include <machine/asm.h>
 #if defined(LIBC_SCCS)
-	RCSID("$NetBSD: divsi3.S,v 1.7 2014/05/23 02:34:19 uebayasi Exp $")
+	RCSID("$NetBSD: divsi3.S,v 1.6 2003/08/07 16:42:07 agc Exp $")
 #endif
 
 ENTRY(__divsi3)
@@ -44,4 +44,3 @@ ENTRY(__divsi3)
 	cltd
 	idivl 8(%esp)
 	ret
-END(__divsi3)

@@ -49,12 +49,7 @@ struct bit_zero
 
 class Abstract
 {
-    virtual void foo() = 0;
-};
-
-class AbstractDestructor
-{
-    virtual ~AbstractDestructor() = 0;
+    virtual ~Abstract() = 0;
 };
 
 struct A
@@ -65,7 +60,7 @@ struct A
 int main()
 {
     test_has_not_nothrow_destructor<void>();
-    test_has_not_nothrow_destructor<AbstractDestructor>();
+    test_has_not_nothrow_destructor<Abstract>();
     test_has_not_nothrow_destructor<NotEmpty>();
 
 #if __has_feature(cxx_noexcept)
@@ -84,7 +79,6 @@ int main()
     test_is_nothrow_destructible<const int*>();
     test_is_nothrow_destructible<char[3]>();
     test_is_nothrow_destructible<char[3]>();
-    test_is_nothrow_destructible<Abstract>();
 #if __has_feature(cxx_noexcept)
     test_is_nothrow_destructible<bit_zero>();
 #endif

@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.53 2015/01/29 20:30:02 joerg Exp $
+#	$NetBSD: Makefile,v 1.51 2012/08/10 12:20:10 joerg Exp $
 #	@(#)Makefile	8.1 (Berkeley) 6/4/93
 
 USE_SHLIBDIR=	yes
@@ -13,7 +13,6 @@ LIBDPLIBS+=     terminfo ${.CURDIR}/../libterminfo
 
 COPTS+=	-Wunused-parameter
 CWARNFLAGS.gcc+=	-Wconversion
-CWARNFLAGS.clang+=	-Wno-cast-qual
 
 OSRCS=	chared.c common.c el.c emacs.c fcns.c filecomplete.c help.c \
 	hist.c keymacro.c map.c chartype.c \
@@ -128,7 +127,7 @@ tc1:	libedit.a tc1.o
 .include <bsd.subdir.mk>
 
 # XXX
-.if defined(HAVE_GCC)
+.if defined(HAVE_GCC) && ${HAVE_GCC} >= 45
 COPTS.editline.c+=	-Wno-cast-qual
 COPTS.tokenizer.c+=	-Wno-cast-qual
 COPTS.tokenizern.c+=	-Wno-cast-qual

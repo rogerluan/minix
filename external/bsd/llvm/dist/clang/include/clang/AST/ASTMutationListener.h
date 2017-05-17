@@ -65,10 +65,6 @@ public:
   virtual void AddedCXXTemplateSpecialization(const FunctionTemplateDecl *TD,
                                               const FunctionDecl *D) {}
 
-  /// \brief A function's exception specification has been evaluated or
-  /// instantiated.
-  virtual void ResolvedExceptionSpec(const FunctionDecl *FD) {}
-
   /// \brief A function's return type has been deduced.
   virtual void DeducedReturnType(const FunctionDecl *FD, QualType ReturnType);
 
@@ -77,9 +73,6 @@ public:
 
   /// \brief A static data member was implicitly instantiated.
   virtual void StaticDataMemberInstantiated(const VarDecl *D) {}
-
-  /// \brief A function template's definition was instantiated.
-  virtual void FunctionDefinitionInstantiated(const FunctionDecl *D) {}
 
   /// \brief A new objc category class was added for an interface.
   virtual void AddedObjCCategoryToInterface(const ObjCCategoryDecl *CatD,
@@ -101,12 +94,6 @@ public:
   ///
   /// \param D the declaration marked used
   virtual void DeclarationMarkedUsed(const Decl *D) {}
-
-  /// \brief A declaration is marked as OpenMP threadprivate which was not
-  /// previously marked as threadprivate.
-  ///
-  /// \param D the declaration marked OpenMP threadprivate.
-  virtual void DeclarationMarkedOpenMPThreadPrivate(const Decl *D) {}
 
   // NOTE: If new methods are added they should also be added to
   // MultiplexASTMutationListener.

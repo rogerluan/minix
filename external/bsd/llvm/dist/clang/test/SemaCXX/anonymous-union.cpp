@@ -80,13 +80,9 @@ union { // expected-error{{anonymous unions at namespace or global scope must be
 };
 
 static union {
-  int int_val2; // expected-note{{previous definition is here}}
+  int int_val2;
   float float_val2;
 };
-
-void PR21858() {
-  void int_val2(); // expected-error{{redefinition of 'int_val2' as different kind of symbol}}
-}
 
 void f() {
   int_val2 = 0;

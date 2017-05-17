@@ -1,4 +1,4 @@
-/* $NetBSD: t_log.c,v 1.13 2015/02/09 19:39:48 martin Exp $ */
+/* $NetBSD: t_log.c,v 1.8 2012/04/08 09:36:04 jruoho Exp $ */
 
 /*-
  * Copyright (c) 2011 The NetBSD Foundation, Inc.
@@ -29,9 +29,10 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 #include <sys/cdefs.h>
-__RCSID("$NetBSD: t_log.c,v 1.13 2015/02/09 19:39:48 martin Exp $");
+__RCSID("$NetBSD: t_log.c,v 1.8 2012/04/08 09:36:04 jruoho Exp $");
 
 #include <atf-c.h>
+#include <atf-c/config.h>
 
 #include <math.h>
 #include <stdio.h>
@@ -59,10 +60,12 @@ ATF_TC_HEAD(log10_nan, tc)
 
 ATF_TC_BODY(log10_nan, tc)
 {
+#ifndef __vax__
 	const double x = 0.0L / 0.0L;
 
 	ATF_CHECK(isnan(x) != 0);
 	ATF_CHECK(isnan(log10(x)) != 0);
+#endif
 }
 
 ATF_TC(log10_inf_neg);
@@ -73,10 +76,12 @@ ATF_TC_HEAD(log10_inf_neg, tc)
 
 ATF_TC_BODY(log10_inf_neg, tc)
 {
+#ifndef __vax__
 	const double x = -1.0L / 0.0L;
 	const double y = log10(x);
 
 	ATF_CHECK(isnan(y) != 0);
+#endif
 }
 
 ATF_TC(log10_inf_pos);
@@ -87,9 +92,11 @@ ATF_TC_HEAD(log10_inf_pos, tc)
 
 ATF_TC_BODY(log10_inf_pos, tc)
 {
+#ifndef __vax__
 	const double x = 1.0L / 0.0L;
 
 	ATF_CHECK(log10(x) == x);
+#endif
 }
 
 ATF_TC(log10_one_pos);
@@ -100,12 +107,14 @@ ATF_TC_HEAD(log10_one_pos, tc)
 
 ATF_TC_BODY(log10_one_pos, tc)
 {
+#ifndef __vax__
 	const double x = log10(1.0);
 	const double y = 0.0L;
 
 	ATF_CHECK(x == y);
 	ATF_CHECK(signbit(x) == 0);
 	ATF_CHECK(signbit(y) == 0);
+#endif
 }
 
 ATF_TC(log10_zero_neg);
@@ -116,9 +125,11 @@ ATF_TC_HEAD(log10_zero_neg, tc)
 
 ATF_TC_BODY(log10_zero_neg, tc)
 {
+#ifndef __vax__
 	const double x = -0.0L;
 
 	ATF_CHECK(log10(x) == -HUGE_VAL);
+#endif
 }
 
 ATF_TC(log10_zero_pos);
@@ -129,9 +140,11 @@ ATF_TC_HEAD(log10_zero_pos, tc)
 
 ATF_TC_BODY(log10_zero_pos, tc)
 {
+#ifndef __vax__
 	const double x = 0.0L;
 
 	ATF_CHECK(log10(x) == -HUGE_VAL);
+#endif
 }
 
 /*
@@ -156,10 +169,12 @@ ATF_TC_HEAD(log10f_nan, tc)
 
 ATF_TC_BODY(log10f_nan, tc)
 {
+#ifndef __vax__
 	const float x = 0.0L / 0.0L;
 
 	ATF_CHECK(isnan(x) != 0);
 	ATF_CHECK(isnan(log10f(x)) != 0);
+#endif
 }
 
 ATF_TC(log10f_inf_neg);
@@ -170,10 +185,12 @@ ATF_TC_HEAD(log10f_inf_neg, tc)
 
 ATF_TC_BODY(log10f_inf_neg, tc)
 {
+#ifndef __vax__
 	const float x = -1.0L / 0.0L;
 	const float y = log10f(x);
 
 	ATF_CHECK(isnan(y) != 0);
+#endif
 }
 
 ATF_TC(log10f_inf_pos);
@@ -184,9 +201,14 @@ ATF_TC_HEAD(log10f_inf_pos, tc)
 
 ATF_TC_BODY(log10f_inf_pos, tc)
 {
+#ifndef __vax__
 	const float x = 1.0L / 0.0L;
 
+	if (strcmp(atf_config_get("atf_arch"), "alpha") == 0)
+		atf_tc_expect_fail("PR port-alpha/46301");
+
 	ATF_CHECK(log10f(x) == x);
+#endif
 }
 
 ATF_TC(log10f_one_pos);
@@ -197,12 +219,14 @@ ATF_TC_HEAD(log10f_one_pos, tc)
 
 ATF_TC_BODY(log10f_one_pos, tc)
 {
+#ifndef __vax__
 	const float x = log10f(1.0);
 	const float y = 0.0L;
 
 	ATF_CHECK(x == y);
 	ATF_CHECK(signbit(x) == 0);
 	ATF_CHECK(signbit(y) == 0);
+#endif
 }
 
 ATF_TC(log10f_zero_neg);
@@ -213,9 +237,11 @@ ATF_TC_HEAD(log10f_zero_neg, tc)
 
 ATF_TC_BODY(log10f_zero_neg, tc)
 {
+#ifndef __vax__
 	const float x = -0.0L;
 
 	ATF_CHECK(log10f(x) == -HUGE_VALF);
+#endif
 }
 
 ATF_TC(log10f_zero_pos);
@@ -226,9 +252,11 @@ ATF_TC_HEAD(log10f_zero_pos, tc)
 
 ATF_TC_BODY(log10f_zero_pos, tc)
 {
+#ifndef __vax__
 	const float x = 0.0L;
 
 	ATF_CHECK(log10f(x) == -HUGE_VALF);
+#endif
 }
 
 /*
@@ -242,10 +270,12 @@ ATF_TC_HEAD(log1p_nan, tc)
 
 ATF_TC_BODY(log1p_nan, tc)
 {
+#ifndef __vax__
 	const double x = 0.0L / 0.0L;
 
 	ATF_CHECK(isnan(x) != 0);
 	ATF_CHECK(isnan(log1p(x)) != 0);
+#endif
 }
 
 ATF_TC(log1p_inf_neg);
@@ -256,6 +286,7 @@ ATF_TC_HEAD(log1p_inf_neg, tc)
 
 ATF_TC_BODY(log1p_inf_neg, tc)
 {
+#ifndef __vax__
 	const double x = -1.0L / 0.0L;
 	const double y = log1p(x);
 
@@ -263,6 +294,7 @@ ATF_TC_BODY(log1p_inf_neg, tc)
 		atf_tc_expect_fail("PR lib/45362");
 		atf_tc_fail("log1p(-Inf) != NaN");
 	}
+#endif
 }
 
 ATF_TC(log1p_inf_pos);
@@ -273,9 +305,11 @@ ATF_TC_HEAD(log1p_inf_pos, tc)
 
 ATF_TC_BODY(log1p_inf_pos, tc)
 {
+#ifndef __vax__
 	const double x = 1.0L / 0.0L;
 
 	ATF_CHECK(log1p(x) == x);
+#endif
 }
 
 ATF_TC(log1p_one_neg);
@@ -286,12 +320,14 @@ ATF_TC_HEAD(log1p_one_neg, tc)
 
 ATF_TC_BODY(log1p_one_neg, tc)
 {
+#ifndef __vax__
 	const double x = log1p(-1.0);
 
 	if (x != -HUGE_VAL) {
 		atf_tc_expect_fail("PR lib/45362");
 		atf_tc_fail("log1p(-1.0) != -HUGE_VAL");
 	}
+#endif
 }
 
 ATF_TC(log1p_zero_neg);
@@ -302,9 +338,11 @@ ATF_TC_HEAD(log1p_zero_neg, tc)
 
 ATF_TC_BODY(log1p_zero_neg, tc)
 {
+#ifndef __vax__
 	const double x = -0.0L;
 
 	ATF_CHECK(log1p(x) == x);
+#endif
 }
 
 ATF_TC(log1p_zero_pos);
@@ -315,9 +353,11 @@ ATF_TC_HEAD(log1p_zero_pos, tc)
 
 ATF_TC_BODY(log1p_zero_pos, tc)
 {
+#ifndef __vax__
 	const double x = 0.0L;
 
 	ATF_CHECK(log1p(x) == x);
+#endif
 }
 
 /*
@@ -331,10 +371,12 @@ ATF_TC_HEAD(log1pf_nan, tc)
 
 ATF_TC_BODY(log1pf_nan, tc)
 {
+#ifndef __vax__
 	const float x = 0.0L / 0.0L;
 
 	ATF_CHECK(isnan(x) != 0);
 	ATF_CHECK(isnan(log1pf(x)) != 0);
+#endif
 }
 
 ATF_TC(log1pf_inf_neg);
@@ -345,6 +387,7 @@ ATF_TC_HEAD(log1pf_inf_neg, tc)
 
 ATF_TC_BODY(log1pf_inf_neg, tc)
 {
+#ifndef __vax__
 	const float x = -1.0L / 0.0L;
 	const float y = log1pf(x);
 
@@ -352,6 +395,7 @@ ATF_TC_BODY(log1pf_inf_neg, tc)
 		atf_tc_expect_fail("PR lib/45362");
 		atf_tc_fail("log1pf(-Inf) != NaN");
 	}
+#endif
 }
 
 ATF_TC(log1pf_inf_pos);
@@ -362,9 +406,11 @@ ATF_TC_HEAD(log1pf_inf_pos, tc)
 
 ATF_TC_BODY(log1pf_inf_pos, tc)
 {
+#ifndef __vax__
 	const float x = 1.0L / 0.0L;
 
 	ATF_CHECK(log1pf(x) == x);
+#endif
 }
 
 ATF_TC(log1pf_one_neg);
@@ -375,12 +421,14 @@ ATF_TC_HEAD(log1pf_one_neg, tc)
 
 ATF_TC_BODY(log1pf_one_neg, tc)
 {
+#ifndef __vax__
 	const float x = log1pf(-1.0);
 
 	if (x != -HUGE_VALF) {
 		atf_tc_expect_fail("PR lib/45362");
 		atf_tc_fail("log1pf(-1.0) != -HUGE_VALF");
 	}
+#endif
 }
 
 ATF_TC(log1pf_zero_neg);
@@ -391,9 +439,11 @@ ATF_TC_HEAD(log1pf_zero_neg, tc)
 
 ATF_TC_BODY(log1pf_zero_neg, tc)
 {
+#ifndef __vax__
 	const float x = -0.0L;
 
 	ATF_CHECK(log1pf(x) == x);
+#endif
 }
 
 ATF_TC(log1pf_zero_pos);
@@ -404,9 +454,11 @@ ATF_TC_HEAD(log1pf_zero_pos, tc)
 
 ATF_TC_BODY(log1pf_zero_pos, tc)
 {
+#ifndef __vax__
 	const float x = 0.0L;
 
 	ATF_CHECK(log1pf(x) == x);
+#endif
 }
 
 /*
@@ -431,10 +483,12 @@ ATF_TC_HEAD(log2_nan, tc)
 
 ATF_TC_BODY(log2_nan, tc)
 {
+#ifndef __vax__
 	const double x = 0.0L / 0.0L;
 
 	ATF_CHECK(isnan(x) != 0);
 	ATF_CHECK(isnan(log2(x)) != 0);
+#endif
 }
 
 ATF_TC(log2_inf_neg);
@@ -445,10 +499,12 @@ ATF_TC_HEAD(log2_inf_neg, tc)
 
 ATF_TC_BODY(log2_inf_neg, tc)
 {
+#ifndef __vax__
 	const double x = -1.0L / 0.0L;
 	const double y = log2(x);
 
 	ATF_CHECK(isnan(y) != 0);
+#endif
 }
 
 ATF_TC(log2_inf_pos);
@@ -459,9 +515,11 @@ ATF_TC_HEAD(log2_inf_pos, tc)
 
 ATF_TC_BODY(log2_inf_pos, tc)
 {
+#ifndef __vax__
 	const double x = 1.0L / 0.0L;
 
 	ATF_CHECK(log2(x) == x);
+#endif
 }
 
 ATF_TC(log2_one_pos);
@@ -472,12 +530,14 @@ ATF_TC_HEAD(log2_one_pos, tc)
 
 ATF_TC_BODY(log2_one_pos, tc)
 {
+#ifndef __vax__
 	const double x = log2(1.0);
 	const double y = 0.0L;
 
 	ATF_CHECK(x == y);
 	ATF_CHECK(signbit(x) == 0);
 	ATF_CHECK(signbit(y) == 0);
+#endif
 }
 
 ATF_TC(log2_zero_neg);
@@ -488,9 +548,11 @@ ATF_TC_HEAD(log2_zero_neg, tc)
 
 ATF_TC_BODY(log2_zero_neg, tc)
 {
+#ifndef __vax__
 	const double x = -0.0L;
 
 	ATF_CHECK(log2(x) == -HUGE_VAL);
+#endif
 }
 
 ATF_TC(log2_zero_pos);
@@ -501,9 +563,11 @@ ATF_TC_HEAD(log2_zero_pos, tc)
 
 ATF_TC_BODY(log2_zero_pos, tc)
 {
+#ifndef __vax__
 	const double x = 0.0L;
 
 	ATF_CHECK(log2(x) == -HUGE_VAL);
+#endif
 }
 
 /*
@@ -528,10 +592,12 @@ ATF_TC_HEAD(log2f_nan, tc)
 
 ATF_TC_BODY(log2f_nan, tc)
 {
+#ifndef __vax__
 	const float x = 0.0L / 0.0L;
 
 	ATF_CHECK(isnan(x) != 0);
 	ATF_CHECK(isnan(log2f(x)) != 0);
+#endif
 }
 
 ATF_TC(log2f_inf_neg);
@@ -542,10 +608,12 @@ ATF_TC_HEAD(log2f_inf_neg, tc)
 
 ATF_TC_BODY(log2f_inf_neg, tc)
 {
+#ifndef __vax__
 	const float x = -1.0L / 0.0L;
 	const float y = log2f(x);
 
 	ATF_CHECK(isnan(y) != 0);
+#endif
 }
 
 ATF_TC(log2f_inf_pos);
@@ -556,9 +624,14 @@ ATF_TC_HEAD(log2f_inf_pos, tc)
 
 ATF_TC_BODY(log2f_inf_pos, tc)
 {
+#ifndef __vax__
 	const float x = 1.0L / 0.0L;
 
+	if (strcmp(atf_config_get("atf_arch"), "alpha") == 0)
+		atf_tc_expect_fail("PR port-alpha/46301");
+
 	ATF_CHECK(log2f(x) == x);
+#endif
 }
 
 ATF_TC(log2f_one_pos);
@@ -569,12 +642,14 @@ ATF_TC_HEAD(log2f_one_pos, tc)
 
 ATF_TC_BODY(log2f_one_pos, tc)
 {
+#ifndef __vax__
 	const float x = log2f(1.0);
 	const float y = 0.0L;
 
 	ATF_CHECK(x == y);
 	ATF_CHECK(signbit(x) == 0);
 	ATF_CHECK(signbit(y) == 0);
+#endif
 }
 
 ATF_TC(log2f_zero_neg);
@@ -585,9 +660,11 @@ ATF_TC_HEAD(log2f_zero_neg, tc)
 
 ATF_TC_BODY(log2f_zero_neg, tc)
 {
+#ifndef __vax__
 	const float x = -0.0L;
 
 	ATF_CHECK(log2f(x) == -HUGE_VALF);
+#endif
 }
 
 ATF_TC(log2f_zero_pos);
@@ -598,9 +675,11 @@ ATF_TC_HEAD(log2f_zero_pos, tc)
 
 ATF_TC_BODY(log2f_zero_pos, tc)
 {
+#ifndef __vax__
 	const float x = 0.0L;
 
 	ATF_CHECK(log2f(x) == -HUGE_VALF);
+#endif
 }
 
 /*
@@ -628,10 +707,12 @@ ATF_TC_HEAD(log_nan, tc)
 
 ATF_TC_BODY(log_nan, tc)
 {
+#ifndef __vax__
 	const double x = 0.0L / 0.0L;
 
 	ATF_CHECK(isnan(x) != 0);
 	ATF_CHECK(isnan(log(x)) != 0);
+#endif
 }
 
 ATF_TC(log_inf_neg);
@@ -642,10 +723,12 @@ ATF_TC_HEAD(log_inf_neg, tc)
 
 ATF_TC_BODY(log_inf_neg, tc)
 {
+#ifndef __vax__
 	const double x = -1.0L / 0.0L;
 	const double y = log(x);
 
 	ATF_CHECK(isnan(y) != 0);
+#endif
 }
 
 ATF_TC(log_inf_pos);
@@ -656,9 +739,11 @@ ATF_TC_HEAD(log_inf_pos, tc)
 
 ATF_TC_BODY(log_inf_pos, tc)
 {
+#ifndef __vax__
 	const double x = 1.0L / 0.0L;
 
 	ATF_CHECK(log(x) == x);
+#endif
 }
 
 ATF_TC(log_one_pos);
@@ -669,12 +754,14 @@ ATF_TC_HEAD(log_one_pos, tc)
 
 ATF_TC_BODY(log_one_pos, tc)
 {
+#ifndef __vax__
 	const double x = log(1.0);
 	const double y = 0.0L;
 
 	ATF_CHECK(x == y);
 	ATF_CHECK(signbit(x) == 0);
 	ATF_CHECK(signbit(y) == 0);
+#endif
 }
 
 ATF_TC(log_zero_neg);
@@ -685,9 +772,11 @@ ATF_TC_HEAD(log_zero_neg, tc)
 
 ATF_TC_BODY(log_zero_neg, tc)
 {
+#ifndef __vax__
 	const double x = -0.0L;
 
 	ATF_CHECK(log(x) == -HUGE_VAL);
+#endif
 }
 
 ATF_TC(log_zero_pos);
@@ -698,9 +787,11 @@ ATF_TC_HEAD(log_zero_pos, tc)
 
 ATF_TC_BODY(log_zero_pos, tc)
 {
+#ifndef __vax__
 	const double x = 0.0L;
 
 	ATF_CHECK(log(x) == -HUGE_VAL);
+#endif
 }
 
 /*
@@ -716,7 +807,7 @@ ATF_TC_BODY(logf_base, tc)
 {
 	const float eps = 1.0e-7;
 
-	if (fabsf(logf(M_E) - 1.0f) > eps)
+	if (fabsf(logf(M_E) - 1.0) > eps)
 		atf_tc_fail_nonfatal("logf(e) != 1");
 }
 
@@ -728,10 +819,12 @@ ATF_TC_HEAD(logf_nan, tc)
 
 ATF_TC_BODY(logf_nan, tc)
 {
+#ifndef __vax__
 	const float x = 0.0L / 0.0L;
 
 	ATF_CHECK(isnan(x) != 0);
 	ATF_CHECK(isnan(logf(x)) != 0);
+#endif
 }
 
 ATF_TC(logf_inf_neg);
@@ -742,10 +835,12 @@ ATF_TC_HEAD(logf_inf_neg, tc)
 
 ATF_TC_BODY(logf_inf_neg, tc)
 {
+#ifndef __vax__
 	const float x = -1.0L / 0.0L;
 	const float y = logf(x);
 
 	ATF_CHECK(isnan(y) != 0);
+#endif
 }
 
 ATF_TC(logf_inf_pos);
@@ -756,9 +851,14 @@ ATF_TC_HEAD(logf_inf_pos, tc)
 
 ATF_TC_BODY(logf_inf_pos, tc)
 {
+#ifndef __vax__
 	const float x = 1.0L / 0.0L;
 
+	if (strcmp(atf_config_get("atf_arch"), "alpha") == 0)
+		atf_tc_expect_fail("PR port-alpha/46301");
+
 	ATF_CHECK(logf(x) == x);
+#endif
 }
 
 ATF_TC(logf_one_pos);
@@ -769,12 +869,14 @@ ATF_TC_HEAD(logf_one_pos, tc)
 
 ATF_TC_BODY(logf_one_pos, tc)
 {
+#ifndef __vax__
 	const float x = logf(1.0);
 	const float y = 0.0L;
 
 	ATF_CHECK(x == y);
 	ATF_CHECK(signbit(x) == 0);
 	ATF_CHECK(signbit(y) == 0);
+#endif
 }
 
 ATF_TC(logf_zero_neg);
@@ -785,9 +887,11 @@ ATF_TC_HEAD(logf_zero_neg, tc)
 
 ATF_TC_BODY(logf_zero_neg, tc)
 {
+#ifndef __vax__
 	const float x = -0.0L;
 
 	ATF_CHECK(logf(x) == -HUGE_VALF);
+#endif
 }
 
 ATF_TC(logf_zero_pos);
@@ -798,9 +902,11 @@ ATF_TC_HEAD(logf_zero_pos, tc)
 
 ATF_TC_BODY(logf_zero_pos, tc)
 {
+#ifndef __vax__
 	const float x = 0.0L;
 
 	ATF_CHECK(logf(x) == -HUGE_VALF);
+#endif
 }
 
 ATF_TP_ADD_TCS(tp)

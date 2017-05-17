@@ -1,13 +1,13 @@
 /* This task handles the interface between the kernel and user-level servers.
- * System services can be accessed by doing a system call. System calls are
- * transformed into request messages, which are handled by this task. By
+ * System services can be accessed by doing a system call. System calls are 
+ * transformed into request messages, which are handled by this task. By 
  * convention, a sys_call() is transformed in a SYS_CALL request message that
- * is handled in a function named do_call().
+ * is handled in a function named do_call(). 
  *
  * A private call vector is used to map all system calls to the functions that
  * handle them. The actual handler functions are contained in separate files
  * to keep this file clean. The call vector is used in the system task's main
- * loop to handle all incoming requests.
+ * loop to handle all incoming requests.  
  *
  * In addition to the main sys_task() entry point, which starts the main loop,
  * there are several other minor entry points:
@@ -26,28 +26,28 @@
  * Changes:
 *    Nov 22, 2009   get_priv supports static priv ids (Cristiano Giuffrida)
  *   Aug 04, 2005   check if system call is allowed  (Jorrit N. Herder)
- *   Jul 20, 2005   send signal to services with message  (Jorrit N. Herder)
+ *   Jul 20, 2005   send signal to services with message  (Jorrit N. Herder) 
  *   Jan 15, 2005   new, generalized virtual copy function  (Jorrit N. Herder)
  *   Oct 10, 2004   dispatch system calls from call vector  (Jorrit N. Herder)
  *   Sep 30, 2004   source code documentation updated  (Jorrit N. Herder)
  */
 
+#include "kernel/kernel.h"
 #include "kernel/system.h"
 #include "kernel/vm.h"
 #include "kernel/clock.h"
 #include <stdlib.h>
-#include <stddef.h>
 #include <assert.h>
 #include <signal.h>
 #include <unistd.h>
 #include <minix/endpoint.h>
 #include <minix/safecopies.h>
 
-/* Declaration of the call vector that defines the mapping of system calls
- * to handler functions. The vector is initialized in sys_init() with map(),
- * which makes sure the system call numbers are ok. No space is allocated,
- * because the dummy is declared extern. If an illegal call is given, the
- * array size will be negative and this won't compile.
+/* Declaration of the call vector that defines the mapping of system calls 
+ * to handler functions. The vector is initialized in sys_init() with map(), 
+ * which makes sure the system call numbers are ok. No space is allocated, 
+ * because the dummy is declared extern. If an illegal call is given, the 
+ * array size will be negative and this won't compile. 
  */
 static int (*call_vec[NR_SYS_CALLS])(struct proc * caller, message *m_ptr);
 
@@ -96,7 +96,7 @@ static int kernel_call_dispatch(struct proc * caller, message *msg)
 {
   int result = OK;
   int call_nr;
-
+  
 #if DEBUG_IPC_HOOK
 	hook_ipc_msgkcall(msg, caller);
 #endif
@@ -155,7 +155,7 @@ void kernel_call(message *m_user, struct proc * caller)
 	  return;
   }
 
-
+  
   /* remember who invoked the kcall so we can bill it its time */
   kbill_kcall = caller;
 
@@ -180,7 +180,7 @@ void system_init(void)
     tmr_inittimer(&(sp->s_alarm_timer));
   }
 
-  /* Initialize the call vector to a safe default handler. Some system calls
+  /* Initialize the call vector to a safe default handler. Some system calls 
    * may be disabled or nonexistant. Then explicitly map known calls to their
    * handler functions. This is done with a macro that gives a compile error
    * if an illegal call number is used. The ordering is not important here.
@@ -209,10 +209,10 @@ void system_init(void)
   map(SYS_SIGRETURN, do_sigreturn);	/* return from POSIX-style signal */
 
   /* Device I/O. */
-  map(SYS_IRQCTL, do_irqctl);  		/* interrupt control operations */
+  map(SYS_IRQCTL, do_irqctl);  		/* interrupt control operations */ 
 #if defined(__i386__)
-  map(SYS_DEVIO, do_devio);   		/* inb, inw, inl, outb, outw, outl */
-  map(SYS_VDEVIO, do_vdevio);  		/* vector with devio requests */
+  map(SYS_DEVIO, do_devio);   		/* inb, inw, inl, outb, outw, outl */ 
+  map(SYS_VDEVIO, do_vdevio);  		/* vector with devio requests */ 
 #endif
 
   /* Memory management. */
@@ -241,11 +241,13 @@ void system_init(void)
 
   /* System control. */
   map(SYS_ABORT, do_abort);		/* abort MINIX */
-  map(SYS_GETINFO, do_getinfo); 	/* request system information */
+  map(SYS_GETINFO, do_getinfo); 	/* request system information */ 
   map(SYS_DIAGCTL, do_diagctl);		/* diagnostics-related functionality */
 
   /* Profiling. */
   map(SYS_SPROF, do_sprofile);         /* start/stop statistical profiling */
+  map(SYS_CPROF, do_cprofile);         /* get/reset call profiling data */
+  map(SYS_PROFBUF, do_profbuf);        /* announce locations to kernel */
 
   /* arm-specific. */
 #if defined(__arm__)
@@ -271,10 +273,9 @@ void system_init(void)
 /*===========================================================================*
  *				get_priv				     *
  *===========================================================================*/
-int get_priv(
-  register struct proc *rc,		/* new (child) process pointer */
-  int priv_id				/* privilege id */
-)
+int get_priv(rc, priv_id)
+register struct proc *rc;		/* new (child) process pointer */
+int priv_id;				/* privilege id */
 {
 /* Allocate a new privilege structure for a system process. Privilege ids
  * can be assigned either statically or dynamically.
@@ -282,8 +283,8 @@ int get_priv(
   register struct priv *sp;                 /* privilege structure */
 
   if(priv_id == NULL_PRIV_ID) {             /* allocate slot dynamically */
-      for (sp = BEG_DYN_PRIV_ADDR; sp < END_DYN_PRIV_ADDR; ++sp)
-          if (sp->s_proc_nr == NONE) break;
+      for (sp = BEG_DYN_PRIV_ADDR; sp < END_DYN_PRIV_ADDR; ++sp) 
+          if (sp->s_proc_nr == NONE) break;	
       if (sp >= END_DYN_PRIV_ADDR) return(ENOSPC);
   }
   else {                                    /* allocate slot from id */
@@ -307,7 +308,7 @@ int get_priv(
 void set_sendto_bit(const struct proc *rp, int id)
 {
 /* Allow a process to send messages to the process(es) associated with the
- * system privilege structure with the given ID.
+ * system privilege structure with the given ID. 
  */
 
   /* Disallow the process from sending to a process privilege structure with no
@@ -364,9 +365,9 @@ void fill_sendto_mask(const struct proc *rp, sys_map_t *map)
 int send_sig(endpoint_t ep, int sig_nr)
 {
 /* Notify a system process about a signal. This is straightforward. Simply
- * set the signal that is to be delivered in the pending signals map and
+ * set the signal that is to be delivered in the pending signals map and 
  * send a notification with source SYSTEM.
- */
+ */ 
   register struct proc *rp;
   struct priv *priv;
   int proc_nr;
@@ -378,6 +379,7 @@ int send_sig(endpoint_t ep, int sig_nr)
   priv = priv(rp);
   if(!priv) return ENOENT;
   sigaddset(&priv->s_sig_pending, sig_nr);
+  increase_proc_signals(rp);
   mini_notify(proc_addr(SYSTEM), rp->p_endpoint);
 
   return OK;
@@ -386,20 +388,21 @@ int send_sig(endpoint_t ep, int sig_nr)
 /*===========================================================================*
  *				cause_sig				     *
  *===========================================================================*/
-void cause_sig(proc_nr_t proc_nr, int sig_nr)
+void cause_sig(proc_nr, sig_nr)
+proc_nr_t proc_nr;		/* process to be signalled */
+int sig_nr;			/* signal to be sent */
 {
-/* A system process wants to send signal 'sig_nr' to process 'proc_nr'.
- * Examples are:
+/* A system process wants to send a signal to a process.  Examples are:
  *  - HARDWARE wanting to cause a SIGSEGV after a CPU exception
  *  - TTY wanting to cause SIGINT upon getting a DEL
- *  - FS wanting to cause SIGPIPE for a broken pipe
+ *  - FS wanting to cause SIGPIPE for a broken pipe 
  * Signals are handled by sending a message to the signal manager assigned to
  * the process. This function handles the signals and makes sure the signal
  * manager gets them by sending a notification. The process being signaled
  * is blocked while the signal manager has not finished all signals for it.
  * Race conditions between calls to this function and the system calls that
  * process pending kernel signals cannot exist. Signal related functions are
- * only called when a user process causes a CPU exception and from the kernel
+ * only called when a user process causes a CPU exception and from the kernel 
  * process level, which runs to completion.
  */
   register struct proc *rp, *sig_mgr_rp;
@@ -436,10 +439,12 @@ void cause_sig(proc_nr_t proc_nr, int sig_nr)
        return;
   }
 
-  s = sigismember(&rp->p_pending, sig_nr);
+  if((s = sigismember(&rp->p_pending, sig_nr)) < 0)
+	panic("sigismember failed");
   /* Check if the signal is already pending. Process it otherwise. */
   if (!s) {
       sigaddset(&rp->p_pending, sig_nr);
+	increase_proc_signals(rp);
       if (! (RTS_ISSET(rp, RTS_SIGNALED))) {		/* other pending */
 	  RTS_SET(rp, RTS_SIGNALED | RTS_SIG_PENDING);
           if(OK != send_sig(sig_mgr, SIGKSIG))
@@ -483,27 +488,6 @@ void send_diag_sig(void)
 }
 
 /*===========================================================================*
- *			         clear_memreq				     *
- *===========================================================================*/
-static void clear_memreq(struct proc *rp)
-{
-  struct proc **rpp;
-
-  if (!RTS_ISSET(rp, RTS_VMREQUEST))
-	return; /* nothing to do */
-
-  for (rpp = &vmrequest; *rpp != NULL;
-     rpp = &(*rpp)->p_vmrequest.nextrequestor) {
-	if (*rpp == rp) {
-		*rpp = rp->p_vmrequest.nextrequestor;
-		break;
-	}
-  }
-
-  RTS_UNSET(rp, RTS_VMREQUEST);
-}
-
-/*===========================================================================*
  *			         clear_ipc				     *
  *===========================================================================*/
 static void clear_ipc(
@@ -537,9 +521,9 @@ static void clear_ipc(
 /*===========================================================================*
  *			         clear_endpoint				     *
  *===========================================================================*/
-void clear_endpoint(struct proc * rc)
+void clear_endpoint(rc)
+register struct proc *rc;		/* slot of process to clean up */
 {
-/* Clean up the slot of the process given as 'rc'. */
   if(isemptyp(rc)) panic("clear_proc: empty process: %d",  rc->p_endpoint);
 
 
@@ -559,25 +543,20 @@ void clear_endpoint(struct proc * rc)
    */
   clear_ipc(rc);
 
-  /* Likewise, if another process was sending or receive a message to or from
+  /* Likewise, if another process was sending or receive a message to or from 
    * the exiting process, it must be alerted that process no longer is alive.
-   * Check all processes.
+   * Check all processes. 
    */
   clear_ipc_refs(rc, EDEADSRCDST);
 
-  /* Finally, if the process was blocked on a VM request, remove it from the
-   * queue of processes waiting to be processed by VM.
-   */
-  clear_memreq(rc);
 }
 
 /*===========================================================================*
  *			       clear_ipc_refs				     *
  *===========================================================================*/
-void clear_ipc_refs(
-  register struct proc *rc,		/* slot of process to clean up */
-  int caller_ret			/* code to return on callers */
-)
+void clear_ipc_refs(rc, caller_ret)
+register struct proc *rc;		/* slot of process to clean up */
+int caller_ret;				/* code to return on callers */
 {
 /* Clear IPC references for a given process slot. */
   struct proc *rp;			/* iterate over process table */
@@ -585,7 +564,7 @@ void clear_ipc_refs(
 
   /* Tell processes that sent asynchronous messages to 'rc' they are not
    * going to be delivered */
-  while ((src_id = has_pending_asend(rc, ANY)) != NULL_PRIV_ID)
+  while ((src_id = has_pending_asend(rc, ANY)) != NULL_PRIV_ID) 
       cancel_async(proc_addr(id_to_nr(src_id)), rc);
 
   for (rp = BEG_PROC_ADDR; rp < END_PROC_ADDR; rp++) {
@@ -639,7 +618,10 @@ void kernel_call_resume(struct proc *caller)
 /*===========================================================================*
  *                               sched_proc                                  *
  *===========================================================================*/
-int sched_proc(struct proc *p, int priority, int quantum, int cpu, int niced)
+int sched_proc(struct proc *p,
+			int priority,
+			int quantum,
+			int cpu)
 {
 	/* Make sure the values given are within the allowed range.*/
 	if ((priority < TASK_Q && priority != -1) || priority > NR_SCHED_QUEUES)
@@ -688,310 +670,9 @@ int sched_proc(struct proc *p, int priority, int quantum, int cpu, int niced)
 		p->p_cpu = cpu;
 #endif
 
-	if (niced)
-		p->p_misc_flags |= MF_NICED;
-	else
-		p->p_misc_flags &= ~MF_NICED;
-
 	/* Clear the scheduling bit and enqueue the process */
 	RTS_UNSET(p, RTS_NO_QUANTUM);
 
-	return OK;
-}
-
-/*===========================================================================*
- *				add_ipc_filter				     *
- *===========================================================================*/
-int add_ipc_filter(struct proc *rp, int type, vir_bytes address,
-	size_t length)
-{
-	int num_elements, r;
-	ipc_filter_t *ipcf, **ipcfp;
-
-	/* Validate arguments. */
-	if (type != IPCF_BLACKLIST && type != IPCF_WHITELIST)
-		return EINVAL;
-
-	if (length % sizeof(ipc_filter_el_t) != 0)
-		return EINVAL;
-
-	num_elements = length / sizeof(ipc_filter_el_t);
-	if (num_elements <= 0 || num_elements > IPCF_MAX_ELEMENTS)
-		return E2BIG;
-
-	/* Allocate a new IPC filter slot. */
-	IPCF_POOL_ALLOCATE_SLOT(type, &ipcf);
-	if (ipcf == NULL)
-		return ENOMEM;
-
-	/* Fill details. */
-	ipcf->num_elements = num_elements;
-	ipcf->next = NULL;
-	r = data_copy(rp->p_endpoint, address,
-		KERNEL, (vir_bytes)ipcf->elements, length);
-	if (r == OK)
-		r = check_ipc_filter(ipcf, TRUE /*fill_flags*/);
-	if (r != OK) {
-		IPCF_POOL_FREE_SLOT(ipcf);
-		return r;
-	}
-
-	/* Add the new filter at the end of the IPC filter chain. */
-	for (ipcfp = &priv(rp)->s_ipcf; *ipcfp != NULL;
-	    ipcfp = &(*ipcfp)->next)
-		;
-	*ipcfp = ipcf;
-
-	return OK;
-}
-
-/*===========================================================================*
- *				clear_ipc_filters			     *
- *===========================================================================*/
-void clear_ipc_filters(struct proc *rp)
-{
-	ipc_filter_t *curr_ipcf, *ipcf;
-
-	ipcf = priv(rp)->s_ipcf;
-	while (ipcf != NULL) {
-		curr_ipcf = ipcf;
-		ipcf = ipcf->next;
-		IPCF_POOL_FREE_SLOT(curr_ipcf);
-	}
-
-	priv(rp)->s_ipcf = NULL;
-
-	/* VM is a special case here: since the cleared IPC filter may have
-	 * blocked memory handling requests, we may now have to tell VM that
-	 * there are "new" requests pending.
-	 */
-	if (rp->p_endpoint == VM_PROC_NR && vmrequest != NULL)
-		if (send_sig(VM_PROC_NR, SIGKMEM) != OK)
-			panic("send_sig failed");
-}
-
-/*===========================================================================*
- *				check_ipc_filter			     *
- *===========================================================================*/
-int check_ipc_filter(ipc_filter_t *ipcf, int fill_flags)
-{
-	ipc_filter_el_t *ipcf_el;
-	int i, num_elements, flags;
-
-	if (ipcf == NULL)
-		return OK;
-
-	num_elements = ipcf->num_elements;
-	flags = 0;
-	for (i = 0; i < num_elements; i++) {
-		ipcf_el = &ipcf->elements[i];
-		if (!IPCF_EL_CHECK(ipcf_el))
-			return EINVAL;
-		flags |= ipcf_el->flags;
-	}
-
-	if (fill_flags)
-		ipcf->flags = flags;
-	else if (ipcf->flags != flags)
-		return EINVAL;
-	return OK;
-}
-
-/*===========================================================================*
- *				allow_ipc_filtered_msg			     *
- *===========================================================================*/
-int allow_ipc_filtered_msg(struct proc *rp, endpoint_t src_e,
-	vir_bytes m_src_v, message *m_src_p)
-{
-	int i, r, num_elements, get_mtype, allow;
-	ipc_filter_t *ipcf;
-	ipc_filter_el_t *ipcf_el;
-	message m_buff;
-
-	ipcf = priv(rp)->s_ipcf;
-	if (ipcf == NULL)
-		return TRUE; /* no IPC filters, always allow */
-
-	if (m_src_p == NULL) {
-		assert(m_src_v != 0);
-
-		/* Should we copy in the message type? */
-		get_mtype = FALSE;
-		do {
-#if DEBUG_DUMPIPCF
-			if (TRUE) {
-#else
-			if (ipcf->flags & IPCF_MATCH_M_TYPE) {
-#endif
-				get_mtype = TRUE;
-				break;
-			}
-			ipcf = ipcf->next;
-		} while (ipcf);
-		ipcf = priv(rp)->s_ipcf; /* reset to start */
-
-		/* If so, copy it in from the process. */
-		if (get_mtype) {
-			r = data_copy(src_e,
-			    m_src_v + offsetof(message, m_type), KERNEL,
-			    (vir_bytes)&m_buff.m_type, sizeof(m_buff.m_type));
-			if (r != OK) {
-				/* allow for now, this will fail later anyway */
-#if DEBUG_DUMPIPCF
-				printf("KERNEL: allow_ipc_filtered_msg: data "
-				    "copy error %d, allowing message...\n", r);
-#endif
-				return TRUE;
-			}
-		}
-		m_src_p = &m_buff;
-	}
-
-	m_src_p->m_source = src_e;
-
-	/* See if the message is allowed. */
-	allow = (ipcf->type == IPCF_BLACKLIST);
-	do {
-		if (allow != (ipcf->type == IPCF_WHITELIST)) {
-			num_elements = ipcf->num_elements;
-			for (i = 0; i < num_elements; i++) {
-				ipcf_el = &ipcf->elements[i];
-				if (IPCF_EL_MATCH(ipcf_el, m_src_p)) {
-					allow = (ipcf->type == IPCF_WHITELIST);
-					break;
-				}
-			}
-		}
-		ipcf = ipcf->next;
-	} while (ipcf);
-
-#if DEBUG_DUMPIPCF
-	printmsg(m_src_p, proc_addr(_ENDPOINT_P(src_e)), rp, allow ? '+' : '-',
-	    TRUE /*printparams*/);
-#endif
-
-	return allow;
-}
-
-/*===========================================================================*
- *			  allow_ipc_filtered_memreq			     *
- *===========================================================================*/
-int allow_ipc_filtered_memreq(struct proc *src_rp, struct proc *dst_rp)
-{
-	/* Determine whether VM should receive a request to handle memory
-	 * that is the result of process 'src_rp' trying to access currently
-	 * unavailable memory in process 'dst_rp'. Return TRUE if VM should
-	 * be given the request, FALSE otherwise.
-	 */
-
-	struct proc *vmp;
-	message m_buf;
-
-	vmp = proc_addr(VM_PROC_NR);
-
-	/* If VM has no filter in place, all requests should go through. */
-	if (priv(vmp)->s_ipcf == NULL)
-		return TRUE;
-
-	/* VM obtains memory requests in response to a SIGKMEM signal, which
-	 * is a notification sent from SYSTEM. Thus, if VM blocks such
-	 * notifications, it also should not get any memory requests. Of
-	 * course, VM should not be asking for requests in that case either,
-	 * but the extra check doesn't hurt.
-	 */
-	m_buf.m_type = NOTIFY_MESSAGE;
-	if (!allow_ipc_filtered_msg(vmp, SYSTEM, 0, &m_buf))
-		return FALSE;
-
-	/* A more refined policy may be implemented here, for example to
-	 * ensure that both the source and the destination (if different)
-	 * are in the group of processes that VM wants to talk to. Since VM
-	 * is basically not able to handle any memory requests during an
-	 * update, we will not get here, and none of that is needed.
-	 */
-	return TRUE;
-}
-
-/*===========================================================================*
- *                             priv_add_irq                                  *
- *===========================================================================*/
-int priv_add_irq(struct proc *rp, int irq)
-{
-        struct priv *priv = priv(rp);
-        int i;
-
-	priv->s_flags |= CHECK_IRQ;	/* Check IRQ */
-
-	/* When restarting a driver, check if it already has the permission */
-	for (i = 0; i < priv->s_nr_irq; i++) {
-		if (priv->s_irq_tab[i] == irq)
-			return OK;
-	}
-
-	i= priv->s_nr_irq;
-	if (i >= NR_IRQ) {
-		printf("do_privctl: %d already has %d irq's.\n",
-			rp->p_endpoint, i);
-		return ENOMEM;
-	}
-	priv->s_irq_tab[i]= irq;
-	priv->s_nr_irq++;
-	return OK;
-}
-
-/*===========================================================================*
- *                             priv_add_io                                   *
- *===========================================================================*/
-int priv_add_io(struct proc *rp, struct io_range *ior)
-{
-        struct priv *priv = priv(rp);
-        int i;
-
-	priv->s_flags |= CHECK_IO_PORT;	/* Check I/O accesses */
-
-	for (i = 0; i < priv->s_nr_io_range; i++) {
-		if (priv->s_io_tab[i].ior_base == ior->ior_base &&
-			priv->s_io_tab[i].ior_limit == ior->ior_limit)
-			return OK;
-	}
-
-	i= priv->s_nr_io_range;
-	if (i >= NR_IO_RANGE) {
-		printf("do_privctl: %d already has %d i/o ranges.\n",
-			rp->p_endpoint, i);
-		return ENOMEM;
-	}
-
-	priv->s_io_tab[i] = *ior;
-	priv->s_nr_io_range++;
-	return OK;
-}
-
-/*===========================================================================*
- *                             priv_add_mem                                  *
- *===========================================================================*/
-int priv_add_mem(struct proc *rp, struct minix_mem_range *memr)
-{
-        struct priv *priv = priv(rp);
-        int i;
-
-	priv->s_flags |= CHECK_MEM;	/* Check memory mappings */
-
-	/* When restarting a driver, check if it already has the permission */
-	for (i = 0; i < priv->s_nr_mem_range; i++) {
-		if (priv->s_mem_tab[i].mr_base == memr->mr_base &&
-			priv->s_mem_tab[i].mr_limit == memr->mr_limit)
-			return OK;
-	}
-
-	i= priv->s_nr_mem_range;
-	if (i >= NR_MEM_RANGE) {
-		printf("do_privctl: %d already has %d mem ranges.\n",
-			rp->p_endpoint, i);
-		return ENOMEM;
-	}
-	priv->s_mem_tab[i]= *memr;
-	priv->s_nr_mem_range++;
 	return OK;
 }
 

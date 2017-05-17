@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.5 2014/08/10 17:34:21 joerg Exp $
+#	$NetBSD: Makefile,v 1.4 2013/01/23 15:02:59 joerg Exp $
 
 LIB=	LLVMMCDisassembler
 
@@ -6,10 +6,7 @@ LIB=	LLVMMCDisassembler
 
 .PATH: ${LLVM_SRCDIR}/lib/MC/MCDisassembler
 
-SRCS+=	Disassembler.cpp \
-	MCDisassembler.cpp \
-	MCExternalSymbolizer.cpp \
-	MCRelocationInfo.cpp \
+SRCS+=	Disassembler.cpp
 
 .if defined(HOSTLIB)
 .include <bsd.hostlib.mk>

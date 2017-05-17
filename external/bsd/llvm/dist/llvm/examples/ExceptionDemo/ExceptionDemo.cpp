@@ -48,7 +48,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/IR/Verifier.h"
+#include "llvm/Analysis/Verifier.h"
 #include "llvm/ExecutionEngine/MCJIT.h"
 #include "llvm/ExecutionEngine/SectionMemoryManager.h"
 #include "llvm/IR/DataLayout.h"
@@ -915,7 +915,7 @@ void generateStringPrint(llvm::LLVMContext &context,
     new llvm::GlobalVariable(module,
                              stringConstant->getType(),
                              true,
-                             llvm::GlobalValue::PrivateLinkage,
+                             llvm::GlobalValue::LinkerPrivateLinkage,
                              stringConstant,
                              "");
   }
@@ -959,7 +959,7 @@ void generateIntegerPrint(llvm::LLVMContext &context,
     new llvm::GlobalVariable(module,
                              stringConstant->getType(),
                              true,
-                             llvm::GlobalValue::PrivateLinkage,
+                             llvm::GlobalValue::LinkerPrivateLinkage,
                              stringConstant,
                              "");
   }
@@ -1957,17 +1957,17 @@ int main(int argc, char *argv[]) {
   llvm::IRBuilder<> theBuilder(context);
 
   // Make the module, which holds all the code.
-  std::unique_ptr<llvm::Module> Owner =
-      llvm::make_unique<llvm::Module>("my cool jit", context);
-  llvm::Module *module = Owner.get();
+  llvm::Module *module = new llvm::Module("my cool jit", context);
 
-  std::unique_ptr<llvm::RTDyldMemoryManager> MemMgr(new llvm::SectionMemoryManager());
+  llvm::RTDyldMemoryManager *MemMgr = new llvm::SectionMemoryManager();
 
   // Build engine with JIT
-  llvm::EngineBuilder factory(std::move(Owner));
+  llvm::EngineBuilder factory(module);
   factory.setEngineKind(llvm::EngineKind::JIT);
+  factory.setAllocateGVsWithCode(false);
   factory.setTargetOptions(Opts);
-  factory.setMCJITMemoryManager(std::move(MemMgr));
+  factory.setMCJITMemoryManager(MemMgr);
+  factory.setUseMCJIT(true);
   llvm::ExecutionEngine *executionEngine = factory.create();
 
   {
@@ -1976,8 +1976,7 @@ int main(int argc, char *argv[]) {
     // Set up the optimizer pipeline.
     // Start with registering info about how the
     // target lays out data structures.
-    module->setDataLayout(executionEngine->getDataLayout());
-    fpm.add(new llvm::DataLayoutPass());
+    fpm.add(new llvm::DataLayout(*executionEngine->getDataLayout()));
 
     // Optimizations turned on
 #ifdef ADD_OPT_PASSES

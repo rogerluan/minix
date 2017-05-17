@@ -49,3 +49,4 @@ void test(id p) {
 // CHECK: </dict>
 // CHECK: </plist>
 
+// DISABLE: mingw32

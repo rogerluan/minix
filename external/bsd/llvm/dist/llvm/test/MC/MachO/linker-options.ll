@@ -34,6 +34,10 @@
 ; CHECK-OBJ:  ),
 ; CHECK-OBJ: ])
 
-!0 = !{i32 6, !"Linker Options", !{!{!"-lz"}, !{!"-framework", !"Cocoa"}, !{!"-lmath"}}}
+!0 = metadata !{ i32 6, metadata !"Linker Options", 
+   metadata !{
+      metadata !{ metadata !"-lz" },
+      metadata !{ metadata !"-framework", metadata !"Cocoa" },
+      metadata !{ metadata !"-lmath" } } }
 
 !llvm.module.flags = !{ !0 }

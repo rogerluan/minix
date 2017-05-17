@@ -268,19 +268,6 @@ const char *findCCommentEnd(const char *BufferPtr, const char *BufferEnd) {
     
 } // unnamed namespace
 
-void Lexer::formTokenWithChars(Token &Result, const char *TokEnd,
-                               tok::TokenKind Kind) {
-  const unsigned TokLen = TokEnd - BufferPtr;
-  Result.setLocation(getSourceLocation(BufferPtr));
-  Result.setKind(Kind);
-  Result.setLength(TokLen);
-#ifndef NDEBUG
-  Result.TextPtr = "<UNSET>";
-  Result.IntVal = 7;
-#endif
-  BufferPtr = TokEnd;
-}
-
 void Lexer::lexCommentText(Token &T) {
   assert(CommentState == LCS_InsideBCPLComment ||
          CommentState == LCS_InsideCComment);
@@ -362,21 +349,20 @@ void Lexer::lexCommentText(Token &T) {
           }
         }
 
-        StringRef CommandName(BufferPtr + 1, Length);
+        const StringRef CommandName(BufferPtr + 1, Length);
 
         const CommandInfo *Info = Traits.getCommandInfoOrNULL(CommandName);
         if (!Info) {
+          formTokenWithChars(T, TokenPtr, tok::unknown_command);
+          T.setUnknownCommandName(CommandName);
           if ((Info = Traits.getTypoCorrectCommandInfo(CommandName))) {
             StringRef CorrectedName = Info->Name;
-            SourceLocation Loc = getSourceLocation(BufferPtr);
-            SourceRange CommandRange(Loc.getLocWithOffset(1),
-                                     getSourceLocation(TokenPtr));
-            Diag(Loc, diag::warn_correct_comment_command_name)
+            SourceRange CommandRange(T.getLocation().getLocWithOffset(1),
+                                     T.getEndLocation());
+            Diag(T.getLocation(), diag::warn_correct_comment_command_name)
               << CommandName << CorrectedName
               << FixItHint::CreateReplacement(CommandRange, CorrectedName);
           } else {
-            formTokenWithChars(T, TokenPtr, tok::unknown_command);
-            T.setUnknownCommandName(CommandName);
             Diag(T.getLocation(), diag::warn_unknown_comment_command_name);
             return;
           }
@@ -531,7 +517,7 @@ void Lexer::lexVerbatimLineText(Token &T) {
 
   // Extract current line.
   const char *Newline = findNewline(BufferPtr, CommentEnd);
-  StringRef Text(BufferPtr, Newline - BufferPtr);
+  const StringRef Text(BufferPtr, Newline - BufferPtr);
   formTokenWithChars(T, Newline, tok::verbatim_line_text);
   T.setVerbatimLineText(Text);
 

@@ -1,4 +1,4 @@
-/*	$NetBSD: shm.h,v 1.49 2015/05/13 01:16:15 pgoyette Exp $	*/
+/*	$NetBSD: shm.h,v 1.48 2009/01/19 19:39:41 christos Exp $	*/
 
 /*-
  * Copyright (c) 1999 The NetBSD Foundation, Inc.
@@ -173,7 +173,6 @@ extern int shm_nused;
 struct vmspace;
 
 void	shminit(void);
-int	shmfini(void);
 void	shmfork(struct vmspace *, struct vmspace *);
 void	shmexit(struct vmspace *);
 int	shmctl1(struct lwp *, int, int, struct shmid_ds *);
@@ -215,12 +214,12 @@ struct shm_info
        unsigned long int swap_successes;
 };
 
-#define SHMMNI 1024
+#define SHMMNI 4096
 #define SHMSEG 32              /* max shared segs per process */
 
-/* Public shm_perm.mode flags, synchronized with NetBSD kernel values above */
-#define SHM_DEST	0x0400	/* destroy on last detach (SHMSEG_REMOVED) */
-#define SHM_LOCKED	0x4000	/* pages will not be swapped (SHMSEG_WIRED) */
+/* shm_mode upper byte flags */
+#define SHM_DEST 01000                 /* segment will be destroyed on last detach */
+#define SHM_LOCKED 02000               /* segment will not be swapped */
 
 #endif /* defined(__minix) */
 

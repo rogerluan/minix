@@ -1,4 +1,4 @@
-/*	$NetBSD: if_ether.h,v 1.64 2014/07/28 14:24:48 ozaki-r Exp $	*/
+/*	$NetBSD: if_ether.h,v 1.61 2012/10/31 10:17:34 msaitoh Exp $	*/
 
 /*
  * Copyright (c) 1982, 1986, 1993
@@ -158,6 +158,7 @@ struct ethercom;
 
 typedef int (*ether_cb_t)(struct ethercom *);
 
+#if !defined(__minix)
 /*
  * Structure shared between the ethernet driver modules and
  * the multicast list code.  For example, each ec_softc or il_softc
@@ -187,12 +188,13 @@ struct ethercom {
 	struct	mowner ec_tx_mowner;		/* mbufs transmitted */
 #endif
 };
+#endif /* !defined(__minix) */
 
 #define	ETHERCAP_VLAN_MTU	0x00000001	/* VLAN-compatible MTU */
 #define	ETHERCAP_VLAN_HWTAGGING	0x00000002	/* hardware VLAN tag support */
 #define	ETHERCAP_JUMBO_MTU	0x00000004	/* 9000 byte MTU supported */
-#define	ETHERCAP_MASK		0x00000007
 
+#if !defined(__minix)
 #define	ECCAPBITS		\
 	"\020"			\
 	"\1VLAN_MTU"		\
@@ -205,6 +207,7 @@ struct eccapreq {
 	int		eccr_capabilities;	/* supported capabiliites */
 	int		eccr_capenable;		/* capabilities enabled */
 };
+#endif /* !defined(__minix) */
 
 #ifdef	_KERNEL
 extern const uint8_t etherbroadcastaddr[ETHER_ADDR_LEN];
@@ -220,6 +223,7 @@ int	ether_multiaddr(const struct sockaddr *, uint8_t[], uint8_t[]);
 void    ether_input(struct ifnet *, struct mbuf *);
 #endif /* _KERNEL */
 
+#if !defined(__minix)
 /*
  * Ethernet multicast address structure.  There is one of these for each
  * multicast address or range of multicast addresses that we are supposed
@@ -232,12 +236,7 @@ struct ether_multi {
 	u_int	 enm_refcount;		/* no. claims to this addr/range */
 	LIST_ENTRY(ether_multi) enm_list;
 };
-
-struct ether_multi_sysctl {
-	u_int   enm_refcount;
-	uint8_t enm_addrlo[ETHER_ADDR_LEN];
-	uint8_t enm_addrhi[ETHER_ADDR_LEN];
-};
+#endif /* !defined(__minix) */
 
 /*
  * Structure used by macros below to remember position when stepping through
@@ -329,7 +328,6 @@ vlan_input_tag(struct ifnet *ifp, struct mbuf *m, u_int vlanid)
 /* test if any VLAN is configured for this interface */
 #define VLAN_ATTACHED(ec)	((ec)->ec_nvlans > 0)
 
-void	etherinit(void);
 void	ether_ifattach(struct ifnet *, const uint8_t *);
 void	ether_ifdetach(struct ifnet *);
 int	ether_mediachange(struct ifnet *);

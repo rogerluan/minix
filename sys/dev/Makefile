@@ -1,10 +1,13 @@
-#	$NetBSD: Makefile,v 1.37 2015/08/02 11:09:05 jmcneill Exp $
+#	$NetBSD: Makefile,v 1.35 2012/06/20 21:38:26 sjg Exp $
 
-#__MINIX: a lot not imported
-SUBDIR=	\
-	i2c \
-	pci \
-	
+.if defined(__MINIX)
+SUBDIR=	i2c
+.else
+SUBDIR=	apm ata bluetooth dec dm dmover dtv filemon hpc \
+	i2c i2o ic ieee1394 ir isa \
+	microcode ofw pci pckbport pcmcia pud putter raidframe sbus scsipi \
+	sun tc usb vme wscons
+.endif # defined(__MINIX)
 
 .include <bsd.own.mk>
 
@@ -14,8 +17,12 @@ SUBDIR+= iscsi
 
 INCSDIR= /usr/include/dev
 
+.if !defined(__MINIX)
 # Only install includes which are used by userland
-INCS=	\
-	vndvar.h
+INCS=	biovar.h ccdvar.h cgdvar.h fssvar.h keylock.h kttcpio.h lockstat.h \
+	md.h vndvar.h
+.else
+INCS=	vndvar.h
+.endif # !defined(__MINIX)
 
 .include <bsd.kinc.mk>

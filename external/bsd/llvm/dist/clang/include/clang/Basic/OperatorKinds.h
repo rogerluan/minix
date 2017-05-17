@@ -12,14 +12,14 @@
 ///
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_CLANG_BASIC_OPERATORKINDS_H
-#define LLVM_CLANG_BASIC_OPERATORKINDS_H
+#ifndef LLVM_CLANG_BASIC_OPERATOR_KINDS_H
+#define LLVM_CLANG_BASIC_OPERATOR_KINDS_H
 
 namespace clang {
 
 /// \brief Enumeration specifying the different kinds of C++ overloaded
 /// operators.
-enum OverloadedOperatorKind : int {
+enum OverloadedOperatorKind {
   OO_None,                ///< Not an overloaded operator
 #define OVERLOADED_OPERATOR(Name,Spelling,Token,Unary,Binary,MemberOnly) \
   OO_##Name,

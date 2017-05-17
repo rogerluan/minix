@@ -347,10 +347,11 @@ define void @f19(i8 *%ptr, i8 %alt, i32 %limit) {
 define void @f20(i8 *%ptr, i8 %alt, i32 %limit) {
 ; FIXME: should use a normal load instead of CS.
 ; CHECK-LABEL: f20:
-; CHECK: lb {{%r[0-9]+}}, 0(%r2)
+; CHECK: cs {{%r[0-9]+}},
+; CHECK: jl
 ; CHECK: {{jl|jnl}} [[LABEL:[^ ]*]]
 ; CHECK: [[LABEL]]:
-; CHECK: stc {{%r[0-9]+}}, 0(%r2)
+; CHECK: stc {{%r[0-9]+}},
 ; CHECK: br %r14
   %cond = icmp ult i32 %limit, 420
   %orig = load atomic i8 *%ptr unordered, align 1
@@ -366,7 +367,7 @@ define void @f21(i8 *%ptr, i8 %alt, i32 %limit) {
 ; CHECK: jhe [[LABEL:[^ ]*]]
 ; CHECK: lb %r3, 0(%r2)
 ; CHECK: [[LABEL]]:
-; CHECK: stc %r3, 0(%r2)
+; CHECK: cs {{%r[0-9]+}},
 ; CHECK: br %r14
   %cond = icmp ult i32 %limit, 420
   %orig = load i8 *%ptr

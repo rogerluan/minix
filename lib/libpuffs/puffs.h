@@ -1,4 +1,4 @@
-/*	$NetBSD: puffs.h,v 1.126 2014/10/31 13:56:04 manu Exp $	*/
+/*	$NetBSD: puffs.h,v 1.124 2012/08/16 09:25:44 manu Exp $	*/
 
 /*
  * Copyright (c) 2005, 2006, 2007  Antti Kantee.  All Rights Reserved.
@@ -93,7 +93,7 @@ struct puffs_node {
 #if defined(__minix)
 	/* MINIX fields */
 	char			pn_mountpoint; /* true if mounted on */
-	unsigned int		pn_count;          /* # times inode used */
+	int 			pn_count;          /* # times inode used */
 #endif /* defined(__minix) */
 };
 #define PUFFS_NODE_REMOVED	0x01		/* not on entry list	*/
@@ -255,14 +255,8 @@ struct puffs_ops {
 	    uint8_t *, off_t, size_t *, const struct puffs_cred *, int, int);
 	int (*puffs_node_reclaim2)(struct puffs_usermount *,
 	    puffs_cookie_t, int);
-	int (*puffs_node_open2)(struct puffs_usermount *,
-	    puffs_cookie_t, int, const struct puffs_cred *, int *);
-	int (*puffs_node_fallocate)(struct puffs_usermount *,
-	    puffs_cookie_t, off_t, off_t);
-	int (*puffs_node_fdiscard)(struct puffs_usermount *,
-	    puffs_cookie_t, off_t, off_t);
 
-	void *puffs_ops_spare[26];
+	void *puffs_ops_spare[28];
 };
 
 typedef	int (*pu_pathbuild_fn)(struct puffs_usermount *,
@@ -421,13 +415,7 @@ enum {
 	    puffs_cookie_t, uint8_t *, off_t, size_t *,			\
 	    const struct puffs_cred *, int, int);			\
 	int fsname##_node_reclaim2(struct puffs_usermount *,		\
-	    puffs_cookie_t, int);					\
-	int fsname##_node_open2(struct puffs_usermount *,		\
-	    puffs_cookie_t, int, const struct puffs_cred *, int *);	\
-	int fsname##_node_fallocate(struct puffs_usermount *,		\
-	    puffs_cookie_t, int, off_t, off_t);				\
-	int fsname##_node_fdiscard(struct puffs_usermount *,		\
-	    puffs_cookie_t, int, off_t, off_t);
+	    puffs_cookie_t, int);
 
 
 #define PUFFSOP_INIT(ops)						\

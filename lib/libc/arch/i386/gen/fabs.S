@@ -1,4 +1,4 @@
-/*	$NetBSD: fabs.S,v 1.6 2014/05/23 02:34:19 uebayasi Exp $	*/
+/*	$NetBSD: fabs.S,v 1.5 2003/08/07 16:42:07 agc Exp $	*/
 
 /*-
  * Copyright (c) 1990 The Regents of the University of California.
@@ -36,11 +36,10 @@
 
 #include <machine/asm.h>
 #if defined(LIBC_SCCS)
-	RCSID("$NetBSD: fabs.S,v 1.6 2014/05/23 02:34:19 uebayasi Exp $")
+	RCSID("$NetBSD: fabs.S,v 1.5 2003/08/07 16:42:07 agc Exp $")
 #endif
 
 ENTRY(fabs)
 	fldl	4(%esp)
 	fabs
 	ret
-END(fabs)

@@ -15,39 +15,42 @@
 #ifndef LLVM_BITCODE_BITSTREAMREADER_H
 #define LLVM_BITCODE_BITSTREAMREADER_H
 
+#include "llvm/ADT/OwningPtr.h"
 #include "llvm/Bitcode/BitCodes.h"
 #include "llvm/Support/Endian.h"
-#include "llvm/Support/StreamingMemoryObject.h"
+#include "llvm/Support/StreamableMemoryObject.h"
 #include <climits>
 #include <string>
 #include <vector>
 
 namespace llvm {
 
-class Deserializer;
+  class Deserializer;
 
-/// This class is used to read from an LLVM bitcode stream, maintaining
-/// information that is global to decoding the entire file. While a file is
-/// being read, multiple cursors can be independently advanced or skipped around
-/// within the file.  These are represented by the BitstreamCursor class.
+/// BitstreamReader - This class is used to read from an LLVM bitcode stream,
+/// maintaining information that is global to decoding the entire file.  While
+/// a file is being read, multiple cursors can be independently advanced or
+/// skipped around within the file.  These are represented by the
+/// BitstreamCursor class.
 class BitstreamReader {
 public:
-  /// This contains information emitted to BLOCKINFO_BLOCK blocks. These
-  /// describe abbreviations that all blocks of the specified ID inherit.
+  /// BlockInfo - This contains information emitted to BLOCKINFO_BLOCK blocks.
+  /// These describe abbreviations that all blocks of the specified ID inherit.
   struct BlockInfo {
     unsigned BlockID;
-    std::vector<IntrusiveRefCntPtr<BitCodeAbbrev>> Abbrevs;
+    std::vector<BitCodeAbbrev*> Abbrevs;
     std::string Name;
 
     std::vector<std::pair<unsigned, std::string> > RecordNames;
   };
 private:
-  std::unique_ptr<MemoryObject> BitcodeBytes;
+  OwningPtr<StreamableMemoryObject> BitcodeBytes;
 
   std::vector<BlockInfo> BlockInfoRecords;
 
-  /// This is set to true if we don't care about the block/record name
-  /// information in the BlockInfo block. Only llvm-bcanalyzer uses this.
+  /// IgnoreBlockInfoNames - This is set to true if we don't care about the
+  /// block/record name information in the BlockInfo block. Only llvm-bcanalyzer
+  /// uses this.
   bool IgnoreBlockInfoNames;
 
   BitstreamReader(const BitstreamReader&) LLVM_DELETED_FUNCTION;
@@ -56,24 +59,13 @@ public:
   BitstreamReader() : IgnoreBlockInfoNames(true) {
   }
 
-  BitstreamReader(const unsigned char *Start, const unsigned char *End)
-      : IgnoreBlockInfoNames(true) {
+  BitstreamReader(const unsigned char *Start, const unsigned char *End) {
+    IgnoreBlockInfoNames = true;
     init(Start, End);
   }
 
-  BitstreamReader(std::unique_ptr<MemoryObject> BitcodeBytes)
-      : BitcodeBytes(std::move(BitcodeBytes)), IgnoreBlockInfoNames(true) {}
-
-  BitstreamReader(BitstreamReader &&Other) {
-    *this = std::move(Other);
-  }
-
-  BitstreamReader &operator=(BitstreamReader &&Other) {
-    BitcodeBytes = std::move(Other.BitcodeBytes);
-    // Explicitly swap block info, so that nothing gets destroyed twice.
-    std::swap(BlockInfoRecords, Other.BlockInfoRecords);
-    IgnoreBlockInfoNames = Other.IgnoreBlockInfoNames;
-    return *this;
+  BitstreamReader(StreamableMemoryObject *bytes) {
+    BitcodeBytes.reset(bytes);
   }
 
   void init(const unsigned char *Start, const unsigned char *End) {
@@ -81,9 +73,22 @@ public:
     BitcodeBytes.reset(getNonStreamedMemoryObject(Start, End));
   }
 
-  MemoryObject &getBitcodeBytes() { return *BitcodeBytes; }
+  StreamableMemoryObject &getBitcodeBytes() { return *BitcodeBytes; }
 
-  /// This is called by clients that want block/record name information.
+  ~BitstreamReader() {
+    // Free the BlockInfoRecords.
+    while (!BlockInfoRecords.empty()) {
+      BlockInfo &Info = BlockInfoRecords.back();
+      // Free blockinfo abbrev info.
+      for (unsigned i = 0, e = static_cast<unsigned>(Info.Abbrevs.size());
+           i != e; ++i)
+        Info.Abbrevs[i]->dropRef();
+      BlockInfoRecords.pop_back();
+    }
+  }
+
+  /// CollectBlockInfoNames - This is called by clients that want block/record
+  /// name information.
   void CollectBlockInfoNames() { IgnoreBlockInfoNames = false; }
   bool isIgnoringBlockInfoNames() { return IgnoreBlockInfoNames; }
 
@@ -91,13 +96,13 @@ public:
   // Block Manipulation
   //===--------------------------------------------------------------------===//
 
-  /// Return true if we've already read and processed the block info block for
-  /// this Bitstream. We only process it for the first cursor that walks over
-  /// it.
+  /// hasBlockInfoRecords - Return true if we've already read and processed the
+  /// block info block for this Bitstream.  We only process it for the first
+  /// cursor that walks over it.
   bool hasBlockInfoRecords() const { return !BlockInfoRecords.empty(); }
 
-  /// If there is block info for the specified ID, return it, otherwise return
-  /// null.
+  /// getBlockInfo - If there is block info for the specified ID, return it,
+  /// otherwise return null.
   const BlockInfo *getBlockInfo(unsigned BlockID) const {
     // Common case, the most recent entry matches BlockID.
     if (!BlockInfoRecords.empty() && BlockInfoRecords.back().BlockID == BlockID)
@@ -107,7 +112,7 @@ public:
          i != e; ++i)
       if (BlockInfoRecords[i].BlockID == BlockID)
         return &BlockInfoRecords[i];
-    return nullptr;
+    return 0;
   }
 
   BlockInfo &getOrCreateBlockInfo(unsigned BlockID) {
@@ -119,26 +124,23 @@ public:
     BlockInfoRecords.back().BlockID = BlockID;
     return BlockInfoRecords.back();
   }
-
-  /// Takes block info from the other bitstream reader.
-  ///
-  /// This is a "take" operation because BlockInfo records are non-trivial, and
-  /// indeed rather expensive.
-  void takeBlockInfo(BitstreamReader &&Other) {
-    assert(!hasBlockInfoRecords());
-    BlockInfoRecords = std::move(Other.BlockInfoRecords);
-  }
 };
 
-/// When advancing through a bitstream cursor, each advance can discover a few
-/// different kinds of entries:
+
+/// BitstreamEntry - When advancing through a bitstream cursor, each advance can
+/// discover a few different kinds of entries:
+///   Error    - Malformed bitcode was found.
+///   EndBlock - We've reached the end of the current block, (or the end of the
+///              file, which is treated like a series of EndBlock records.
+///   SubBlock - This is the start of a new subblock of a specific ID.
+///   Record   - This is a record with a specific AbbrevID.
+///
 struct BitstreamEntry {
   enum {
-    Error,    // Malformed bitcode was found.
-    EndBlock, // We've reached the end of the current block, (or the end of the
-              // file, which is treated like a series of EndBlock records.
-    SubBlock, // This is the start of a new subblock of a specific ID.
-    Record    // This is a record with a specific AbbrevID.
+    Error,
+    EndBlock,
+    SubBlock,
+    Record
   } Kind;
 
   unsigned ID;
@@ -157,9 +159,9 @@ struct BitstreamEntry {
   }
 };
 
-/// This represents a position within a bitcode file. There may be multiple
-/// independent cursors reading within one bitstream, each maintaining their own
-/// local state.
+/// BitstreamCursor - This represents a position within a bitcode file.  There
+/// may be multiple independent cursors reading within one bitstream, each
+/// maintaining their own local state.
 ///
 /// Unlike iterators, BitstreamCursors are heavy-weight objects that should not
 /// be passed by value.
@@ -168,54 +170,71 @@ class BitstreamCursor {
   BitstreamReader *BitStream;
   size_t NextChar;
 
-  // The size of the bicode. 0 if we don't know it yet.
-  size_t Size;
 
-  /// This is the current data we have pulled from the stream but have not
-  /// returned to the client. This is specifically and intentionally defined to
-  /// follow the word size of the host machine for efficiency. We use word_t in
-  /// places that are aware of this to make it perfectly explicit what is going
-  /// on.
-  typedef size_t word_t;
+  /// CurWord/word_t - This is the current data we have pulled from the stream
+  /// but have not returned to the client.  This is specifically and
+  /// intentionally defined to follow the word size of the host machine for
+  /// efficiency.  We use word_t in places that are aware of this to make it
+  /// perfectly explicit what is going on.
+  typedef uint32_t word_t;
   word_t CurWord;
 
-  /// This is the number of bits in CurWord that are valid. This is always from
-  /// [0...bits_of(size_t)-1] inclusive.
+  /// BitsInCurWord - This is the number of bits in CurWord that are valid. This
+  /// is always from [0...31/63] inclusive (depending on word size).
   unsigned BitsInCurWord;
 
-  // This is the declared size of code values used for the current block, in
-  // bits.
+  // CurCodeSize - This is the declared size of code values used for the current
+  // block, in bits.
   unsigned CurCodeSize;
 
-  /// Abbrevs installed at in this block.
-  std::vector<IntrusiveRefCntPtr<BitCodeAbbrev>> CurAbbrevs;
+  /// CurAbbrevs - Abbrevs installed at in this block.
+  std::vector<BitCodeAbbrev*> CurAbbrevs;
 
   struct Block {
     unsigned PrevCodeSize;
-    std::vector<IntrusiveRefCntPtr<BitCodeAbbrev>> PrevAbbrevs;
+    std::vector<BitCodeAbbrev*> PrevAbbrevs;
     explicit Block(unsigned PCS) : PrevCodeSize(PCS) {}
   };
 
-  /// This tracks the codesize of parent blocks.
+  /// BlockScope - This tracks the codesize of parent blocks.
   SmallVector<Block, 8> BlockScope;
 
 
 public:
-  BitstreamCursor() { init(nullptr); }
+  BitstreamCursor() : BitStream(0), NextChar(0) {
+  }
+  BitstreamCursor(const BitstreamCursor &RHS) : BitStream(0), NextChar(0) {
+    operator=(RHS);
+  }
 
-  explicit BitstreamCursor(BitstreamReader &R) { init(&R); }
-
-  void init(BitstreamReader *R) {
-    freeState();
-
-    BitStream = R;
+  explicit BitstreamCursor(BitstreamReader &R) : BitStream(&R) {
     NextChar = 0;
-    Size = 0;
+    CurWord = 0;
     BitsInCurWord = 0;
     CurCodeSize = 2;
   }
 
+  void init(BitstreamReader &R) {
+    freeState();
+
+    BitStream = &R;
+    NextChar = 0;
+    CurWord = 0;
+    BitsInCurWord = 0;
+    CurCodeSize = 2;
+  }
+
+  ~BitstreamCursor() {
+    freeState();
+  }
+
+  void operator=(const BitstreamCursor &RHS);
+
   void freeState();
+
+  bool isEndPos(size_t pos) {
+    return BitStream->getBitcodeBytes().isObjectEnd(static_cast<uint64_t>(pos));
+  }
 
   bool canSkipToPos(size_t pos) const {
     // pos can be skipped to if it is a valid address or one byte past the end.
@@ -223,19 +242,20 @@ public:
         static_cast<uint64_t>(pos - 1));
   }
 
-  bool AtEndOfStream() {
-    if (BitsInCurWord != 0)
-      return false;
-    if (Size != 0)
-      return Size == NextChar;
-    fillCurWord();
-    return BitsInCurWord == 0;
+  uint32_t getWord(size_t pos) {
+    uint8_t buf[4] = { 0xFF, 0xFF, 0xFF, 0xFF };
+    BitStream->getBitcodeBytes().readBytes(pos, sizeof(buf), buf);
+    return *reinterpret_cast<support::ulittle32_t *>(buf);
   }
 
-  /// Return the number of bits used to encode an abbrev #.
+  bool AtEndOfStream() {
+    return BitsInCurWord == 0 && isEndPos(NextChar);
+  }
+
+  /// getAbbrevIDWidth - Return the number of bits used to encode an abbrev #.
   unsigned getAbbrevIDWidth() const { return CurCodeSize; }
 
-  /// Return the bit # of the bit we are reading.
+  /// GetCurrentBitNo - Return the bit # of the bit we are reading.
   uint64_t GetCurrentBitNo() const {
     return NextChar*CHAR_BIT - BitsInCurWord;
   }
@@ -249,17 +269,19 @@ public:
 
   /// Flags that modify the behavior of advance().
   enum {
-    /// If this flag is used, the advance() method does not automatically pop
-    /// the block scope when the end of a block is reached.
+    /// AF_DontPopBlockAtEnd - If this flag is used, the advance() method does
+    /// not automatically pop the block scope when the end of a block is
+    /// reached.
     AF_DontPopBlockAtEnd = 1,
 
-    /// If this flag is used, abbrev entries are returned just like normal
-    /// records.
+    /// AF_DontAutoprocessAbbrevs - If this flag is used, abbrev entries are
+    /// returned just like normal records.
     AF_DontAutoprocessAbbrevs = 2
   };
 
-      /// Advance the current bitstream, returning the next entry in the stream.
-      BitstreamEntry advance(unsigned Flags = 0) {
+  /// advance - Advance the current bitstream, returning the next entry in the
+  /// stream.
+  BitstreamEntry advance(unsigned Flags = 0) {
     while (1) {
       unsigned Code = ReadCode();
       if (Code == bitc::END_BLOCK) {
@@ -284,8 +306,8 @@ public:
     }
   }
 
-  /// This is a convenience function for clients that don't expect any
-  /// subblocks. This just skips over them automatically.
+  /// advanceSkippingSubblocks - This is a convenience function for clients that
+  /// don't expect any subblocks.  This just skips over them automatically.
   BitstreamEntry advanceSkippingSubblocks(unsigned Flags = 0) {
     while (1) {
       // If we found a normal entry, return it.
@@ -299,7 +321,7 @@ public:
     }
   }
 
-  /// Reset the stream to the specified bit number.
+  /// JumpToBit - Reset the stream to the specified bit number.
   void JumpToBit(uint64_t BitNo) {
     uintptr_t ByteNo = uintptr_t(BitNo/8) & ~(sizeof(word_t)-1);
     unsigned WordBitNo = unsigned(BitNo & (sizeof(word_t)*8-1));
@@ -308,72 +330,75 @@ public:
     // Move the cursor to the right word.
     NextChar = ByteNo;
     BitsInCurWord = 0;
+    CurWord = 0;
 
     // Skip over any bits that are already consumed.
-    if (WordBitNo)
-      Read(WordBitNo);
-  }
-
-  void fillCurWord() {
-    assert(Size == 0 || NextChar < (unsigned)Size);
-
-    // Read the next word from the stream.
-    uint8_t Array[sizeof(word_t)] = {0};
-
-    uint64_t BytesRead =
-        BitStream->getBitcodeBytes().readBytes(Array, sizeof(Array), NextChar);
-
-    // If we run out of data, stop at the end of the stream.
-    if (BytesRead == 0) {
-      Size = NextChar;
-      return;
+    if (WordBitNo) {
+      if (sizeof(word_t) > 4)
+        Read64(WordBitNo);
+      else
+        Read(WordBitNo);
     }
-
-    CurWord =
-        support::endian::read<word_t, support::little, support::unaligned>(
-            Array);
-    NextChar += BytesRead;
-    BitsInCurWord = BytesRead * 8;
   }
 
-  word_t Read(unsigned NumBits) {
-    static const unsigned BitsInWord = sizeof(word_t) * 8;
 
-    assert(NumBits && NumBits <= BitsInWord &&
-           "Cannot return zero or more than BitsInWord bits!");
-
-    static const unsigned Mask = sizeof(word_t) > 4 ? 0x3f : 0x1f;
+  uint32_t Read(unsigned NumBits) {
+    assert(NumBits && NumBits <= 32 &&
+           "Cannot return zero or more than 32 bits!");
 
     // If the field is fully contained by CurWord, return it quickly.
     if (BitsInCurWord >= NumBits) {
-      word_t R = CurWord & (~word_t(0) >> (BitsInWord - NumBits));
-
-      // Use a mask to avoid undefined behavior.
-      CurWord >>= (NumBits & Mask);
-
+      uint32_t R = uint32_t(CurWord) & (~0U >> (32-NumBits));
+      CurWord >>= NumBits;
       BitsInCurWord -= NumBits;
       return R;
     }
 
-    word_t R = BitsInCurWord ? CurWord : 0;
-    unsigned BitsLeft = NumBits - BitsInCurWord;
-
-    fillCurWord();
-
     // If we run out of data, stop at the end of the stream.
-    if (BitsLeft > BitsInCurWord)
+    if (isEndPos(NextChar)) {
+      CurWord = 0;
+      BitsInCurWord = 0;
       return 0;
+    }
 
-    word_t R2 = CurWord & (~word_t(0) >> (BitsInWord - BitsLeft));
+    uint32_t R = uint32_t(CurWord);
 
-    // Use a mask to avoid undefined behavior.
-    CurWord >>= (BitsLeft & Mask);
+    // Read the next word from the stream.
+    uint8_t Array[sizeof(word_t)] = {0};
 
-    BitsInCurWord -= BitsLeft;
+    BitStream->getBitcodeBytes().readBytes(NextChar, sizeof(Array), Array);
 
-    R |= R2 << (NumBits - BitsLeft);
+    // Handle big-endian byte-swapping if necessary.
+    support::detail::packed_endian_specific_integral
+      <word_t, support::little, support::unaligned> EndianValue;
+    memcpy(&EndianValue, Array, sizeof(Array));
 
+    CurWord = EndianValue;
+
+    NextChar += sizeof(word_t);
+
+    // Extract NumBits-BitsInCurWord from what we just read.
+    unsigned BitsLeft = NumBits-BitsInCurWord;
+
+    // Be careful here, BitsLeft is in the range [1..32]/[1..64] inclusive.
+    R |= uint32_t((CurWord & (word_t(~0ULL) >> (sizeof(word_t)*8-BitsLeft)))
+                    << BitsInCurWord);
+
+    // BitsLeft bits have just been used up from CurWord.  BitsLeft is in the
+    // range [1..32]/[1..64] so be careful how we shift.
+    if (BitsLeft != sizeof(word_t)*8)
+      CurWord >>= BitsLeft;
+    else
+      CurWord = 0;
+    BitsInCurWord = sizeof(word_t)*8-BitsLeft;
     return R;
+  }
+
+  uint64_t Read64(unsigned NumBits) {
+    if (NumBits <= 32) return Read(NumBits);
+
+    uint64_t V = Read(32);
+    return V | (uint64_t)Read(NumBits-32) << 32;
   }
 
   uint32_t ReadVBR(unsigned NumBits) {
@@ -394,8 +419,8 @@ public:
     }
   }
 
-  // Read a VBR that may have a value up to 64-bits in size. The chunk size of
-  // the VBR must still be <= 32 bits though.
+  // ReadVBR64 - Read a VBR that may have a value up to 64-bits in size.  The
+  // chunk size of the VBR must still be <= 32 bits though.
   uint64_t ReadVBR64(unsigned NumBits) {
     uint32_t Piece = Read(NumBits);
     if ((Piece & (1U << (NumBits-1))) == 0)
@@ -426,6 +451,7 @@ private:
     }
 
     BitsInCurWord = 0;
+    CurWord = 0;
   }
 public:
 
@@ -437,13 +463,15 @@ public:
   // Block header:
   //    [ENTER_SUBBLOCK, blockid, newcodelen, <align4bytes>, blocklen]
 
-  /// Having read the ENTER_SUBBLOCK code, read the BlockID for the block.
+  /// ReadSubBlockID - Having read the ENTER_SUBBLOCK code, read the BlockID for
+  /// the block.
   unsigned ReadSubBlockID() {
     return ReadVBR(bitc::BlockIDWidth);
   }
 
-  /// Having read the ENTER_SUBBLOCK abbrevid and a BlockID, skip over the body
-  /// of this block. If the block record is malformed, return true.
+  /// SkipBlock - Having read the ENTER_SUBBLOCK abbrevid and a BlockID, skip
+  /// over the body of this block.  If the block record is malformed, return
+  /// true.
   bool SkipBlock() {
     // Read and ignore the codelen value.  Since we are skipping this block, we
     // don't care what code widths are used inside of it.
@@ -461,9 +489,9 @@ public:
     return false;
   }
 
-  /// Having read the ENTER_SUBBLOCK abbrevid, enter the block, and return true
-  /// if the block has an error.
-  bool EnterSubBlock(unsigned BlockID, unsigned *NumWordsP = nullptr);
+  /// EnterSubBlock - Having read the ENTER_SUBBLOCK abbrevid, enter
+  /// the block, and return true if the block has an error.
+  bool EnterSubBlock(unsigned BlockID, unsigned *NumWordsP = 0);
 
   bool ReadBlockEnd() {
     if (BlockScope.empty()) return true;
@@ -481,7 +509,12 @@ private:
   void popBlockScope() {
     CurCodeSize = BlockScope.back().PrevCodeSize;
 
-    CurAbbrevs = std::move(BlockScope.back().PrevAbbrevs);
+    // Delete abbrevs from popped scope.
+    for (unsigned i = 0, e = static_cast<unsigned>(CurAbbrevs.size());
+         i != e; ++i)
+      CurAbbrevs[i]->dropRef();
+
+    BlockScope.back().PrevAbbrevs.swap(CurAbbrevs);
     BlockScope.pop_back();
   }
 
@@ -489,20 +522,27 @@ private:
   // Record Processing
   //===--------------------------------------------------------------------===//
 
+private:
+  void readAbbreviatedLiteral(const BitCodeAbbrevOp &Op,
+                              SmallVectorImpl<uint64_t> &Vals);
+  void readAbbreviatedField(const BitCodeAbbrevOp &Op,
+                            SmallVectorImpl<uint64_t> &Vals);
+  void skipAbbreviatedField(const BitCodeAbbrevOp &Op);
+
 public:
 
-  /// Return the abbreviation for the specified AbbrevId.
+  /// getAbbrev - Return the abbreviation for the specified AbbrevId.
   const BitCodeAbbrev *getAbbrev(unsigned AbbrevID) {
     unsigned AbbrevNo = AbbrevID-bitc::FIRST_APPLICATION_ABBREV;
     assert(AbbrevNo < CurAbbrevs.size() && "Invalid abbrev #!");
-    return CurAbbrevs[AbbrevNo].get();
+    return CurAbbrevs[AbbrevNo];
   }
 
-  /// Read the current record and discard it.
+  /// skipRecord - Read the current record and discard it.
   void skipRecord(unsigned AbbrevID);
 
   unsigned readRecord(unsigned AbbrevID, SmallVectorImpl<uint64_t> &Vals,
-                      StringRef *Blob = nullptr);
+                      StringRef *Blob = 0);
 
   //===--------------------------------------------------------------------===//
   // Abbrev Processing

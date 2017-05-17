@@ -11,16 +11,16 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_MC_MCOBJECTFILEINFO_H
-#define LLVM_MC_MCOBJECTFILEINFO_H
+#ifndef LLVM_MC_MCBJECTFILEINFO_H
+#define LLVM_MC_MCBJECTFILEINFO_H
 
-#include "llvm/ADT/Triple.h"
 #include "llvm/Support/CodeGen.h"
 
 namespace llvm {
   class MCContext;
   class MCSection;
   class StringRef;
+  class Triple;
 
 class MCObjectFileInfo {
 protected:
@@ -33,15 +33,17 @@ protected:
   /// weak_definition of constant 0 for an omitted EH frame.
   bool SupportsWeakOmittedEHFrame;
 
-  /// SupportsCompactUnwindWithoutEHFrame - True if the target object file
-  /// supports emitting a compact unwind section without an associated EH frame
-  /// section.
-  bool SupportsCompactUnwindWithoutEHFrame;
+  /// IsFunctionEHFrameSymbolPrivate - This flag is set to true if the
+  /// "EH_frame" symbol for EH information should be an assembler temporary (aka
+  /// private linkage, aka an L or .L label) or false if it should be a normal
+  /// non-.globl label.  This defaults to true.
+  bool IsFunctionEHFrameSymbolPrivate;
 
-  /// PersonalityEncoding, LSDAEncoding, TTypeEncoding - Some encoding values
-  /// for EH.
+  /// PersonalityEncoding, LSDAEncoding, FDEEncoding, TTypeEncoding - Some
+  /// encoding values for EH.
   unsigned PersonalityEncoding;
   unsigned LSDAEncoding;
+  unsigned FDEEncoding;
   unsigned FDECFIEncoding;
   unsigned TTypeEncoding;
 
@@ -116,7 +118,6 @@ protected:
 
   /// These are used for the Fission separate debug information files.
   const MCSection *DwarfInfoDWOSection;
-  const MCSection *DwarfTypesDWOSection;
   const MCSection *DwarfAbbrevDWOSection;
   const MCSection *DwarfStrDWOSection;
   const MCSection *DwarfLineDWOSection;
@@ -127,8 +128,6 @@ protected:
   /// Sections for newer gnu pubnames and pubtypes.
   const MCSection *DwarfGnuPubNamesSection;
   const MCSection *DwarfGnuPubTypesSection;
-
-  const MCSection *COFFDebugSymbolsSection;
 
   // Extra TLS Variable Data section.  If the target needs to put additional
   // information for a TLS variable, it'll go here.
@@ -196,11 +195,11 @@ public:
   void InitMCObjectFileInfo(StringRef TT, Reloc::Model RM, CodeModel::Model CM,
                             MCContext &ctx);
 
+  bool isFunctionEHFrameSymbolPrivate() const {
+    return IsFunctionEHFrameSymbolPrivate;
+  }
   bool getSupportsWeakOmittedEHFrame() const {
     return SupportsWeakOmittedEHFrame;
-  }
-  bool getSupportsCompactUnwindWithoutEHFrame() const {
-    return SupportsCompactUnwindWithoutEHFrame;
   }
   bool getCommDirectiveSupportsAlignment() const {
     return CommDirectiveSupportsAlignment;
@@ -208,7 +207,9 @@ public:
 
   unsigned getPersonalityEncoding() const { return PersonalityEncoding; }
   unsigned getLSDAEncoding() const { return LSDAEncoding; }
-  unsigned getFDEEncoding() const { return FDECFIEncoding; }
+  unsigned getFDEEncoding(bool CFI) const {
+    return CFI ? FDECFIEncoding : FDEEncoding;
+  }
   unsigned getTTypeEncoding() const { return TTypeEncoding; }
 
   unsigned getCompactUnwindDwarfEHFrameOnly() const {
@@ -261,10 +262,6 @@ public:
   const MCSection *getDwarfInfoDWOSection() const {
     return DwarfInfoDWOSection;
   }
-  const MCSection *getDwarfTypesSection(uint64_t Hash) const;
-  const MCSection *getDwarfTypesDWOSection() const {
-    return DwarfTypesDWOSection;
-  }
   const MCSection *getDwarfAbbrevDWOSection() const {
     return DwarfAbbrevDWOSection;
   }
@@ -282,10 +279,6 @@ public:
   }
   const MCSection *getDwarfAddrSection() const {
     return DwarfAddrSection;
-  }
-
-  const MCSection *getCOFFDebugSymbolsSection() const {
-    return COFFDebugSymbolsSection;
   }
 
   const MCSection *getTLSExtraDataSection() const {
@@ -360,21 +353,12 @@ public:
     return EHFrameSection;
   }
 
-  enum Environment { IsMachO, IsELF, IsCOFF };
-  Environment getObjectFileType() const {
-    return Env;
-  }
-
-  Reloc::Model getRelocM() const {
-    return RelocM;
-  }
-
 private:
+  enum Environment { IsMachO, IsELF, IsCOFF };
   Environment Env;
   Reloc::Model RelocM;
   CodeModel::Model CMModel;
   MCContext *Ctx;
-  Triple TT;
 
   void InitMachOMCObjectFileInfo(Triple T);
   void InitELFMCObjectFileInfo(Triple T);
@@ -383,9 +367,6 @@ private:
   /// InitEHFrameSection - Initialize EHFrameSection on demand.
   ///
   void InitEHFrameSection();
-
-public:
-  const Triple &getTargetTriple() const { return TT; }
 };
 
 } // end namespace llvm

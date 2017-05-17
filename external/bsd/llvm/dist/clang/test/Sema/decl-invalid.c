@@ -24,4 +24,5 @@ I; // expected-warning {{declaration does not declare anything}}
 
 // rdar://6880449
 register int test1;     // expected-error {{illegal storage class on file-scoped variable}}
+register int test2 __asm__("edi");  // expected-error {{global register variables are not supported}}
 

@@ -99,9 +99,9 @@ extern struct foo x;
   };
   struct S {
     __typeof(myStatus) __in;  // fails.
-    struct S1 { // expected-warning {{declaration does not declare anything}}
+    struct S1 {
       __typeof(myStatus) __in;  // fails.
-      struct S { // expected-warning {{declaration does not declare anything}}
+      struct S {
         __typeof(myStatus) __in;  // fails.
       };
     };

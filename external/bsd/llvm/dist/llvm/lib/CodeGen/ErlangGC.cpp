@@ -21,7 +21,6 @@
 #include "llvm/MC/MCSymbol.h"
 #include "llvm/Target/TargetInstrInfo.h"
 #include "llvm/Target/TargetMachine.h"
-#include "llvm/Target/TargetSubtargetInfo.h"
 
 using namespace llvm;
 
@@ -33,7 +32,7 @@ namespace {
                           DebugLoc DL) const;
   public:
     ErlangGC();
-    bool findCustomSafePoints(GCFunctionInfo &FI, MachineFunction &MF) override;
+    bool findCustomSafePoints(GCFunctionInfo &FI, MachineFunction &MF);
   };
 
 }
@@ -54,7 +53,7 @@ ErlangGC::ErlangGC() {
 MCSymbol *ErlangGC::InsertLabel(MachineBasicBlock &MBB,
                                 MachineBasicBlock::iterator MI,
                                 DebugLoc DL) const {
-  const TargetInstrInfo *TII = MBB.getParent()->getSubtarget().getInstrInfo();
+  const TargetInstrInfo* TII = MBB.getParent()->getTarget().getInstrInfo();
   MCSymbol *Label = MBB.getParent()->getContext().CreateTempSymbol();
   BuildMI(MBB, MI, DL, TII->get(TargetOpcode::GC_LABEL)).addSym(Label);
   return Label;

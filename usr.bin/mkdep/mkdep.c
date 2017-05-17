@@ -1,4 +1,4 @@
-/* $NetBSD: mkdep.c,v 1.44 2015/06/16 22:54:10 christos Exp $ */
+/* $NetBSD: mkdep.c,v 1.43 2013/03/05 21:57:47 christos Exp $ */
 
 /*-
  * Copyright (c) 1999 The NetBSD Foundation, Inc.
@@ -37,10 +37,12 @@
 #if !defined(lint)
 __COPYRIGHT("@(#) Copyright (c) 1999 The NetBSD Foundation, Inc.\
  All rights reserved.");
-__RCSID("$NetBSD: mkdep.c,v 1.44 2015/06/16 22:54:10 christos Exp $");
+__RCSID("$NetBSD: mkdep.c,v 1.43 2013/03/05 21:57:47 christos Exp $");
 #endif /* not lint */
 
+#ifndef __minix
 #include <sys/mman.h>
+#endif
 #include <sys/param.h>
 #include <sys/wait.h>
 #include <ctype.h>
@@ -228,13 +230,13 @@ main(int argc, char **argv)
 	const char *prefix = NULL;
 	const char *suffixes = NULL, *s;
 	suff_list_t *suff_list = NULL, *sl;
-#if !defined(__minix)
+#if defined(__minix)
 	size_t nr;
-#else
+
 	/* triggers a 'may be used uninitialized', when compiled with gcc,
 	 * asserts off, and -Os. */
 	slen = 0;
-#endif /* !defined(__minix) */
+#endif /* defined(__minix) */
 
 	suf = NULL;		/* XXXGCC -Wuninitialized [sun2] */
 	sl = NULL;		/* XXXGCC -Wuninitialized [sun2] */
@@ -357,11 +359,20 @@ main(int argc, char **argv)
 			close(fd);
 			continue;
 		}
+#ifndef __minix
 		buf = mmap(NULL, sz, PROT_READ|PROT_WRITE, MAP_PRIVATE, fd, 0);
 		close(fd);
 
 		if (buf == MAP_FAILED)
 			err(EXIT_FAILURE, "unable to mmap file %s", fname);
+#else
+		buf = malloc(sz);
+		if (buf == NULL)
+			err(EXIT_FAILURE, "malloc");
+		if ((nr = pread(fd, buf, sz, 0)) != sz)
+			err(EXIT_FAILURE, "read error %s", fname);
+		close(fd);		
+#endif
 		lim = buf + sz - 1;
 
 		/* Remove leading "./" from filenames */
@@ -462,7 +473,11 @@ main(int argc, char **argv)
 				save_for_optional(colon + 1, eol);
 			line = eol;
 		}
+#ifndef __minix
 		munmap(buf, sz);
+#else
+		free(buf);
+#endif
 	}
 
 	if (oflag && opt != NULL) {
@@ -479,7 +494,7 @@ main(int argc, char **argv)
 
 	exit(EXIT_SUCCESS);
 wrerror:
-	err(EXIT_FAILURE, "unable to %s to file %s",
+	err(EXIT_FAILURE, "unable to %s to file %s\n",
 	    aflag & O_TRUNC ? "write" : "append", filename);
 }
 

@@ -22,10 +22,6 @@ DPADD+=		${LIBINTL}
 LDADD+=		-lintl
 .endif # !defined(__MINIX)
 
-.if defined(__MINIX)
-CWARNFLAGS.clang+=	-Wno-error
-.endif # defined(__MINIX)
-
 LIBCOMMONDIR!=	cd ${.CURDIR}/../common && ${PRINTOBJDIR}
 .endif
 

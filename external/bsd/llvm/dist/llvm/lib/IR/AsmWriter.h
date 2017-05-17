@@ -12,15 +12,14 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_LIB_IR_ASMWRITER_H
-#define LLVM_LIB_IR_ASMWRITER_H
+#ifndef LLVM_IR_ASSEMBLYWRITER_H
+#define LLVM_IR_ASSEMBLYWRITER_H
 
 #include "llvm/ADT/DenseMap.h"
-#include "llvm/ADT/SetVector.h"
+#include "llvm/ADT/OwningPtr.h"
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/TypeFinder.h"
-#include "llvm/IR/UseListOrder.h"
 #include "llvm/Support/FormattedStream.h"
 
 namespace llvm {
@@ -28,7 +27,6 @@ namespace llvm {
 class BasicBlock;
 class Function;
 class GlobalValue;
-class Comdat;
 class Module;
 class NamedMDNode;
 class Value;
@@ -69,12 +67,10 @@ protected:
   const Module *TheModule;
 
 private:
-  std::unique_ptr<SlotTracker> ModuleSlotTracker;
+  OwningPtr<SlotTracker> ModuleSlotTracker;
   SlotTracker &Machine;
   TypePrinting TypePrinter;
   AssemblyAnnotationWriter *AnnotationWriter;
-  SetVector<const Comdat *> Comdats;
-  UseListOrderStack UseListOrders;
 
 public:
   /// Construct an AssemblyWriter with an external SlotTracker
@@ -95,9 +91,6 @@ public:
   void writeOperand(const Value *Op, bool PrintType);
   void writeParamOperand(const Value *Operand, AttributeSet Attrs,unsigned Idx);
   void writeAtomic(AtomicOrdering Ordering, SynchronizationScope SynchScope);
-  void writeAtomicCmpXchg(AtomicOrdering SuccessOrdering,
-                          AtomicOrdering FailureOrdering,
-                          SynchronizationScope SynchScope);
 
   void writeAllMDNodes();
   void writeMDNode(unsigned Slot, const MDNode *Node);
@@ -106,15 +99,11 @@ public:
   void printTypeIdentities();
   void printGlobal(const GlobalVariable *GV);
   void printAlias(const GlobalAlias *GV);
-  void printComdat(const Comdat *C);
   void printFunction(const Function *F);
   void printArgument(const Argument *FA, AttributeSet Attrs, unsigned Idx);
   void printBasicBlock(const BasicBlock *BB);
   void printInstructionLine(const Instruction &I);
   void printInstruction(const Instruction &I);
-
-  void printUseListOrder(const UseListOrder &Order);
-  void printUseLists(const Function *F);
 
 private:
   void init();
@@ -126,4 +115,4 @@ private:
 
 } // namespace llvm
 
-#endif
+#endif //LLVM_IR_ASMWRITER_H

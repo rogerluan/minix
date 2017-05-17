@@ -7,8 +7,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-// REQUIRES: locale.ru_RU.UTF-8
-
 // <locale>
 
 // locale(const locale& other, const string& std_name, category cat);

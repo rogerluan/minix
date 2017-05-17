@@ -135,7 +135,10 @@ do {									\
 int
 compare(NODE *s, FTSENT *p)
 {
-	u_int32_t len, val, flags;
+	u_int32_t len, val;
+#if HAVE_STRUCT_STAT_ST_FLAGS
+	u_int32_t flags;
+#endif
 	int fd, label;
 	const char *cp, *tab;
 #if !defined(NO_MD5) || !defined(NO_RMD160) || !defined(NO_SHA1) || !defined(NO_SHA2)

@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.221 2015/06/03 14:32:16 christos Exp $
+#	$NetBSD: Makefile,v 1.214 2013/11/22 16:10:25 christos Exp $
 #	from: @(#)Makefile	8.3 (Berkeley) 1/7/94
 
 .include <bsd.own.mk>
@@ -6,28 +6,26 @@
 SUBDIR= asa \
 	banner basename \
 	bzip2 bzip2recover cal calendar \
-	checknr chpass cksum cmp col colcrt colrm \
+	checknr chpass cksum col colcrt colrm \
 	column comm csplit ctags cut \
 	deroff dirname du \
 	env expand \
-	false find finger flock fold fmt fpr from \
-	fsplit ftp genassym gencat getent \
-	getopt \
-	head hexdump id indent infocmp ipcrm ipcs join jot \
+	false finger fold fpr from \
+	fsplit ftp genassym getopt \
+	head hexdump id indent infocmp join jot \
 	lam last ldd leave \
-	locale lock login logname lorder m4 \
+	lock login logname lorder m4 \
 	machine make man menuc mesg \
-	mkcsmapper mkdep mkesdb mkfifo mklocale mkstr mktemp \
+	mkdep mkfifo mkstr mktemp \
 	msgc \
-	nbperf netstat newgrp nice nl nohup \
-	pagesize passwd paste patch pathchk pr \
+	nbperf newgrp nice nl nohup \
+	passwd paste patch pathchk pr \
 	printenv printf pwhash \
-	renice rev rsh \
+	renice rev \
 	\
 	sdiff sed seq shar shlock \
 	shuffle  sort split stat su \
-	tail tee telnet tic time touch \
-	tput \
+	tail tee tic touch tput \
 	tr true tsort tty ul uname unexpand unifdef \
 	uniq units unvis unzip users \
 	uudecode uuencode uuidgen vis \
@@ -37,19 +35,21 @@ SUBDIR= asa \
 
 .if !defined(__MINIX)
 SUBDIR+= ../external/zlib/pigz/bin/pigz
+.else
+# LSC FIXME For now we compile those unconditionnaly
+SUBDIR+= apropos whatis bdes soelim 
 .endif # defined(__MINIX)
 
-.if (${MKGROFF} == "no") || defined(__MINIX)
+.if (${MKGROFF} == "no")
 SUBDIR+= soelim
 .endif
 
-.if (${MKMAKEMANDB} == "no") || defined(__MINIX)
+.if (${MKMAKEMANDB} == "no")
 SUBDIR+= apropos whatis
 .endif
 
 .if (${MKRUMP} != "no")
-SUBDIR+= rump_allserver rump_dhcpclient rump_halt rump_server shmif_dumpbus \
-	rump_wmd
+SUBDIR+= rump_allserver rump_dhcpclient rump_halt rump_server
 .endif
 
 .if (${MKBSDGREP} != "no")
@@ -76,9 +76,7 @@ SUBDIR+= ypcat ypmatch ypwhich
 
 .if (${MKCRYPTO} != "no")
 SUBDIR+= bdes
-.if !defined(__MINIX)
 SUBDIR+= nbsvtool
-.endif # defined(__MINIX)
 .endif
 
 .include <bsd.subdir.mk>

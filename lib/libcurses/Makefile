@@ -1,14 +1,9 @@
-#	$NetBSD: Makefile,v 1.71 2014/07/05 22:31:32 dholland Exp $
+#	$NetBSD: Makefile,v 1.68 2012/04/21 14:39:35 roy Exp $
 #	@(#)Makefile	8.2 (Berkeley) 1/2/94
 
 .include <bsd.own.mk>
 
-.if defined(__MINIX)
-# /usr/minix/src-clang/lib/libcurses/get_wch.c:646:15: error: comparison of unsigned expression < 0 is always false [-Werror,-Wtautological-compare]
-WARNS=0
-.else
 WARNS=	2
-.endif
 
 CPPFLAGS+=-I${.CURDIR} -I${NETBSDSRCDIR}/lib/libterminfo
 .if defined(DEBUG_CURSES)
@@ -181,9 +176,9 @@ MLINKS+= curses_addch.3 addch.3 curses_addchstr.3 addchnstr.3 \
 	 curses_touch.3 wtouchln.3 curses_underscore.3 wunderend.3 \
 	 curses_underscore.3 wunderscore.3 curses_line.3 wvline.3
 
-.if !defined(__MINIX)
+.if make(install)
 SUBDIR+= PSD.doc
-.endif # !defined(__MINIX)
+.endif
 
 fileio.h: shlib_version genfileioh.awk
 	${TOOL_AWK} -f ${.CURDIR}/genfileioh.awk < ${.CURDIR}/shlib_version > ${.CURDIR}/fileio.h

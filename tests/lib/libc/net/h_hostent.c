@@ -1,4 +1,4 @@
-/*	$NetBSD: h_hostent.c,v 1.2 2014/01/09 02:18:10 christos Exp $	*/
+/*	$NetBSD: h_hostent.c,v 1.1 2013/08/16 15:29:45 christos Exp $	*/
 
 /*-
  * Copyright (c) 2013 The NetBSD Foundation, Inc.
@@ -29,7 +29,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 #include <sys/cdefs.h>
-__RCSID("$NetBSD: h_hostent.c,v 1.2 2014/01/09 02:18:10 christos Exp $");
+__RCSID("$NetBSD: h_hostent.c,v 1.1 2013/08/16 15:29:45 christos Exp $");
 
 #include <stdio.h>
 #include <string.h>
@@ -46,8 +46,6 @@ __RCSID("$NetBSD: h_hostent.c,v 1.2 2014/01/09 02:18:10 christos Exp $");
 #include <arpa/inet.h>
 
 #include "hostent.h"
-
-extern const char *__res_conf_name;
 
 static void
 phostent(const struct hostent *h)
@@ -125,7 +123,7 @@ main(int argc, char *argv[])
 	info.buflen = sizeof(buf);
 	info.he = &e;
 
-	while ((c = getopt(argc, argv, "46af:r:t:")) != -1) {
+	while ((c = getopt(argc, argv, "46af:t:")) != -1) {
 		switch (c) {
 		case '4':
 			af = AF_INET;
@@ -136,14 +134,11 @@ main(int argc, char *argv[])
 		case 'a':
 			byaddr++;
 			break;
-		case 'f':
-			_hf_sethostsfile(optarg);
-			break;
-		case 'r':
-			__res_conf_name = optarg;
-			break;
 		case 't':
 			type = optarg;
+			break;
+		case 'f':
+			_hf_sethostsfile(optarg);
 			break;
 		default:
 			usage();

@@ -1,4 +1,4 @@
-minix-base preserve
+minix-sys	preserve
 base-sys-root	preserve
 base-sys-share	preserve
 base-sys-shlib	preserve

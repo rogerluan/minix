@@ -1,6 +1,6 @@
 ;RUN: rm -f %T/test.a
 ;RUN: not llvm-ar r %T/test.a . 2>&1 | FileCheck %s
-;CHECK: .: {{I|i}}s a directory
+;CHECK: .: Is a directory
 
 ;RUN: rm -f %T/test.a
 ;RUN: touch %T/a-very-long-file-name

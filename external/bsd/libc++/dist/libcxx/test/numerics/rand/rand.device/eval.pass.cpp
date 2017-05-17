@@ -18,18 +18,6 @@
 
 int main()
 {
-    {
-        std::random_device r;
-        std::random_device::result_type e = r();
-    }
-
-    try
-    {
-        std::random_device r("/dev/null");
-        r();
-        assert(false);
-    }
-    catch (const std::system_error& e)
-    {
-    }
+    std::random_device r;
+    std::random_device::result_type e = r();
 }

@@ -1,4 +1,4 @@
-/*	$NetBSD: net.h,v 1.27 2014/03/29 14:30:16 jakllsch Exp $	*/
+/*	$NetBSD: net.h,v 1.26 2011/05/11 16:23:40 zoltan Exp $	*/
 
 /*
  * Copyright (c) 1993 Adam Glass
@@ -38,7 +38,6 @@
  * SUCH DAMAGE.
  */
 
-#include <net/if_ether.h>	/* for ETHER_ADDR_LEN */
 #include <netinet/in.h>
 #include <netinet/in_systm.h>
 
@@ -58,7 +57,7 @@
 /* Returns true if n_long's on the same net */
 #define	SAMENET(a1, a2, m) ((a1.s_addr & m) == (a2.s_addr & m))
 
-#define MACPY(s, d) memcpy(d, s, ETHER_ADDR_LEN)
+#define MACPY(s, d) memcpy(d, s, 6)
 
 #define MAXTMO 20	/* seconds */
 #define MINTMO 2	/* seconds */
@@ -90,7 +89,7 @@
 
 #define TCP_TOTAL_HEADER_SIZE (ETHERNET_HEADER_SIZE + IP_HEADER_SIZE + TCP_HEADER_SIZE)
 
-extern	u_char bcea[ETHER_ADDR_LEN];
+extern	u_char bcea[6];
 extern	char rootpath[FNAME_SIZE];
 extern	char bootfile[FNAME_SIZE];
 extern	char hostname[FNAME_SIZE];

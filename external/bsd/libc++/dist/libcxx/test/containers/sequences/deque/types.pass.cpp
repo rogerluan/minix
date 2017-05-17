@@ -33,9 +33,9 @@
 #include <iterator>
 #include <type_traits>
 
-#include "test_allocator.h"
+#include "../../test_allocator.h"
 #include "../../Copyable.h"
-#include "min_allocator.h"
+#include "../../min_allocator.h"
 
 template <class T, class Allocator>
 void
@@ -82,8 +82,7 @@ int main()
         static_assert((std::is_same<C::const_reference, const C::value_type&>::value), "");
         static_assert((std::is_same<C::pointer, min_pointer<C::value_type>>::value), "");
         static_assert((std::is_same<C::const_pointer, min_pointer<const C::value_type>>::value), "");
-//  min_allocator doesn't have a size_type, so one gets synthesized
-        static_assert((std::is_same<C::size_type, std::make_unsigned<C::difference_type>::type>::value), "");
+        static_assert((std::is_same<C::size_type, std::size_t>::value), "");
         static_assert((std::is_same<C::difference_type, std::ptrdiff_t>::value), "");
     }
 #endif

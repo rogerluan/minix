@@ -5,14 +5,16 @@
 //
 // This test assumes that floats are 32-bit aligned and doubles are
 // 64-bit aligned, and uses x86-64 as a target that should have this
-// property.
+// datalayout.
+
+// CHECK: target datalayout = "{{.*}}f32:32:32-f64:64:64{{.*}}"
 
 volatile _Complex float cf;
 volatile _Complex double cd;
 volatile _Complex float cf32 __attribute__((aligned(32)));
 volatile _Complex double cd32 __attribute__((aligned(32)));
 
-// CHECK-LABEL: define void @test_cf()
+// CHECK-LABEL-LABEL: define void @test_cf()
 void test_cf() {
   // CHECK:      load volatile float* getelementptr inbounds ({ float, float }* @cf, i32 0, i32 0), align 4
   // CHECK-NEXT: load volatile float* getelementptr inbounds ({ float, float }* @cf, i32 0, i32 1), align 4
@@ -25,7 +27,7 @@ void test_cf() {
   // CHECK-NEXT: ret void
 }
 
-// CHECK-LABEL: define void @test_cd()
+// CHECK-LABEL-LABEL: define void @test_cd()
 void test_cd() {
   // CHECK:      load volatile double* getelementptr inbounds ({ double, double }* @cd, i32 0, i32 0), align 8
   // CHECK-NEXT: load volatile double* getelementptr inbounds ({ double, double }* @cd, i32 0, i32 1), align 8
@@ -38,7 +40,7 @@ void test_cd() {
   // CHECK-NEXT: ret void
 }
 
-// CHECK-LABEL: define void @test_cf32()
+// CHECK-LABEL-LABEL: define void @test_cf32()
 void test_cf32() {
   // CHECK:      load volatile float* getelementptr inbounds ({ float, float }* @cf32, i32 0, i32 0), align 32
   // CHECK-NEXT: load volatile float* getelementptr inbounds ({ float, float }* @cf32, i32 0, i32 1), align 4
@@ -51,7 +53,7 @@ void test_cf32() {
   // CHECK-NEXT: ret void
 }
 
-// CHECK-LABEL: define void @test_cd32()
+// CHECK-LABEL-LABEL: define void @test_cd32()
 void test_cd32() {
   // CHECK:      load volatile double* getelementptr inbounds ({ double, double }* @cd32, i32 0, i32 0), align 32
   // CHECK-NEXT: load volatile double* getelementptr inbounds ({ double, double }* @cd32, i32 0, i32 1), align 8

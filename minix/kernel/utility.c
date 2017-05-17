@@ -31,7 +31,6 @@ void panic(const char *fmt, ...)
 	printf("kernel panic: ");
   	va_start(arg, fmt);
 	vprintf(fmt, arg);
-	va_end(arg);
 	printf("\n");
   }
 
@@ -46,15 +45,14 @@ void panic(const char *fmt, ...)
 #endif
 
   /* Abort MINIX. */
-  minix_shutdown(0);
+  minix_shutdown(NULL);
 }
 
 /*===========================================================================*
  *				kputc				     	     *
  *===========================================================================*/
-void kputc(
-  int c					/* character to append */
-)
+void kputc(c)
+int c;					/* character to append */
 {
 /* Accumulate a single character for a kernel message. Send a notification
  * to the output drivers if an END_OF_KMESS is encountered.
@@ -71,7 +69,7 @@ void kputc(
       kmess.km_buf[kmess.km_next] = c;	/* put normal char in buffer */
       kmess.kmess_buf[kmess.blpos] = c;
       if (kmess.km_size < sizeof(kmess.km_buf))
-          kmess.km_size += 1;
+          kmess.km_size += 1;		
       kmess.km_next = (kmess.km_next + 1) % _KMESS_BUF_SIZE;
       if(kmess.blpos == maxblpos) {
       	memmove(kmess.kmess_buf,
@@ -85,9 +83,8 @@ void kputc(
 /*===========================================================================*
  *				_exit				     	     *
  *===========================================================================*/
-void _exit(
-  int e					/* error code */
-)
+void _exit(e)
+int e;					/* error code */
 {
   panic("_exit called from within the kernel, should not happen. (err %i)", e);
 }

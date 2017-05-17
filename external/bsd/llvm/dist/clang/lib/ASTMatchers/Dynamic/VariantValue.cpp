@@ -13,6 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "clang/ASTMatchers/Dynamic/VariantValue.h"
+
 #include "clang/Basic/LLVM.h"
 #include "llvm/ADT/STLExtras.h"
 
@@ -20,88 +21,25 @@ namespace clang {
 namespace ast_matchers {
 namespace dynamic {
 
-std::string ArgKind::asString() const {
-  switch (getArgKind()) {
-  case AK_Matcher:
-    return (Twine("Matcher<") + MatcherKind.asStringRef() + ">").str();
-  case AK_Unsigned:
-    return "unsigned";
-  case AK_String:
-    return "string";
-  }
-  llvm_unreachable("unhandled ArgKind");
-}
-
-bool ArgKind::isConvertibleTo(ArgKind To, unsigned *Specificity) const {
-  if (K != To.K)
-    return false;
-  if (K != AK_Matcher) {
-    if (Specificity)
-      *Specificity = 1;
-    return true;
-  }
-  unsigned Distance;
-  if (!MatcherKind.isBaseOf(To.MatcherKind, &Distance))
-    return false;
-
-  if (Specificity)
-    *Specificity = 100 - Distance;
-  return true;
-}
-
-bool
-VariantMatcher::MatcherOps::canConstructFrom(const DynTypedMatcher &Matcher,
-                                             bool &IsExactMatch) const {
-  IsExactMatch = Matcher.getSupportedKind().isSame(NodeKind);
-  return Matcher.canConvertTo(NodeKind);
-}
-
-llvm::Optional<DynTypedMatcher>
-VariantMatcher::MatcherOps::constructVariadicOperator(
-    DynTypedMatcher::VariadicOperator Op,
-    ArrayRef<VariantMatcher> InnerMatchers) const {
-  std::vector<DynTypedMatcher> DynMatchers;
-  for (const auto &InnerMatcher : InnerMatchers) {
-    // Abort if any of the inner matchers can't be converted to
-    // Matcher<T>.
-    if (!InnerMatcher.Value)
-      return llvm::None;
-    llvm::Optional<DynTypedMatcher> Inner =
-        InnerMatcher.Value->getTypedMatcher(*this);
-    if (!Inner)
-      return llvm::None;
-    DynMatchers.push_back(*Inner);
-  }
-  return DynTypedMatcher::constructVariadic(Op, DynMatchers);
-}
-
+VariantMatcher::MatcherOps::~MatcherOps() {}
 VariantMatcher::Payload::~Payload() {}
 
 class VariantMatcher::SinglePayload : public VariantMatcher::Payload {
 public:
   SinglePayload(const DynTypedMatcher &Matcher) : Matcher(Matcher) {}
 
-  llvm::Optional<DynTypedMatcher> getSingleMatcher() const override {
+  virtual llvm::Optional<DynTypedMatcher> getSingleMatcher() const {
     return Matcher;
   }
 
-  std::string getTypeAsString() const override {
+  virtual std::string getTypeAsString() const {
     return (Twine("Matcher<") + Matcher.getSupportedKind().asStringRef() + ">")
         .str();
   }
 
-  llvm::Optional<DynTypedMatcher>
-  getTypedMatcher(const MatcherOps &Ops) const override {
-    bool Ignore;
-    if (Ops.canConstructFrom(Matcher, Ignore))
-      return Matcher;
-    return llvm::None;
-  }
-
-  bool isConvertibleTo(ast_type_traits::ASTNodeKind Kind,
-                       unsigned *Specificity) const override {
-    return ArgKind(Matcher.getSupportedKind())
-        .isConvertibleTo(Kind, Specificity);
+  virtual void makeTypedMatcher(MatcherOps &Ops) const {
+    if (Ops.canConstructFrom(Matcher))
+      Ops.constructFrom(Matcher);
   }
 
 private:
@@ -110,18 +48,18 @@ private:
 
 class VariantMatcher::PolymorphicPayload : public VariantMatcher::Payload {
 public:
-  PolymorphicPayload(std::vector<DynTypedMatcher> MatchersIn)
-      : Matchers(std::move(MatchersIn)) {}
+  PolymorphicPayload(ArrayRef<DynTypedMatcher> MatchersIn)
+      : Matchers(MatchersIn) {}
 
-  ~PolymorphicPayload() override {}
+  virtual ~PolymorphicPayload() {}
 
-  llvm::Optional<DynTypedMatcher> getSingleMatcher() const override {
+  virtual llvm::Optional<DynTypedMatcher> getSingleMatcher() const {
     if (Matchers.size() != 1)
       return llvm::Optional<DynTypedMatcher>();
     return Matchers[0];
   }
 
-  std::string getTypeAsString() const override {
+  virtual std::string getTypeAsString() const {
     std::string Inner;
     for (size_t i = 0, e = Matchers.size(); i != e; ++i) {
       if (i != 0)
@@ -131,44 +69,17 @@ public:
     return (Twine("Matcher<") + Inner + ">").str();
   }
 
-  llvm::Optional<DynTypedMatcher>
-  getTypedMatcher(const MatcherOps &Ops) const override {
-    bool FoundIsExact = false;
-    const DynTypedMatcher *Found = nullptr;
-    int NumFound = 0;
+  virtual void makeTypedMatcher(MatcherOps &Ops) const {
+    const DynTypedMatcher *Found = NULL;
     for (size_t i = 0, e = Matchers.size(); i != e; ++i) {
-      bool IsExactMatch;
-      if (Ops.canConstructFrom(Matchers[i], IsExactMatch)) {
-        if (Found) {
-          if (FoundIsExact) {
-            assert(!IsExactMatch && "We should not have two exact matches.");
-            continue;
-          }
-        }
+      if (Ops.canConstructFrom(Matchers[i])) {
+        if (Found)
+          return;
         Found = &Matchers[i];
-        FoundIsExact = IsExactMatch;
-        ++NumFound;
       }
     }
-    // We only succeed if we found exactly one, or if we found an exact match.
-    if (Found && (FoundIsExact || NumFound == 1))
-      return *Found;
-    return llvm::None;
-  }
-
-  bool isConvertibleTo(ast_type_traits::ASTNodeKind Kind,
-                       unsigned *Specificity) const override {
-    unsigned MaxSpecificity = 0;
-    for (const DynTypedMatcher &Matcher : Matchers) {
-      unsigned ThisSpecificity;
-      if (ArgKind(Matcher.getSupportedKind())
-              .isConvertibleTo(Kind, &ThisSpecificity)) {
-        MaxSpecificity = std::max(MaxSpecificity, ThisSpecificity);
-      }
-    }
-    if (Specificity)
-      *Specificity = MaxSpecificity;
-    return MaxSpecificity > 0;
+    if (Found)
+      Ops.constructFrom(*Found);
   }
 
   const std::vector<DynTypedMatcher> Matchers;
@@ -176,15 +87,15 @@ public:
 
 class VariantMatcher::VariadicOpPayload : public VariantMatcher::Payload {
 public:
-  VariadicOpPayload(DynTypedMatcher::VariadicOperator Op,
-                    std::vector<VariantMatcher> Args)
-      : Op(Op), Args(std::move(Args)) {}
+  VariadicOpPayload(ast_matchers::internal::VariadicOperatorFunction Func,
+                    ArrayRef<VariantMatcher> Args)
+      : Func(Func), Args(Args) {}
 
-  llvm::Optional<DynTypedMatcher> getSingleMatcher() const override {
+  virtual llvm::Optional<DynTypedMatcher> getSingleMatcher() const {
     return llvm::Optional<DynTypedMatcher>();
   }
 
-  std::string getTypeAsString() const override {
+  virtual std::string getTypeAsString() const {
     std::string Inner;
     for (size_t i = 0, e = Args.size(); i != e; ++i) {
       if (i != 0)
@@ -194,22 +105,12 @@ public:
     return Inner;
   }
 
-  llvm::Optional<DynTypedMatcher>
-  getTypedMatcher(const MatcherOps &Ops) const override {
-    return Ops.constructVariadicOperator(Op, Args);
-  }
-
-  bool isConvertibleTo(ast_type_traits::ASTNodeKind Kind,
-                       unsigned *Specificity) const override {
-    for (const VariantMatcher &Matcher : Args) {
-      if (!Matcher.isConvertibleTo(Kind, Specificity))
-        return false;
-    }
-    return true;
+  virtual void makeTypedMatcher(MatcherOps &Ops) const {
+    Ops.constructVariadicOperator(Func, Args);
   }
 
 private:
-  const DynTypedMatcher::VariadicOperator Op;
+  const ast_matchers::internal::VariadicOperatorFunction Func;
   const std::vector<VariantMatcher> Args;
 };
 
@@ -220,14 +121,14 @@ VariantMatcher VariantMatcher::SingleMatcher(const DynTypedMatcher &Matcher) {
 }
 
 VariantMatcher
-VariantMatcher::PolymorphicMatcher(std::vector<DynTypedMatcher> Matchers) {
-  return VariantMatcher(new PolymorphicPayload(std::move(Matchers)));
+VariantMatcher::PolymorphicMatcher(ArrayRef<DynTypedMatcher> Matchers) {
+  return VariantMatcher(new PolymorphicPayload(Matchers));
 }
 
 VariantMatcher VariantMatcher::VariadicOperatorMatcher(
-    DynTypedMatcher::VariadicOperator Op,
-    std::vector<VariantMatcher> Args) {
-  return VariantMatcher(new VariadicOpPayload(Op, std::move(Args)));
+    ast_matchers::internal::VariadicOperatorFunction Func,
+    ArrayRef<VariantMatcher> Args) {
+  return VariantMatcher(new VariadicOpPayload(Func, Args));
 }
 
 llvm::Optional<DynTypedMatcher> VariantMatcher::getSingleMatcher() const {
@@ -338,43 +239,6 @@ void VariantValue::setMatcher(const VariantMatcher &NewValue) {
   reset();
   Type = VT_Matcher;
   Value.Matcher = new VariantMatcher(NewValue);
-}
-
-bool VariantValue::isConvertibleTo(ArgKind Kind, unsigned *Specificity) const {
-  switch (Kind.getArgKind()) {
-  case ArgKind::AK_Unsigned:
-    if (!isUnsigned())
-      return false;
-    *Specificity = 1;
-    return true;
-
-  case ArgKind::AK_String:
-    if (!isString())
-      return false;
-    *Specificity = 1;
-    return true;
-
-  case ArgKind::AK_Matcher:
-    if (!isMatcher())
-      return false;
-    return getMatcher().isConvertibleTo(Kind.getMatcherKind(), Specificity);
-  }
-  llvm_unreachable("Invalid Type");
-}
-
-bool VariantValue::isConvertibleTo(ArrayRef<ArgKind> Kinds,
-                                   unsigned *Specificity) const {
-  unsigned MaxSpecificity = 0;
-  for (const ArgKind& Kind : Kinds) {
-    unsigned ThisSpecificity;
-    if (!isConvertibleTo(Kind, &ThisSpecificity))
-      continue;
-    MaxSpecificity = std::max(MaxSpecificity, ThisSpecificity);
-  }
-  if (Specificity && MaxSpecificity > 0) {
-    *Specificity = MaxSpecificity;
-  }
-  return MaxSpecificity > 0;
 }
 
 std::string VariantValue::getTypeAsString() const {

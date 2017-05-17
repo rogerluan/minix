@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.4 2014/08/10 17:35:07 joerg Exp $
+#	$NetBSD: Makefile,v 1.3 2013/11/28 14:19:59 joerg Exp $
 
 LIB=	lldCore
 
@@ -11,6 +11,7 @@ SRCS+=	DefinedAtom.cpp \
 	File.cpp \
 	InputGraph.cpp \
 	LinkingContext.cpp \
+	PassManager.cpp \
 	Resolver.cpp \
 	SymbolTable.cpp
 

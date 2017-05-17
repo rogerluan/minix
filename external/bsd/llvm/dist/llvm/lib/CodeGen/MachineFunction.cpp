@@ -17,6 +17,7 @@
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/Analysis/ConstantFolding.h"
+#include "llvm/Assembly/Writer.h"
 #include "llvm/CodeGen/MachineConstantPool.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
@@ -25,8 +26,8 @@
 #include "llvm/CodeGen/MachineModuleInfo.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/Passes.h"
+#include "llvm/DebugInfo.h"
 #include "llvm/IR/DataLayout.h"
-#include "llvm/IR/DebugInfo.h"
 #include "llvm/IR/Function.h"
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCContext.h"
@@ -36,10 +37,7 @@
 #include "llvm/Target/TargetFrameLowering.h"
 #include "llvm/Target/TargetLowering.h"
 #include "llvm/Target/TargetMachine.h"
-#include "llvm/Target/TargetSubtargetInfo.h"
 using namespace llvm;
-
-#define DEBUG_TYPE "codegen"
 
 //===----------------------------------------------------------------------===//
 // MachineFunction implementation
@@ -53,19 +51,17 @@ void ilist_traits<MachineBasicBlock>::deleteNode(MachineBasicBlock *MBB) {
 }
 
 MachineFunction::MachineFunction(const Function *F, const TargetMachine &TM,
-                                 unsigned FunctionNum, MachineModuleInfo &mmi)
-    : Fn(F), Target(TM), STI(TM.getSubtargetImpl()), Ctx(mmi.getContext()),
-      MMI(mmi) {
-  if (STI->getRegisterInfo())
-    RegInfo = new (Allocator) MachineRegisterInfo(this);
+                                 unsigned FunctionNum, MachineModuleInfo &mmi,
+                                 GCModuleInfo* gmi)
+  : Fn(F), Target(TM), Ctx(mmi.getContext()), MMI(mmi), GMI(gmi) {
+  if (TM.getRegisterInfo())
+    RegInfo = new (Allocator) MachineRegisterInfo(TM);
   else
-    RegInfo = nullptr;
+    RegInfo = 0;
 
-  MFInfo = nullptr;
-  FrameInfo = new (Allocator)
-      MachineFrameInfo(STI->getFrameLowering()->getStackAlignment(),
-                       STI->getFrameLowering()->isStackRealignable(),
-                       !F->hasFnAttribute("no-realign-stack"));
+  MFInfo = 0;
+  FrameInfo =
+    new (Allocator) MachineFrameInfo(TM,!F->hasFnAttribute("no-realign-stack"));
 
   if (Fn->getAttributes().hasAttribute(AttributeSet::FunctionIndex,
                                        Attribute::StackAlignment))
@@ -73,16 +69,16 @@ MachineFunction::MachineFunction(const Function *F, const TargetMachine &TM,
                                 getStackAlignment(AttributeSet::FunctionIndex));
 
   ConstantPool = new (Allocator) MachineConstantPool(TM);
-  Alignment = STI->getTargetLowering()->getMinFunctionAlignment();
+  Alignment = TM.getTargetLowering()->getMinFunctionAlignment();
 
   // FIXME: Shouldn't use pref alignment if explicit alignment is set on Fn.
   if (!Fn->getAttributes().hasAttribute(AttributeSet::FunctionIndex,
                                         Attribute::OptimizeForSize))
     Alignment = std::max(Alignment,
-                         STI->getTargetLowering()->getPrefFunctionAlignment());
+                         TM.getTargetLowering()->getPrefFunctionAlignment());
 
   FunctionNumber = FunctionNum;
-  JumpTableInfo = nullptr;
+  JumpTableInfo = 0;
 }
 
 MachineFunction::~MachineFunction() {
@@ -128,11 +124,6 @@ getOrCreateJumpTableInfo(unsigned EntryKind) {
   return JumpTableInfo;
 }
 
-/// Should we be emitting segmented stack stuff for the function
-bool MachineFunction::shouldSplitStack() {
-  return getFunction()->hasFnAttribute("split-stack");
-}
-
 /// RenumberBlocks - This discards all of the MachineBasicBlock numbers and
 /// recomputes them.  This guarantees that the MBB numbers are sequential,
 /// dense, and match the ordering of the blocks within the function.  If a
@@ -141,7 +132,7 @@ bool MachineFunction::shouldSplitStack() {
 void MachineFunction::RenumberBlocks(MachineBasicBlock *MBB) {
   if (empty()) { MBBNumbering.clear(); return; }
   MachineFunction::iterator MBBI, E = end();
-  if (MBB == nullptr)
+  if (MBB == 0)
     MBBI = begin();
   else
     MBBI = MBB;
@@ -149,7 +140,7 @@ void MachineFunction::RenumberBlocks(MachineBasicBlock *MBB) {
   // Figure out the block number this should have.
   unsigned BlockNo = 0;
   if (MBBI != begin())
-    BlockNo = std::prev(MBBI)->getNumber() + 1;
+    BlockNo = prior(MBBI)->getNumber()+1;
 
   for (; MBBI != E; ++MBBI, ++BlockNo) {
     if (MBBI->getNumber() != (int)BlockNo) {
@@ -157,7 +148,7 @@ void MachineFunction::RenumberBlocks(MachineBasicBlock *MBB) {
       if (MBBI->getNumber() != -1) {
         assert(MBBNumbering[MBBI->getNumber()] == &*MBBI &&
                "MBB number mismatch!");
-        MBBNumbering[MBBI->getNumber()] = nullptr;
+        MBBNumbering[MBBI->getNumber()] = 0;
       }
 
       // If BlockNo is already taken, set that block's number to -1.
@@ -232,26 +223,20 @@ MachineFunction::DeleteMachineBasicBlock(MachineBasicBlock *MBB) {
 MachineMemOperand *
 MachineFunction::getMachineMemOperand(MachinePointerInfo PtrInfo, unsigned f,
                                       uint64_t s, unsigned base_alignment,
-                                      const AAMDNodes &AAInfo,
+                                      const MDNode *TBAAInfo,
                                       const MDNode *Ranges) {
   return new (Allocator) MachineMemOperand(PtrInfo, f, s, base_alignment,
-                                           AAInfo, Ranges);
+                                           TBAAInfo, Ranges);
 }
 
 MachineMemOperand *
 MachineFunction::getMachineMemOperand(const MachineMemOperand *MMO,
                                       int64_t Offset, uint64_t Size) {
-  if (MMO->getValue())
-    return new (Allocator)
-               MachineMemOperand(MachinePointerInfo(MMO->getValue(),
-                                                    MMO->getOffset()+Offset),
-                                 MMO->getFlags(), Size,
-                                 MMO->getBaseAlignment());
   return new (Allocator)
-             MachineMemOperand(MachinePointerInfo(MMO->getPseudoValue(),
+             MachineMemOperand(MachinePointerInfo(MMO->getValue(),
                                                   MMO->getOffset()+Offset),
                                MMO->getFlags(), Size,
-                               MMO->getBaseAlignment());
+                               MMO->getBaseAlignment(), 0);
 }
 
 MachineInstr::mmo_iterator
@@ -282,7 +267,7 @@ MachineFunction::extractLoadMemRefs(MachineInstr::mmo_iterator Begin,
           getMachineMemOperand((*I)->getPointerInfo(),
                                (*I)->getFlags() & ~MachineMemOperand::MOStore,
                                (*I)->getSize(), (*I)->getBaseAlignment(),
-                               (*I)->getAAInfo());
+                               (*I)->getTBAAInfo());
         Result[Index] = JustLoad;
       }
       ++Index;
@@ -314,7 +299,7 @@ MachineFunction::extractStoreMemRefs(MachineInstr::mmo_iterator Begin,
           getMachineMemOperand((*I)->getPointerInfo(),
                                (*I)->getFlags() & ~MachineMemOperand::MOLoad,
                                (*I)->getSize(), (*I)->getBaseAlignment(),
-                               (*I)->getAAInfo());
+                               (*I)->getTBAAInfo());
         Result[Index] = JustStore;
       }
       ++Index;
@@ -353,7 +338,7 @@ void MachineFunction::print(raw_ostream &OS, SlotIndexes *Indexes) const {
   // Print Constant Pool
   ConstantPool->print(OS);
 
-  const TargetRegisterInfo *TRI = getSubtarget().getRegisterInfo();
+  const TargetRegisterInfo *TRI = getTarget().getRegisterInfo();
 
   if (RegInfo && !RegInfo->livein_empty()) {
     OS << "Function Live Ins: ";
@@ -362,15 +347,15 @@ void MachineFunction::print(raw_ostream &OS, SlotIndexes *Indexes) const {
       OS << PrintReg(I->first, TRI);
       if (I->second)
         OS << " in " << PrintReg(I->second, TRI);
-      if (std::next(I) != E)
+      if (llvm::next(I) != E)
         OS << ", ";
     }
     OS << '\n';
   }
 
-  for (const auto &BB : *this) {
+  for (const_iterator BB = begin(), E = end(); BB != E; ++BB) {
     OS << '\n';
-    BB.print(OS, Indexes);
+    BB->print(OS, Indexes);
   }
 
   OS << "\n# End machine code for function " << getName() << ".\n\n";
@@ -440,16 +425,7 @@ unsigned MachineFunction::addLiveIn(unsigned PReg,
   MachineRegisterInfo &MRI = getRegInfo();
   unsigned VReg = MRI.getLiveInVirtReg(PReg);
   if (VReg) {
-    const TargetRegisterClass *VRegRC = MRI.getRegClass(VReg);
-    (void)VRegRC;
-    // A physical register can be added several times.
-    // Between two calls, the register class of the related virtual register
-    // may have been constrained to match some operation constraints.
-    // In that case, check that the current register class includes the
-    // physical register and is a sub class of the specified RC.
-    assert((VRegRC == RC || (VRegRC->contains(PReg) &&
-                             RC->hasSubClassEq(VRegRC))) &&
-            "Register class mismatch!");
+    assert(MRI.getRegClass(VReg) == RC && "Register class mismatch!");
     return VReg;
   }
   VReg = MRI.createVirtualRegister(RC);
@@ -460,14 +436,14 @@ unsigned MachineFunction::addLiveIn(unsigned PReg,
 /// getJTISymbol - Return the MCSymbol for the specified non-empty jump table.
 /// If isLinkerPrivate is specified, an 'l' label is returned, otherwise a
 /// normal 'L' label is returned.
-MCSymbol *MachineFunction::getJTISymbol(unsigned JTI, MCContext &Ctx,
+MCSymbol *MachineFunction::getJTISymbol(unsigned JTI, MCContext &Ctx, 
                                         bool isLinkerPrivate) const {
-  const DataLayout *DL = getSubtarget().getDataLayout();
   assert(JumpTableInfo && "No jump tables");
   assert(JTI < JumpTableInfo->getJumpTables().size() && "Invalid JTI!");
+  const MCAsmInfo &MAI = *getTarget().getMCAsmInfo();
 
-  const char *Prefix = isLinkerPrivate ? DL->getLinkerPrivateGlobalPrefix() :
-                                         DL->getPrivateGlobalPrefix();
+  const char *Prefix = isLinkerPrivate ? MAI.getLinkerPrivateGlobalPrefix() :
+                                         MAI.getPrivateGlobalPrefix();
   SmallString<60> Name;
   raw_svector_ostream(Name)
     << Prefix << "JTI" << getFunctionNumber() << '_' << JTI;
@@ -477,8 +453,8 @@ MCSymbol *MachineFunction::getJTISymbol(unsigned JTI, MCContext &Ctx,
 /// getPICBaseSymbol - Return a function-local symbol to represent the PIC
 /// base.
 MCSymbol *MachineFunction::getPICBaseSymbol() const {
-  const DataLayout *DL = getSubtarget().getDataLayout();
-  return Ctx.GetOrCreateSymbol(Twine(DL->getPrivateGlobalPrefix())+
+  const MCAsmInfo &MAI = *Target.getMCAsmInfo();
+  return Ctx.GetOrCreateSymbol(Twine(MAI.getPrivateGlobalPrefix())+
                                Twine(getFunctionNumber())+"$pb");
 }
 
@@ -486,11 +462,15 @@ MCSymbol *MachineFunction::getPICBaseSymbol() const {
 //  MachineFrameInfo implementation
 //===----------------------------------------------------------------------===//
 
+const TargetFrameLowering *MachineFrameInfo::getFrameLowering() const {
+  return TM.getFrameLowering();
+}
+
 /// ensureMaxAlignment - Make sure the function is at least Align bytes
 /// aligned.
 void MachineFrameInfo::ensureMaxAlignment(unsigned Align) {
-  if (!StackRealignable || !RealignOption)
-    assert(Align <= StackAlignment &&
+  if (!getFrameLowering()->isStackRealignable() || !RealignOption)
+    assert(Align <= getFrameLowering()->getStackAlignment() &&
            "For targets without stack realignment, Align is out of limit!");
   if (MaxAlignment < Align) MaxAlignment = Align;
 }
@@ -510,12 +490,14 @@ static inline unsigned clampStackAlignment(bool ShouldClamp, unsigned Align,
 /// a nonnegative identifier to represent it.
 ///
 int MachineFrameInfo::CreateStackObject(uint64_t Size, unsigned Alignment,
-                      bool isSS, const AllocaInst *Alloca) {
+                      bool isSS, bool MayNeedSP, const AllocaInst *Alloca) {
   assert(Size != 0 && "Cannot allocate zero size stack objects!");
-  Alignment = clampStackAlignment(!StackRealignable || !RealignOption,
-                                  Alignment, StackAlignment);
-  Objects.push_back(StackObject(Size, Alignment, 0, false, isSS, Alloca,
-                                !isSS));
+  Alignment =
+    clampStackAlignment(!getFrameLowering()->isStackRealignable() ||
+                          !RealignOption,
+                        Alignment, getFrameLowering()->getStackAlignment());
+  Objects.push_back(StackObject(Size, Alignment, 0, false, isSS, MayNeedSP,
+                                Alloca));
   int Index = (int)Objects.size() - NumFixedObjects - 1;
   assert(Index >= 0 && "Bad frame index!");
   ensureMaxAlignment(Alignment);
@@ -528,9 +510,11 @@ int MachineFrameInfo::CreateStackObject(uint64_t Size, unsigned Alignment,
 ///
 int MachineFrameInfo::CreateSpillStackObject(uint64_t Size,
                                              unsigned Alignment) {
-  Alignment = clampStackAlignment(!StackRealignable || !RealignOption,
-                                  Alignment, StackAlignment);
-  CreateStackObject(Size, Alignment, true);
+  Alignment =
+    clampStackAlignment(!getFrameLowering()->isStackRealignable() ||
+                          !RealignOption,
+                        Alignment, getFrameLowering()->getStackAlignment()); 
+  CreateStackObject(Size, Alignment, true, false);
   int Index = (int)Objects.size() - NumFixedObjects - 1;
   ensureMaxAlignment(Alignment);
   return Index;
@@ -541,12 +525,13 @@ int MachineFrameInfo::CreateSpillStackObject(uint64_t Size,
 /// variable sized object is created, whether or not the index returned is
 /// actually used.
 ///
-int MachineFrameInfo::CreateVariableSizedObject(unsigned Alignment,
-                                                const AllocaInst *Alloca) {
+int MachineFrameInfo::CreateVariableSizedObject(unsigned Alignment) {
   HasVarSizedObjects = true;
-  Alignment = clampStackAlignment(!StackRealignable || !RealignOption,
-                                  Alignment, StackAlignment);
-  Objects.push_back(StackObject(0, Alignment, 0, false, false, Alloca, true));
+  Alignment =
+    clampStackAlignment(!getFrameLowering()->isStackRealignable() ||
+                          !RealignOption,
+                        Alignment, getFrameLowering()->getStackAlignment()); 
+  Objects.push_back(StackObject(0, Alignment, 0, false, false, true, 0));
   ensureMaxAlignment(Alignment);
   return (int)Objects.size()-NumFixedObjects-1;
 }
@@ -557,43 +542,25 @@ int MachineFrameInfo::CreateVariableSizedObject(unsigned Alignment,
 /// index with a negative value.
 ///
 int MachineFrameInfo::CreateFixedObject(uint64_t Size, int64_t SPOffset,
-                                        bool Immutable, bool isAliased) {
+                                        bool Immutable) {
   assert(Size != 0 && "Cannot allocate zero size fixed stack objects!");
   // The alignment of the frame index can be determined from its offset from
   // the incoming frame position.  If the frame object is at offset 32 and
   // the stack is guaranteed to be 16-byte aligned, then we know that the
   // object is 16-byte aligned.
-  unsigned Align = MinAlign(SPOffset, StackAlignment);
-  Align = clampStackAlignment(!StackRealignable || !RealignOption, Align,
-                              StackAlignment);
+  unsigned StackAlign = getFrameLowering()->getStackAlignment();
+  unsigned Align = MinAlign(SPOffset, StackAlign);
+  Align =
+    clampStackAlignment(!getFrameLowering()->isStackRealignable() ||
+                          !RealignOption,
+                        Align, getFrameLowering()->getStackAlignment()); 
   Objects.insert(Objects.begin(), StackObject(Size, Align, SPOffset, Immutable,
                                               /*isSS*/   false,
-                                              /*Alloca*/ nullptr, isAliased));
+                                              /*NeedSP*/ false,
+                                              /*Alloca*/ 0));
   return -++NumFixedObjects;
 }
 
-/// CreateFixedSpillStackObject - Create a spill slot at a fixed location
-/// on the stack.  Returns an index with a negative value.
-int MachineFrameInfo::CreateFixedSpillStackObject(uint64_t Size,
-                                                  int64_t SPOffset) {
-  unsigned Align = MinAlign(SPOffset, StackAlignment);
-  Align = clampStackAlignment(!StackRealignable || !RealignOption, Align,
-                              StackAlignment);
-  Objects.insert(Objects.begin(), StackObject(Size, Align, SPOffset,
-                                              /*Immutable*/ true,
-                                              /*isSS*/ true,
-                                              /*Alloca*/ nullptr,
-                                              /*isAliased*/ false));
-  return -++NumFixedObjects;
-}
-
-int MachineFrameInfo::CreateFrameAllocation(uint64_t Size) {
-  // Force the use of a frame pointer. The intention is that this intrinsic be
-  // used in conjunction with unwind mechanisms that leak the frame pointer.
-  setFrameAddressIsTaken(true);
-  Size = RoundUpToAlignment(Size, StackAlignment);
-  return CreateStackObject(Size, StackAlignment, false);
-}
 
 BitVector
 MachineFrameInfo::getPristineRegs(const MachineBasicBlock *MBB) const {
@@ -601,7 +568,7 @@ MachineFrameInfo::getPristineRegs(const MachineBasicBlock *MBB) const {
   const MachineFunction *MF = MBB->getParent();
   assert(MF && "MBB must be part of a MachineFunction");
   const TargetMachine &TM = MF->getTarget();
-  const TargetRegisterInfo *TRI = TM.getSubtargetImpl()->getRegisterInfo();
+  const TargetRegisterInfo *TRI = TM.getRegisterInfo();
   BitVector BV(TRI->getNumRegs());
 
   // Before CSI is calculated, no registers are considered pristine. They can be
@@ -609,7 +576,7 @@ MachineFrameInfo::getPristineRegs(const MachineBasicBlock *MBB) const {
   if (!isCalleeSavedInfoValid())
     return BV;
 
-  for (const MCPhysReg *CSR = TRI->getCalleeSavedRegs(MF); CSR && *CSR; ++CSR)
+  for (const uint16_t *CSR = TRI->getCalleeSavedRegs(MF); CSR && *CSR; ++CSR)
     BV.set(*CSR);
 
   // The entry MBB always has all CSRs pristine.
@@ -626,8 +593,8 @@ MachineFrameInfo::getPristineRegs(const MachineBasicBlock *MBB) const {
 }
 
 unsigned MachineFrameInfo::estimateStackSize(const MachineFunction &MF) const {
-  const TargetFrameLowering *TFI = MF.getSubtarget().getFrameLowering();
-  const TargetRegisterInfo *RegInfo = MF.getSubtarget().getRegisterInfo();
+  const TargetFrameLowering *TFI = MF.getTarget().getFrameLowering();
+  const TargetRegisterInfo *RegInfo = MF.getTarget().getRegisterInfo();
   unsigned MaxAlign = getMaxAlignment();
   int Offset = 0;
 
@@ -677,7 +644,7 @@ unsigned MachineFrameInfo::estimateStackSize(const MachineFunction &MF) const {
 void MachineFrameInfo::print(const MachineFunction &MF, raw_ostream &OS) const{
   if (Objects.empty()) return;
 
-  const TargetFrameLowering *FI = MF.getSubtarget().getFrameLowering();
+  const TargetFrameLowering *FI = MF.getTarget().getFrameLowering();
   int ValOffset = (FI ? FI->getOffsetOfLocalArea() : 0);
 
   OS << "Frame Objects:\n";
@@ -821,7 +788,7 @@ void MachineJumpTableInfo::dump() const { print(dbgs()); }
 void MachineConstantPoolValue::anchor() { }
 
 const DataLayout *MachineConstantPool::getDataLayout() const {
-  return TM.getSubtargetImpl()->getDataLayout();
+  return TM.getDataLayout();
 }
 
 Type *MachineConstantPoolEntry::getType() const {
@@ -835,37 +802,6 @@ unsigned MachineConstantPoolEntry::getRelocationInfo() const {
   if (isMachineConstantPoolEntry())
     return Val.MachineCPVal->getRelocationInfo();
   return Val.ConstVal->getRelocationInfo();
-}
-
-SectionKind
-MachineConstantPoolEntry::getSectionKind(const DataLayout *DL) const {
-  SectionKind Kind;
-  switch (getRelocationInfo()) {
-  default:
-    llvm_unreachable("Unknown section kind");
-  case 2:
-    Kind = SectionKind::getReadOnlyWithRel();
-    break;
-  case 1:
-    Kind = SectionKind::getReadOnlyWithRelLocal();
-    break;
-  case 0:
-    switch (DL->getTypeAllocSize(getType())) {
-    case 4:
-      Kind = SectionKind::getMergeableConst4();
-      break;
-    case 8:
-      Kind = SectionKind::getMergeableConst8();
-      break;
-    case 16:
-      Kind = SectionKind::getMergeableConst16();
-      break;
-    default:
-      Kind = SectionKind::getMergeableConst();
-      break;
-    }
-  }
-  return Kind;
 }
 
 MachineConstantPool::~MachineConstantPool() {
@@ -893,10 +829,11 @@ static bool CanShareConstantPoolEntry(const Constant *A, const Constant *B,
   if (isa<StructType>(A->getType()) || isa<ArrayType>(A->getType()) ||
       isa<StructType>(B->getType()) || isa<ArrayType>(B->getType()))
     return false;
-
+  
   // For now, only support constants with the same size.
   uint64_t StoreSize = TD->getTypeStoreSize(A->getType());
-  if (StoreSize != TD->getTypeStoreSize(B->getType()) || StoreSize > 128)
+  if (StoreSize != TD->getTypeStoreSize(B->getType()) || 
+      StoreSize > 128)
     return false;
 
   Type *IntTy = IntegerType::get(A->getContext(), StoreSize*8);
@@ -925,7 +862,7 @@ static bool CanShareConstantPoolEntry(const Constant *A, const Constant *B,
 /// an existing one.  User must specify the log2 of the minimum required
 /// alignment for the object.
 ///
-unsigned MachineConstantPool::getConstantPoolIndex(const Constant *C,
+unsigned MachineConstantPool::getConstantPoolIndex(const Constant *C, 
                                                    unsigned Alignment) {
   assert(Alignment && "Alignment must be specified!");
   if (Alignment > PoolAlignment) PoolAlignment = Alignment;
@@ -973,7 +910,7 @@ void MachineConstantPool::print(raw_ostream &OS) const {
     if (Constants[i].isMachineConstantPoolEntry())
       Constants[i].Val.MachineCPVal->print(OS);
     else
-      Constants[i].Val.ConstVal->printAsOperand(OS, /*PrintType=*/false);
+      WriteAsOperand(OS, Constants[i].Val.ConstVal, /*PrintType=*/false);
     OS << ", align=" << Constants[i].getAlignment();
     OS << "\n";
   }

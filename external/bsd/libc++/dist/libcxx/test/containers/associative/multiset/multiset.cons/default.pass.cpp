@@ -16,7 +16,7 @@
 #include <set>
 #include <cassert>
 
-#include "min_allocator.h"
+#include "../../../min_allocator.h"
 
 int main()
 {
@@ -28,11 +28,6 @@ int main()
 #if __cplusplus >= 201103L
     {
     std::multiset<int, std::less<int>, min_allocator<int>> m;
-    assert(m.empty());
-    assert(m.begin() == m.end());
-    }
-    {
-    std::multiset<int> m = {};
     assert(m.empty());
     assert(m.begin() == m.end());
     }

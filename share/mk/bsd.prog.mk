@@ -1,4 +1,4 @@
-#	$NetBSD: bsd.prog.mk,v 1.292 2015/06/07 15:04:28 matt Exp $
+#	$NetBSD: bsd.prog.mk,v 1.286 2013/11/11 10:24:53 joerg Exp $
 #	@(#)bsd.prog.mk	8.2 (Berkeley) 4/2/94
 
 .ifndef HOSTPROG
@@ -60,35 +60,32 @@ CFLAGS+=	${COPTS}
 CFLAGS+=	-g
 .endif
 OBJCFLAGS+=	${OBJCOPTS}
-MKDEP_SUFFIXES?=	.o .ln .d
+MKDEP_SUFFIXES?=	.o .ln
 
 # CTF preserve debug symbols
-.if (${MKCTF:Uno} != "no") && (${CFLAGS:M-g} != "")
+.if defined(MKDTRACE) && (${MKDTRACE} != "no") && (${CFLAGS:M-g} != "")
 CTFFLAGS+= -g
 CTFMFLAGS+= -g
-.if defined(HAVE_GCC) && ${HAVE_GCC} >= 48
-#CFLAGS+=-gdwarf-2
-.endif
 .endif
 
 # ELF platforms depend on crti.o, crtbegin.o, crtend.o, and crtn.o
 .ifndef LIBCRTBEGIN
-LIBCRTBEGIN=	${DESTDIR}/usr/lib/${MLIBDIR:D${MLIBDIR}/}crti.o ${_GCC_CRTBEGIN}
+LIBCRTBEGIN=	${DESTDIR}/usr/lib/crti.o ${_GCC_CRTBEGIN}
 .MADE: ${LIBCRTBEGIN}
 .endif
 .ifndef LIBCRTEND
-LIBCRTEND=	${_GCC_CRTEND} ${DESTDIR}/usr/lib/${MLIBDIR:D${MLIBDIR}/}crtn.o
+LIBCRTEND=	${_GCC_CRTEND} ${DESTDIR}/usr/lib/crtn.o
 .MADE: ${LIBCRTEND}
 .endif
 _SHLINKER=	${SHLINKDIR}/ld.elf_so
 
 .ifndef LIBCRT0
-LIBCRT0=	${DESTDIR}/usr/lib/${MLIBDIR:D${MLIBDIR}/}crt0.o
+LIBCRT0=	${DESTDIR}/usr/lib/crt0.o
 .MADE: ${LIBCRT0}
 .endif
 
 .ifndef LIBCRTI
-LIBCRTI=	${DESTDIR}/usr/lib/${MLIBDIR:D${MLIBDIR}/}crti.o
+LIBCRTI=	${DESTDIR}/usr/lib/crti.o
 .MADE: ${LIBCRTI}
 .endif
 
@@ -225,7 +222,6 @@ LIB${_lib:tu}=	${DESTDIR}/usr/lib/lib${_lib:S/xx/++/:S/atf_c/atf-c/}.a
 	devman \
 	elf \
 	exec \
-	fsdriver \
 	gpio \
 	hgfs \
 	i2cdriver \
@@ -235,9 +231,8 @@ LIB${_lib:tu}=	${DESTDIR}/usr/lib/lib${_lib:S/xx/++/:S/atf_c/atf-c/}.a
 	minixfs \
 	mthread \
 	netdriver \
+	netsock \
 	sffs \
-	sockdriver \
-	sockevent \
 	sys \
 	timers \
 	usb \
@@ -642,7 +637,7 @@ ${_P}: .gdbinit ${LIBCRT0} ${LIBCRTI} ${OBJS.${_P}} ${LIBC} ${LIBCRTBEGIN} \
 
 ${_P}.ro: ${OBJS.${_P}} ${_DPADD.${_P}}
 	${_MKTARGET_LINK}
-	${CC} ${LDFLAGS:N-Wl,-pie} -nostdlib -r -Wl,-dc -o ${.TARGET} ${OBJS.${_P}}
+	${CC} ${LDFLAGS} -nostdlib -r -Wl,-dc -o ${.TARGET} ${OBJS.${_P}}
 
 .if defined(_PROGDEBUG.${_P})
 ${_PROGDEBUG.${_P}}: ${_P}

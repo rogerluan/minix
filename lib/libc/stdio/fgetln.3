@@ -1,4 +1,4 @@
-.\"	$NetBSD: fgetln.3,v 1.15 2014/06/19 14:27:50 christos Exp $
+.\"	$NetBSD: fgetln.3,v 1.14 2004/05/10 17:15:28 drochner Exp $
 .\"
 .\" Copyright (c) 1990, 1991, 1993
 .\"	The Regents of the University of California.  All rights reserved.
@@ -29,7 +29,7 @@
 .\"
 .\"     @(#)fgetln.3	8.3 (Berkeley) 4/19/94
 .\"
-.Dd June 19, 2014
+.Dd April 21, 2004
 .Dt FGETLN 3
 .Os
 .Sh NAME
@@ -134,14 +134,22 @@ temporary buffer:
 	char *buf, *lbuf;
 	size_t len;
 
-	while ((lbuf = buf = fgetln(fp, &len)) != NULL) {
-		if (len > 0 && buf[len - 1] == '\en')
+	lbuf = NULL;
+	while ((buf = fgetln(fp, &len))) {
+		if (buf[len - 1] == '\en')
 			buf[len - 1] = '\e0';
-		else if ((lbuf = strndup(buf, len + 1)) == NULL)
+		else {
+			if ((lbuf = (char *)malloc(len + 1)) == NULL)
 				err(1, NULL);
-		printf("%s\en", lbuf);
+			memcpy(lbuf, buf, len);
+			lbuf[len] = '\e0';
+			buf = lbuf;
+		}
+		printf("%s\en", buf);
 
-		if (lbuf != buf)
+		if (lbuf != NULL) {
 			free(lbuf);
+			lbuf = NULL;
+		}
 	}
 .Ed

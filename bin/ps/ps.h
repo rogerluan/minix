@@ -1,4 +1,4 @@
-/*	$NetBSD: ps.h,v 1.27 2014/04/20 22:48:59 dholland Exp $	*/
+/*	$NetBSD: ps.h,v 1.26 2006/10/02 17:54:35 apb Exp $	*/
 
 /*-
  * Copyright (c) 1990, 1993
@@ -35,10 +35,8 @@
 
 #define	UNLIMITED	0	/* unlimited terminal width */
 
-enum mode {
-	PRINTMODE = 0,		/* print values */
-	WIDTHMODE = 1		/* determine width of column */
-};
+#define	PRINTMODE	0	/* print values */
+#define	WIDTHMODE	1	/* determine width of column */
 
 enum type {
 	UNSPECIFIED,
@@ -67,7 +65,7 @@ typedef struct var {
 #define	ALIAS	0x40		/* entry is alias for 'header' */
 	u_int	flag;
 				/* output routine */
-	void	(*oproc)(void *, struct varent *, enum mode);
+	void	(*oproc)(void *, struct varent *, int);
 	/*
 	 * The following (optional) elements are hooks for passing information
 	 * to the generic output routine: pvar (that which prints simple

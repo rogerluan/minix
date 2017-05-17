@@ -1,13 +1,10 @@
 // RUN: %clang_cc1 %s -triple i386-unknown-unknown -emit-llvm -o - | FileCheck %s
 
 struct A {
-  virtual int operator-();
+  virtual int operator-() = 0;
 };
 
-void f(A a, A *ap) {
-  // CHECK: call i32 @_ZN1AngEv(%struct.A* %a)
-  -a;
-
+void f(A *a) {
   // CHECK: call i32 %
-  -*ap;
+  -*a;
 }

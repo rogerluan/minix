@@ -30,7 +30,7 @@
  * SUCH DAMAGE.
  *
  *	from: @(#)SYS.h	5.5 (Berkeley) 5/7/91
- *	$NetBSD: SYS.h,v 1.12 2014/05/22 14:38:38 uebayasi Exp $
+ *	$NetBSD: SYS.h,v 1.11 2011/11/18 20:43:01 joerg Exp $
  */
 
 #include <machine/asm.h>
@@ -66,15 +66,13 @@
 
 #define PSEUDO_NOERROR(x,y)						\
 	_SYSCALL_NOERROR(x,y);						\
-	ret;								\
-	END(x)
+	ret
 
 #define PSEUDO(x,y)							\
 	_SYSCALL_NOERROR(x,y);						\
 	jc 2f;								\
 	ret;								\
-	2: _SYSCALL_ERR;						\
-	END(x)
+	2: _SYSCALL_ERR
 
 #define RSYSCALL_NOERROR(x)						\
 	PSEUDO_NOERROR(x,x)

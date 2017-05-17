@@ -1,4 +1,4 @@
-; RUN: llc < %s -mtriple=x86_64-apple-darwin -mcpu=knl --show-mc-encoding | FileCheck %s
+; RUN: llc < %s -mtriple=x86_64-apple-darwin -mcpu=knl | FileCheck %s
 
 ; CHECK-LABEL: sitof32
 ; CHECK: vcvtdq2ps %zmm
@@ -22,22 +22,6 @@ define <16 x i32> @fptosi00(<16 x float> %a) nounwind {
 define <16 x i32> @fptoui00(<16 x float> %a) nounwind {
   %b = fptoui <16 x float> %a to <16 x i32>
   ret <16 x i32> %b
-}
-
-; CHECK-LABEL: fptoui_256
-; CHECK: vcvttps2udq
-; CHECK: ret
-define <8 x i32> @fptoui_256(<8 x float> %a) nounwind {
-  %b = fptoui <8 x float> %a to <8 x i32>
-  ret <8 x i32> %b
-}
-
-; CHECK-LABEL: fptoui_128
-; CHECK: vcvttps2udq
-; CHECK: ret
-define <4 x i32> @fptoui_128(<4 x float> %a) nounwind {
-  %b = fptoui <4 x float> %a to <4 x i32>
-  ret <4 x i32> %b
 }
 
 ; CHECK-LABEL: fptoui01
@@ -83,7 +67,7 @@ define <8 x double> @fpext00(<8 x float> %b) nounwind {
 }
 
 ; CHECK-LABEL: funcA
-; CHECK: vcvtsi2sdq (%rdi){{.*}} encoding: [0x62
+; CHECK: vcvtsi2sdqz (%
 ; CHECK: ret
 define double @funcA(i64* nocapture %e) {
 entry:
@@ -93,7 +77,7 @@ entry:
 }
 
 ; CHECK-LABEL: funcB
-; CHECK: vcvtsi2sdl (%{{.*}} encoding: [0x62
+; CHECK: vcvtsi2sdlz (%
 ; CHECK: ret
 define double @funcB(i32* %e) {
 entry:
@@ -103,7 +87,7 @@ entry:
 }
 
 ; CHECK-LABEL: funcC
-; CHECK: vcvtsi2ssl (%{{.*}} encoding: [0x62
+; CHECK: vcvtsi2sslz (%
 ; CHECK: ret
 define float @funcC(i32* %e) {
 entry:
@@ -113,7 +97,7 @@ entry:
 }
 
 ; CHECK-LABEL: i64tof32
-; CHECK: vcvtsi2ssq  (%{{.*}} encoding: [0x62
+; CHECK: vcvtsi2ssqz  (%
 ; CHECK: ret
 define float @i64tof32(i64* %e) {
 entry:
@@ -123,7 +107,7 @@ entry:
 }
 
 ; CHECK-LABEL: fpext
-; CHECK: vcvtss2sd {{.*}} encoding: [0x62
+; CHECK: vcvtss2sdz
 ; CHECK: ret
 define void @fpext() {
 entry:
@@ -136,9 +120,9 @@ entry:
 }
 
 ; CHECK-LABEL: fpround_scalar
-; CHECK: vmovsd {{.*}} encoding: [0x62
-; CHECK: vcvtsd2ss {{.*}} encoding: [0x62
-; CHECK: vmovss {{.*}} encoding: [0x62
+; CHECK: vmovsdz
+; CHECK: vcvtsd2ssz
+; CHECK: vmovssz
 ; CHECK: ret
 define void @fpround_scalar() nounwind uwtable {
 entry:
@@ -151,7 +135,7 @@ entry:
 }
 
 ; CHECK-LABEL: long_to_double
-; CHECK: vmovq {{.*}} encoding: [0x62
+; CHECK: vmovqz
 ; CHECK: ret
 define double @long_to_double(i64 %x) {
    %res = bitcast i64 %x to double
@@ -159,7 +143,7 @@ define double @long_to_double(i64 %x) {
 }
 
 ; CHECK-LABEL: double_to_long
-; CHECK: vmovq {{.*}} encoding: [0x62
+; CHECK: vmovqz
 ; CHECK: ret
 define i64 @double_to_long(double %x) {
    %res = bitcast double %x to i64
@@ -167,7 +151,7 @@ define i64 @double_to_long(double %x) {
 }
 
 ; CHECK-LABEL: int_to_float
-; CHECK: vmovd {{.*}} encoding: [0x62
+; CHECK: vmovdz
 ; CHECK: ret
 define float @int_to_float(i32 %x) {
    %res = bitcast i32 %x to float
@@ -175,7 +159,7 @@ define float @int_to_float(i32 %x) {
 }
 
 ; CHECK-LABEL: float_to_int
-; CHECK: vmovd {{.*}} encoding: [0x62
+; CHECK: vmovdz
 ; CHECK: ret
 define i32 @float_to_int(float %x) {
    %res = bitcast float %x to i32
@@ -192,14 +176,6 @@ define <16 x double> @uitof64(<16 x i32> %a) nounwind {
   ret <16 x double> %b
 }
 
-; CHECK-LABEL: uitof64_256
-; CHECK: vcvtudq2pd
-; CHECK: ret
-define <4 x double> @uitof64_256(<4 x i32> %a) nounwind {
-  %b = uitofp <4 x i32> %a to <4 x double>
-  ret <4 x double> %b
-}
-
 ; CHECK-LABEL: uitof32
 ; CHECK: vcvtudq2ps
 ; CHECK: ret
@@ -208,24 +184,8 @@ define <16 x float> @uitof32(<16 x i32> %a) nounwind {
   ret <16 x float> %b
 }
 
-; CHECK-LABEL: uitof32_256
-; CHECK: vcvtudq2ps
-; CHECK: ret
-define <8 x float> @uitof32_256(<8 x i32> %a) nounwind {
-  %b = uitofp <8 x i32> %a to <8 x float>
-  ret <8 x float> %b
-}
-
-; CHECK-LABEL: uitof32_128
-; CHECK: vcvtudq2ps
-; CHECK: ret
-define <4 x float> @uitof32_128(<4 x i32> %a) nounwind {
-  %b = uitofp <4 x i32> %a to <4 x float>
-  ret <4 x float> %b
-}
-
 ; CHECK-LABEL: @fptosi02
-; CHECK: vcvttss2si {{.*}} encoding: [0x62
+; CHECK vcvttss2siz
 ; CHECK: ret
 define i32 @fptosi02(float %a) nounwind {
   %b = fptosi float %a to i32
@@ -233,7 +193,7 @@ define i32 @fptosi02(float %a) nounwind {
 }
 
 ; CHECK-LABEL: @fptoui02
-; CHECK: vcvttss2usi {{.*}} encoding: [0x62
+; CHECK vcvttss2usiz
 ; CHECK: ret
 define i32 @fptoui02(float %a) nounwind {
   %b = fptoui float %a to i32
@@ -241,7 +201,7 @@ define i32 @fptoui02(float %a) nounwind {
 }
 
 ; CHECK-LABEL: @uitofp02
-; CHECK: vcvtusi2ss
+; CHECK vcvtusi2ss
 ; CHECK: ret
 define float @uitofp02(i32 %a) nounwind {
   %b = uitofp i32 %a to float
@@ -249,62 +209,9 @@ define float @uitofp02(i32 %a) nounwind {
 }
 
 ; CHECK-LABEL: @uitofp03
-; CHECK: vcvtusi2sd
+; CHECK vcvtusi2sd
 ; CHECK: ret
 define double @uitofp03(i32 %a) nounwind {
   %b = uitofp i32 %a to double
   ret double %b
-}
-
-; CHECK-LABEL: @sitofp_16i1_float
-; CHECK: vpbroadcastd
-; CHECK: vcvtdq2ps
-define <16 x float> @sitofp_16i1_float(<16 x i32> %a) {
-  %mask = icmp slt <16 x i32> %a, zeroinitializer
-  %1 = sitofp <16 x i1> %mask to <16 x float>
-  ret <16 x float> %1
-}
-
-; CHECK-LABEL: @sitofp_16i8_float
-; CHECK: vpmovsxbd
-; CHECK: vcvtdq2ps
-define <16 x float> @sitofp_16i8_float(<16 x i8> %a) {
-  %1 = sitofp <16 x i8> %a to <16 x float>
-  ret <16 x float> %1
-}
-
-; CHECK-LABEL: @sitofp_16i16_float
-; CHECK: vpmovsxwd
-; CHECK: vcvtdq2ps
-define <16 x float> @sitofp_16i16_float(<16 x i16> %a) {
-  %1 = sitofp <16 x i16> %a to <16 x float>
-  ret <16 x float> %1
-}
-
-; CHECK-LABEL: @sitofp_8i16_double
-; CHECK: vpmovsxwd
-; CHECK: vcvtdq2pd
-define <8 x double> @sitofp_8i16_double(<8 x i16> %a) {
-  %1 = sitofp <8 x i16> %a to <8 x double>
-  ret <8 x double> %1
-}
-
-; CHECK-LABEL: sitofp_8i8_double
-; CHECK: vpmovzxwd
-; CHECK: vpslld
-; CHECK: vpsrad
-; CHECK: vcvtdq2pd
-define <8 x double> @sitofp_8i8_double(<8 x i8> %a) {
-  %1 = sitofp <8 x i8> %a to <8 x double>
-  ret <8 x double> %1
-}
-
-
-; CHECK-LABEL: @sitofp_8i1_double
-; CHECK: vpbroadcastq
-; CHECK: vcvtdq2pd
-define <8 x double> @sitofp_8i1_double(<8 x double> %a) {
-  %cmpres = fcmp ogt <8 x double> %a, zeroinitializer
-  %1 = sitofp <8 x i1> %cmpres to <8 x double>
-  ret <8 x double> %1
 }

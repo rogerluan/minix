@@ -72,11 +72,13 @@ bool EditedSource::commitInsert(SourceLocation OrigLoc,
     return true;
   }
 
+  Twine concat;
   if (beforePreviousInsertions)
-    FA.Text = copyString(Twine(text) + FA.Text);
+    concat = Twine(text) + FA.Text;
   else
-    FA.Text = copyString(Twine(FA.Text) + text);
+    concat = Twine(FA.Text) +  text;
 
+  FA.Text = copyString(concat);
   return true;
 }
 
@@ -158,7 +160,7 @@ void EditedSource::commitRemove(SourceLocation OrigLoc,
   }
 
   FileOffset TopBegin, TopEnd;
-  FileEdit *TopFA = nullptr;
+  FileEdit *TopFA = 0;
 
   if (I == FileEdits.end()) {
     FileEditsTy::iterator
@@ -279,12 +281,6 @@ static void adjustRemoval(const SourceManager &SM, const LangOptions &LangOpts,
 
   unsigned begin = offs.getOffset();
   unsigned end = begin + len;
-
-  // Do not try to extend the removal if we're at the end of the buffer already.
-  if (end == buffer.size())
-    return;
-
-  assert(begin < buffer.size() && end < buffer.size() && "Invalid range!");
 
   // FIXME: Remove newline.
 

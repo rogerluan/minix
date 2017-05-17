@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.25 2015/01/29 20:41:35 joerg Exp $
+#	$NetBSD: Makefile,v 1.20 2013/09/02 14:34:56 joerg Exp $
 
 LIB=	LLVMMipsCodeGen
 
@@ -11,23 +11,21 @@ SRCS+=	Mips16ISelDAGToDAG.cpp \
 	Mips16InstrInfo.cpp \
 	Mips16FrameLowering.cpp \
 	Mips16HardFloat.cpp \
-	Mips16HardFloatInfo.cpp \
 	Mips16RegisterInfo.cpp \
 	MipsAnalyzeImmediate.cpp \
 	MipsAsmPrinter.cpp \
-	MipsCCState.cpp \
+	MipsCodeEmitter.cpp \
 	MipsConstantIslandPass.cpp \
 	MipsDelaySlotFiller.cpp \
-	MipsFastISel.cpp \
 	MipsFrameLowering.cpp \
 	MipsInstrInfo.cpp \
 	MipsISelDAGToDAG.cpp \
 	MipsISelLowering.cpp \
+	MipsJITInfo.cpp \
 	MipsLongBranch.cpp \
 	MipsMachineFunction.cpp \
 	MipsModuleISelDAGToDAG.cpp \
 	MipsMCInstLower.cpp \
-	MipsOptimizePICCall.cpp \
 	MipsOs16.cpp \
 	MipsRegisterInfo.cpp \
 	MipsSEISelLowering.cpp \
@@ -52,8 +50,7 @@ TABLEGEN_OUTPUT= \
 	MipsGenCodeEmitter.inc|-gen-emitter \
 	MipsGenDAGISel.inc|-gen-dag-isel \
 	MipsGenDisassemblerTables.inc|-gen-disassembler \
-	MipsGenFastISel.inc|-gen-fast-isel \
-	MipsGenMCCodeEmitter.inc|-gen-emitter \
+	MipsGenMCCodeEmitter.inc|-gen-emitter^-mc-emitter \
 	MipsGenMCPseudoLowering.inc|-gen-pseudo-lowering \
 	MipsGenSubtargetInfo.inc|-gen-subtarget
 
