@@ -267,3 +267,9 @@ This guide was written purely to give some light to the folks out there that are
 - Improve the formatting of this guide;
 - Localize this guide into Portuguese;
 - Add a guide to show how to get the minix kernel source running with the most useful tools.
+
+## Credits
+This guide wouldn't have been made possible without the help of this great guide that I found browsing the web:
+[Minix Syscall Implementation](http://homepages.cs.ncl.ac.uk/nick.cook/csc2025/minix/syscall-exercise1.html)
+
+Note that that one runs on Minix v3.2.1 (I think), so the implementation is slightly different.
