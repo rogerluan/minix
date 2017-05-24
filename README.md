@@ -265,4 +265,5 @@ This guide was written purely to give some light to the folks out there that are
 - Provide screenshots of the tests made;
 - Explain how to mount a shared folder;
 - Improve the formatting of this guide;
-- Localize this guide into Portuguese
+- Localize this guide into Portuguese;
+- Add a guide to show how to get the minix kernel source running with the most useful tools.
