@@ -260,3 +260,4 @@ To-do:
 - Provide screenshots of the tests made;
 - Explain how to mount a shared folder;
 - Improve the formatting of this guide;
+- Localize this guide into Portuguese
