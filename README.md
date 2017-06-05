@@ -17,7 +17,7 @@ To get started, we'll start preparing the system to have a new system call. The 
 
 [comment]:<http://jmp.sh/Zr1ujw6>
 
-![table.c](https://storage.jumpshare.com/preview/MzU0bLErkx-QcM6c3Yf_IzxcKTgw9rySIbK6m-gCSLOwv4udeDrkoueX4t54mGEcBhGB81DUpAGtxOlHU6N9z90Iq-_ZMIwlJNqsu6s4bO0F1kR3dMUjedqC16uBUu85)
+![table.c](http://i.imgur.com/to8Z7fC.png)
 
 
 ### Step 3: Adding the prototype (or signature) of your method to the system prototype file
@@ -25,7 +25,7 @@ To get started, we'll start preparing the system to have a new system call. The 
 
 [comment]:<http://jmp.sh/8mfQVXA>
 
-![proto.h](https://storage.jumpshare.com/preview/A08I3Dj8mFkDsU-IeTFScQWr9GC7c0q7LaMrGTGkguRQpx0sv0I0hSTUbKrMfvbPz92exxFIXTlVE_T6MJUsE90Iq-_ZMIwlJNqsu6s4bO0F1kR3dMUjedqC16uBUu85)
+![proto.h](http://i.imgur.com/Fki9W7X.png)
 
 ### Step 4: Implementing the method that will be performed upon the call of your function
 ```nano /usr/src/minix/servers/pm/mdc.c```
@@ -34,7 +34,7 @@ It will look something like this:
 
 [comment]:<http://jmp.sh/hHPKbp3>
 
-![mdc.c](https://storage.jumpshare.com/preview/dtcR0mRH858FcmixKZr1l8WgJ_H0cAv2uNcuyKfZtoBkWZSiakntw-8YOnsrkjuLYdXvQlq_1eCjLI0x5ZN_Y90Iq-_ZMIwlJNqsu6s4bO0F1kR3dMUjedqC16uBUu85)
+![mdc.c](http://i.imgur.com/1mGUxmK.png)
 
 But here's the full source code:
 
@@ -89,7 +89,7 @@ The system needs to know what to compile. To let it know, we have to edit the fo
 
 [comment]:<http://jmp.sh/PqWb0fH>
 
-![Makefile](https://storage.jumpshare.com/preview/rWtA_HsVFBgfQvkrVwUYSJr7RuwudntD1yfMWjz_bZwIxPMn73bc72aIt53GR7SbxK2sAoTuFbhPWxQf3ve8Yt0Iq-_ZMIwlJNqsu6s4bO0F1kR3dMUjedqC16uBUu85)
+![Makefile](http://i.imgur.com/XS99SN8.png)
 
 ### Step 6: Compile
 
@@ -138,7 +138,7 @@ clang ex1a.c -o ex1a
 
 [comment]:<http://jmp.sh/eOPCuZ8>
 
-![ex1a.c](https://storage.jumpshare.com/preview/8pZKmg33dhPxtLvhyKbi7vbYFekudzUrC7ApVzAwAPUPR60ebvyOGr6Pmupfu620DhYD75rca8lggbulcjJP5d0Iq-_ZMIwlJNqsu6s4bO0F1kR3dMUjedqC16uBUu85)
+![ex1a.c](http://i.imgur.com/vsQBw24.png)
 
 
 ## Part 2: Creating Your Own Library
@@ -149,7 +149,7 @@ clang ex1a.c -o ex1a
 
 [comment]:<http://jmp.sh/l287lFf>
 
-![customlib.h](https://storage.jumpshare.com/preview/Bf3SuwgMxdU0TQINwZnzRM0F6e2oLY7Eh2_hykEpAJVtxFE-udcex6y0TVzBQRDNjx5eBy8YCrdFlkIKT5csP90Iq-_ZMIwlJNqsu6s4bO0F1kR3dMUjedqC16uBUu85)
+![customlib.h](http://i.imgur.com/12ta6Bc.png)
 
 
 ### Step 2: Add it to the compiling sources
@@ -158,7 +158,7 @@ clang ex1a.c -o ex1a
 
 [comment]:<http://jmp.sh/FaTXi3T>
 
-![Makefile](https://storage.jumpshare.com/preview/9DxoX6e4Z39_uTy7TQwekgzxfwHslE8Anz-nNp6jqu4rNEbSpqL-HVxcBi1BpgMEz7HtdnTsCDcvvzdZRMUg_t0Iq-_ZMIwlJNqsu6s4bO0F1kR3dMUjedqC16uBUu85)
+![Makefile](http://i.imgur.com/ZWWyy8t.png)
 
 ### Step 3: Compile
 Again, we need to compile the system to apply the changes. To do so, follow the commands:
@@ -210,7 +210,7 @@ clang ex1b.c -o ex1b
 
 [comment]:<http://jmp.sh/oAVzEIT>
 
-![ex1b.c](https://storage.jumpshare.com/preview/31m-pr1tZKMeUx7n7YZH9DiQ11qRja8byBcAgba4u0JyFfo77XPWztbIBBkOb8EC8-oDosTn0FmNoTe-8liVv90Iq-_ZMIwlJNqsu6s4bO0F1kR3dMUjedqC16uBUu85)
+![ex1b.c](http://i.imgur.com/2zuWsr9.png)
 
 [comment]:<http://jmp.sh/VBIAyhU>
 
