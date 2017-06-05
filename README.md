@@ -10,7 +10,7 @@ To get started, we'll start preparing the system to have a new system call. The 
 
 [comment]:<http://jmp.sh/UHqxBwV>
 
-![callnr.h](http://jmp.sh/UHqxBwV)
+![callnr.h](http://i.imgur.com/RBJD6iV.png)
 
 ### Step 2: Adding your system call to the system table of calls
 ```nano /usr/src/minix/servers/pm/table.c```
