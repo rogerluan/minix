@@ -10,7 +10,7 @@ To get started, we'll start preparing the system to have a new system call. The 
 
 [comment]:<http://jmp.sh/UHqxBwV>
 
-![callnr.h](https://storage.jumpshare.com/preview/XbJw5tZUCvyxDB48n8-wUd1pXeHtJ2cIsuSKNFsBY4bx1bb4TMuaRXv32TC0Foq6yneWOJhKHz7rc0UyVcLNqd0Iq-_ZMIwlJNqsu6s4bO0F1kR3dMUjedqC16uBUu85)
+![callnr.h](http://jmp.sh/UHqxBwV)
 
 ### Step 2: Adding your system call to the system table of calls
 ```nano /usr/src/minix/servers/pm/table.c```
@@ -218,7 +218,8 @@ clang ex1b.c -o ex1b
 
 If you're running your minix in a virtual machine like VMWare or VirtualBox (it's likely that you are), you can export your files to a VM shared folder quickly.
 To do so, first make sure your shared folder is mounted:
-```mount -t vbfs -o share=sharedFolder none /mnt```
+
+```mount -t vbfs -o share=sharedFolder none /mnt```
 
 Then implement the following script:
 
